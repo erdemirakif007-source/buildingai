@@ -1,0 +1,102 @@
+2026-03-09 23:38:27,541 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-09 23:39:28,970 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-09 23:39:29,051 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-09 23:39:29,135 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-09 23:43:29,957 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-10 00:17:00,723 | INFO | RESET CODE SENT: erdemirakif007@gmail.com
+2026-03-10 00:25:35,895 | INFO | RESET CODE SENT: erdemirakif007@gmail.com
+2026-03-10 00:25:38,833 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-10 00:25:45,429 | INFO | RESET CODE SENT: erdemirakif007@gmail.com
+2026-03-10 00:26:10,222 | INFO | PASSWORD RESET SUCCESS: erdemirakif007@gmail.com
+2026-03-10 00:26:17,631 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-10 00:26:22,505 | INFO | RESET CODE SENT: erdemirakif007@gmail.com
+2026-03-10 00:26:53,202 | INFO | LOGIN SUCCESS: erdemirakif007@gmail.com
+2026-03-10 00:26:53,958 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-10 00:36:56,241 | INFO | AI QUERY: type=sor
+2026-03-10 00:36:56,242 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-10 00:37:32,216 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-10 00:37:35,641 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-10 00:37:42,673 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-10 00:37:49,138 | WARNING | LOGIN FAILED: erdemirakif007@gmail.com
+2026-03-10 00:37:57,520 | INFO | LOGIN SUCCESS: erdemirakif007@gmail.com
+2026-03-10 00:37:58,366 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-10 00:38:07,852 | INFO | AI QUERY: type=sor
+2026-03-10 00:38:07,853 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-10 00:38:43,842 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-10 00:42:13,636 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-10 00:42:14,661 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-10 00:42:28,103 | INFO | AI QUERY: type=sor
+2026-03-10 00:42:28,103 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-10 00:43:01,369 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-10 00:43:06,298 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-10 00:43:07,449 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent "HTTP/1.1 400 Bad Request"
+2026-03-10 00:43:07,450 | ERROR | TTS ERROR: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'The requested combination of response modalities (TEXT) is not supported by the model. models/gemini-2.5-flash-preview-tts accepts the following combination of response modalities:\n* AUDIO\n', 'status': 'INVALID_ARGUMENT'}}
+2026-03-10 00:43:14,307 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-10 00:43:15,359 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent "HTTP/1.1 400 Bad Request"
+2026-03-10 00:43:15,360 | ERROR | TTS ERROR: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'The requested combination of response modalities (TEXT) is not supported by the model. models/gemini-2.5-flash-preview-tts accepts the following combination of response modalities:\n* AUDIO\n', 'status': 'INVALID_ARGUMENT'}}
+2026-03-10 00:44:56,558 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-10 00:45:13,664 | INFO | AI QUERY: type=sor
+2026-03-10 00:45:13,665 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-10 00:45:35,934 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-10 00:45:40,149 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-10 00:45:40,765 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 400 Bad Request"
+2026-03-10 00:45:40,768 | ERROR | TTS ERROR: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Cannot extract voices from a non-audio request.', 'status': 'INVALID_ARGUMENT'}}
+2026-03-10 00:48:37,784 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-10 00:48:48,452 | INFO | AI QUERY: type=sor
+2026-03-10 00:48:48,452 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-10 00:49:23,136 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-10 00:49:41,254 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-10 00:49:42,300 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent "HTTP/1.1 400 Bad Request"
+2026-03-10 00:49:42,301 | ERROR | TTS ERROR: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'The requested combination of response modalities (TEXT) is not supported by the model. models/gemini-2.5-flash-preview-tts accepts the following combination of response modalities:\n* AUDIO\n', 'status': 'INVALID_ARGUMENT'}}
+2026-03-10 00:51:43,966 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-10 00:52:42,569 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent "HTTP/1.1 200 OK"
+2026-03-10 00:53:16,351 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-10 00:53:21,292 | INFO | LOGIN SUCCESS: erdemirakif007@gmail.com
+2026-03-10 00:53:22,582 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-10 00:53:31,946 | INFO | AI QUERY: type=sor
+2026-03-10 00:53:31,947 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-10 00:54:00,178 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-10 00:54:05,547 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-10 00:55:01,224 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent "HTTP/1.1 200 OK"
+2026-03-10 00:56:08,508 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-10 00:57:09,164 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent "HTTP/1.1 200 OK"
+2026-03-10 01:03:04,624 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-10 01:07:50,678 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-10 01:08:02,334 | INFO | AI QUERY: type=sor
+2026-03-10 01:08:02,335 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-10 01:08:29,237 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-10 01:09:04,959 | ERROR | TTS ERROR: No module named 'edge_tts'
+2026-03-10 01:11:16,906 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-10 01:11:24,690 | INFO | AI QUERY: type=sor
+2026-03-10 01:11:24,690 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-10 01:11:56,972 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-10 01:15:56,475 | INFO | AI QUERY: type=sor
+2026-03-10 01:15:56,476 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-10 01:16:20,179 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-10 22:05:25,657 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-10 22:14:44,851 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-10 22:14:52,157 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-10 22:14:52,172 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-10 22:15:06,022 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-10 22:15:06,033 | INFO | AI QUERY: type=sesli-rapor
+2026-03-10 23:19:28,945 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-10 23:28:28,351 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-10 23:36:31,463 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-10 23:40:57,772 | WARNING | LOGIN FAILED: erdemirakif007@gmail.com
+2026-03-10 23:41:04,669 | WARNING | LOGIN FAILED: erdemirakif007@gmail.com
+2026-03-10 23:41:06,359 | WARNING | LOGIN FAILED: erdemirakif007@gmail.com
+2026-03-10 23:41:07,144 | WARNING | LOGIN FAILED: erdemirakif007@gmail.com
+2026-03-10 23:41:08,959 | WARNING | ACCOUNT LOCKED: erdemirakif007@gmail.com
+2026-03-10 23:41:08,964 | WARNING | ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: /login
+2026-03-10 23:41:09,159 | WARNING | ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: /login
+2026-03-10 23:41:15,486 | WARNING | ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: /login
+2026-03-10 23:41:17,074 | WARNING | ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: /login
+2026-03-10 23:41:32,193 | WARNING | ratelimit 5 per 1 minute (127.0.0.1) exceeded at endpoint: /login
+2026-03-10 23:43:32,014 | INFO | RESET CODE SENT: erdemirakif007@gmail.com
+2026-03-10 23:43:57,393 | INFO | PASSWORD RESET SUCCESS: erdemirakif007@gmail.com
+2026-03-10 23:56:21,711 | WARNING | LOGIN FAILED: erdemirakif007@gmail.com
+2026-03-10 23:56:21,719 | WARNING | LOGIN FAILED: erdemirakif007@gmail.com
+2026-03-10 23:56:34,827 | INFO | LOGIN SUCCESS: erdemirakif007@gmail.com
+2026-03-10 23:56:36,545 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-10 23:56:40,498 | INFO | LOGIN SUCCESS: erdemirakif007@gmail.com
+2026-03-10 23:57:10,330 | INFO | ADMIN: erdemirakif@gmail.com plani pro yapildi.
