@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(pip install slowapi)"
+      "Bash(pip install slowapi)",
+      "Bash(pip install:*)"
     ]
   }
 }

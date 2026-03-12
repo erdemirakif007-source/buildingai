@@ -100,3 +100,69 @@
 2026-03-10 23:56:36,545 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
 2026-03-10 23:56:40,498 | INFO | LOGIN SUCCESS: erdemirakif007@gmail.com
 2026-03-10 23:57:10,330 | INFO | ADMIN: erdemirakif@gmail.com plani pro yapildi.
+2026-03-12 00:54:24,338 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 01:04:18,137 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 01:14:58,032 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 01:22:02,242 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 01:22:23,307 | INFO | AI QUERY: user 2, type: kamera-analiz, tip: guvenlik
+2026-03-12 01:22:23,322 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-12 01:22:48,607 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-12 01:25:51,636 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 01:26:04,641 | INFO | AI QUERY: user 2, type: kamera-analiz, tip: guvenlik
+2026-03-12 01:26:04,653 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-12 01:26:28,669 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-12 01:31:35,302 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 01:38:40,389 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 01:45:27,518 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 01:45:31,289 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 01:45:32,962 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 01:47:31,035 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 01:48:21,470 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 01:50:12,270 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 01:50:16,285 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 01:52:11,996 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 13:13:51,192 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 13:14:35,392 | INFO | HTTP Request: GET https://webdosya.csb.gov.tr/v2/yfk/2026/03/2026-mart-in-aat-rayi-20260303131227.pdf "HTTP/1.1 200 OK"
+2026-03-12 13:15:02,713 | INFO | HTTP Request: GET https://webdosya.csb.gov.tr/v2/yfk/2026/03/2026-mart-in-aat-rayi-20260303131227.pdf "HTTP/1.1 200 OK"
+2026-03-12 13:18:22,125 | INFO | HTTP Request: GET https://webdosya.csb.gov.tr/v2/yfk/2026/03/2026-mart-in-aat-rayi-20260303131227.pdf "HTTP/1.1 200 OK"
+2026-03-12 13:18:28,410 | INFO | HTTP Request: GET https://webdosya.csb.gov.tr/v2/yfk/2026/03/2026-mart-in-aat-rayi-20260303131227.pdf "HTTP/1.1 200 OK"
+2026-03-12 13:18:40,325 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 13:23:01,115 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 13:23:22,967 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-12 13:23:32,622 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-12 13:26:23,277 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 13:30:49,011 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 13:31:19,832 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 13:34:09,635 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-12 13:34:21,942 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-12 13:34:21,954 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-12 13:34:46,285 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-12 13:34:47,383 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 13:40:48,297 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 13:41:39,073 | INFO | AI QUERY: type=sor
+2026-03-12 13:41:39,075 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-12 13:42:04,762 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-12 13:49:20,436 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-12 13:49:31,705 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-12 13:49:31,727 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-12 13:49:45,929 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-12 13:50:49,326 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 13:56:58,108 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 13:59:07,473 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 14:06:12,206 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=%C4%B0stanbul,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 14:07:53,855 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 14:34:52,481 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 14:44:34,543 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 14:44:35,647 | INFO | HTTP Request: GET https://deprem.afad.gov.tr/apiv2/event/filter?start=2026-02-10T11:44:34&end=2026-03-12T11:44:34&lat=39.0&lon=35.0&maxrad=800.0&orderby=timedesc&limit=50 "HTTP/1.0 302 Moved Temporarily"
+2026-03-12 14:45:04,528 | INFO | HTTP Request: GET https://deprem.afad.gov.tr/apiv2/event/filter?start=2025-03-12T11:45:03&end=2026-03-12T11:45:03&lat=39.747&lon=37.0396&maxrad=200&orderby=magnitudedesc&limit=100 "HTTP/1.0 302 Moved Temporarily"
+2026-03-12 14:45:04,529 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-12 14:45:37,123 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-12 14:56:59,913 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 14:57:08,843 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 14:57:32,586 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 15:00:23,742 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 15:00:44,138 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 15:22:53,488 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"
+2026-03-12 15:23:25,519 | INFO | AFC is enabled with max remote calls: 10.
+2026-03-12 15:23:38,834 | INFO | HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-03-12 15:23:39,500 | INFO | HTTP Request: GET https://api.openweathermap.org/data/2.5/weather?q=Sivas,TR&appid=f7c8fdf460fc4867dae01a9132d66522&units=metric&lang=tr "HTTP/1.1 200 OK"

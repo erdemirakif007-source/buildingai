@@ -7,6 +7,9 @@ HTML_TEMPLATE = f"""
 <head>
     <meta charset="utf-8">
     <title>BuildingAI Pro</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     {CSS_STYLE}
     <style>
         /* ---- AUTH TABS ---- */
@@ -168,8 +171,18 @@ HTML_TEMPLATE = f"""
             </div>
 
             <hr class="divider">
-            <button onclick="closeProfile(); proYukselt();" style="width:100%; padding:14px; background:linear-gradient(135deg,#e67e22,#f39c12); border:none; color:white; border-radius:14px; cursor:pointer; font-weight:700; font-size:1rem; transition:0.3s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
-                ⚡ Pro'ya Geç - $10/ay
+            <div style="display:flex; gap:8px; margin-bottom:4px;">
+                <button onclick="closeProfile(); odemePaneliAc('pro');" style="flex:1; padding:12px; background:linear-gradient(135deg,#6366f1,#818cf8); border:none; color:white; border-radius:14px; cursor:pointer; font-weight:700; font-size:0.9rem; transition:0.3s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
+                    ⚡ PRO — 650 TL/ay
+                </button>
+                <button onclick="closeProfile(); odemePaneliAc('max');" style="flex:1; padding:12px; background:linear-gradient(135deg,#b7791f,#f1c40f); border:none; color:#111; border-radius:14px; cursor:pointer; font-weight:700; font-size:0.9rem; transition:0.3s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
+                    👑 MAX — 1.990 TL/ay
+                </button>
+            </div>
+
+            <hr class="divider">
+            <button onclick="closeProfile(); rolSifirla();" style="width:100%; padding:12px; background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.3); color:#818cf8; border-radius:14px; cursor:pointer; font-weight:700; margin-bottom:12px; transition:0.3s;" onmouseover="this.style.background='rgba(99,102,241,0.2)'" onmouseout="this.style.background='rgba(99,102,241,0.1)'">
+                🔄 Rolümü Değiştir
             </button>
 
             <hr class="divider">
@@ -181,40 +194,73 @@ HTML_TEMPLATE = f"""
 
     <div id="sidebarOverlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
 
-    <div onclick="toggleHistory()" style="position: fixed; top: 30px; right: 100px; width: 55px; height: 55px; background: #161625; border: 2px solid #2ecc71; border-radius: 50%; cursor: pointer; z-index: 1000; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(46,204,113,0.2); transition: 0.3s;" onmouseover="this.style.transform='scale(1.1)';" onmouseout="this.style.transform='scale(1)';" title="Şantiye Arşivi">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 26px; height: 26px;">
-            <path d="M12 8v4l3 3"></path>
-            <path d="M2.05 13a10 10 0 1 0 2.18-7.18L1 9h6"></path>
-        </svg>
-    </div>
-
-    <!-- Profil butonu -->
-    <div onclick="openProfile()" style="position: fixed; top: 30px; right: 30px; width: 55px; height: 55px; background: #161625; border: 2px solid var(--primary); border-radius: 50%; cursor: pointer; z-index: 1000; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(230,126,34,0.2); transition: 0.3s; font-size: 1.4rem;" onmouseover="this.style.transform='scale(1.1)';" onmouseout="this.style.transform='scale(1)';" title="Profilim">
-        👤
-    </div>
-
-    <div id="historySidebar" style="position: fixed; top: 0; left: -350px; width: 320px; height: 100vh; background: #161625; border-right: 1px solid #333; box-shadow: 5px 0 20px rgba(0,0,0,0.8); transition: left 0.4s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1000; display: flex; flex-direction: column; padding: 25px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 15px; margin-bottom: 15px;">
-            <h3 style="color: #f1c40f; margin: 0; font-size: 1.2rem;">🗂️ Şantiye Arşivi</h3>
-            <button onclick="toggleHistory()" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer;">✖</button>
+    <!-- ===== NAV SIDEBAR ===== -->
+    <div id="navSidebar" class="nav-sidebar" style="display:none;">
+        <div class="nav-logo">
+            <span class="nav-logo-icon">🏗️</span>
+            <span class="nav-logo-text">BuildingAI Pro</span>
         </div>
-        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
-            <label style="color:#aaa; font-size:0.8rem;">Tarihe Göre Bul:</label>
-            <input type="date" id="historyDateSearch" onchange="filterHistory()" style="background: rgba(255,255,255,0.05); border: 1px solid #444; color: white; padding: 10px; border-radius: 8px; outline: none; cursor: pointer;">
-            <label style="color:#aaa; font-size:0.8rem; margin-top:5px;">Sıralama:</label>
-            <select id="historySort" onchange="loadHistoryList()" style="background: rgba(255,255,255,0.05); border: 1px solid #444; color: white; padding: 10px; border-radius: 8px; outline: none; cursor: pointer;">
-                <option value="yeni">En Yeni Raporlar (Önce)</option>
-                <option value="eski">En Eski Raporlar (Önce)</option>
-            </select>
+        <div class="nav-links" id="navLinks">
+            <div class="nav-item active" id="nav-home" onclick="navGit('home')">
+                <span class="nav-icon">🏠</span>
+                <span class="nav-label">Ana Sayfa</span>
+            </div>
+            <div class="nav-item" id="nav-kamera" onclick="navGit('kamera')">
+                <span class="nav-icon">📷</span>
+                <span class="nav-label">Kamera Analizi</span>
+            </div>
+            <div class="nav-item" id="nav-hesaplama" onclick="navGit('hesaplama')">
+                <span class="nav-icon">🧮</span>
+                <span class="nav-label">Hesaplama</span>
+            </div>
+            <div class="nav-item" id="nav-arsiv" onclick="navGit('arsiv')">
+                <span class="nav-icon">📁</span>
+                <span class="nav-label">Arşiv</span>
+            </div>
+            <div class="nav-item" id="nav-gunluk" onclick="navGit('gunluk')">
+                <span class="nav-icon">📝</span>
+                <span class="nav-label">Günlük Rapor</span>
+            </div>
+            <div class="nav-item" id="nav-sesli" onclick="navGit('sesli')">
+                <span class="nav-icon">🎤</span>
+                <span class="nav-label">Sesli Rapor</span>
+            </div>
+            <div class="nav-item" id="nav-fiyat" onclick="navGit('fiyat')">
+                <span class="nav-icon">📊</span>
+                <span class="nav-label">Fiyat Takibi</span>
+            </div>
+            <div class="nav-item" id="nav-stok" onclick="navGit('stok')">
+                <span class="nav-icon">📦</span>
+                <span class="nav-label">Stok Takibi</span>
+            </div>
+            <div class="nav-item" id="nav-deprem" onclick="navGit('deprem')">
+                <span class="nav-icon">🌍</span>
+                <span class="nav-label">Deprem Analizi</span>
+            </div>
+            <div class="nav-item" id="nav-santiye" onclick="navGit('santiye')" data-rol="muteahhit">
+                <span class="nav-icon">🏗️</span>
+                <span class="nav-label">Şantiye Dashboard</span>
+            </div>
         </div>
-        <div id="historyList" style="display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding-right: 5px; height: 100%;"></div>
+        <div class="nav-bottom">
+            <div class="nav-item" onclick="openProfile()">
+                <span class="nav-icon">👤</span>
+                <span class="nav-label">Profil</span>
+            </div>
+        </div>
     </div>
 
-    <div class="container" id="mainApp" style="display:none;">
-        <div class="header-grid">
-            <h1>🏗️ BuildingAI</h1>
-            <div class="weather-widget">
-                <select id="citySelect" class="city-dropdown" onchange="havaGuncelle()">
+    <!-- NAV MOBILE OVERLAY -->
+    <div id="navOverlay" class="nav-overlay" onclick="closeMobileNav()"></div>
+
+    <!-- ===== TOP HEADER ===== -->
+    <div id="topHeader" class="top-header" style="display:none;">
+        <button class="header-hamburger" id="hamburgerBtn" onclick="toggleMobileNav()">☰</button>
+        <button class="header-collapse-btn" id="collapseBtn" onclick="toggleNavSidebar()">◀</button>
+        <div class="header-title" id="headerTitle">🏠 Ana Sayfa</div>
+        <div class="header-right">
+            <div class="weather-inline">
+                <select id="citySelect" class="city-select-inline" onchange="havaGuncelle()">
                     <option value="Adana">Adana</option><option value="Adıyaman">Adıyaman</option>
                     <option value="Afyonkarahisar">Afyonkarahisar</option><option value="Ağrı">Ağrı</option>
                     <option value="Amasya">Amasya</option><option value="Ankara">Ankara</option>
@@ -257,10 +303,76 @@ HTML_TEMPLATE = f"""
                     <option value="Kilis">Kilis</option><option value="Osmaniye">Osmaniye</option>
                     <option value="Düzce">Düzce</option>
                 </select>
-                <span class="temp" id="temp">--°C</span>
-                <span class="condition" id="condition">Yükleniyor...</span>
+                <div class="weather-data">
+                    <span class="weather-temp" id="temp">--°C</span>
+                    <span class="weather-cond" id="condition">Yükleniyor...</span>
+                </div>
             </div>
+            <div class="theme-toggle" onclick="temaToggle()" title="Dark/Light mod"></div>
+            <div class="header-profile-btn" onclick="openProfile()" title="Profilim">👤</div>
         </div>
+    </div>
+
+    <div id="historySidebar" style="position: fixed; top: 0; left: -350px; width: 320px; height: 100vh; background: #161625; border-right: 1px solid #333; box-shadow: 5px 0 20px rgba(0,0,0,0.8); transition: left 0.4s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1000; display: flex; flex-direction: column; padding: 25px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 15px; margin-bottom: 15px;">
+            <h3 style="color: #f1c40f; margin: 0; font-size: 1.2rem;">🗂️ Şantiye Arşivi</h3>
+            <button onclick="toggleHistory()" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer;">✖</button>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
+            <label style="color:#aaa; font-size:0.8rem;">Tarihe Göre Bul:</label>
+            <input type="date" id="historyDateSearch" onchange="filterHistory()" style="background: rgba(255,255,255,0.05); border: 1px solid #444; color: white; padding: 10px; border-radius: 8px; outline: none; cursor: pointer;">
+            <label style="color:#aaa; font-size:0.8rem; margin-top:5px;">Sıralama:</label>
+            <select id="historySort" onchange="loadHistoryList()" style="background: rgba(255,255,255,0.05); border: 1px solid #444; color: white; padding: 10px; border-radius: 8px; outline: none; cursor: pointer;">
+                <option value="yeni">En Yeni Raporlar (Önce)</option>
+                <option value="eski">En Eski Raporlar (Önce)</option>
+            </select>
+        </div>
+        <div id="historyList" style="display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding-right: 5px; height: 100%;"></div>
+    </div>
+
+    <!-- ===== MAIN APP ===== -->
+    <div id="mainApp" style="display:none;">
+
+    <!-- ROL SEÇİM EKRANI -->
+    <div id="rolSecimEkrani" style="display:none; position:fixed; inset:0; background:var(--bg); z-index:6000; align-items:center; justify-content:center; flex-direction:column;">
+      <div style="position:absolute; inset:0; background:radial-gradient(ellipse 80% 60% at 50% 0%, rgba(249,115,22,0.12) 0%, transparent 60%); pointer-events:none;"></div>
+      <div style="position:relative; z-index:1; text-align:center; width:90%; max-width:700px;">
+        <div style="margin-bottom:48px; animation:fadeInDown 0.6s var(--ease) both;">
+          <div style="font-size:3rem; margin-bottom:16px;">🏗️</div>
+          <h1 style="font-size:2rem; font-weight:900; letter-spacing:-1.5px; background:linear-gradient(135deg,var(--primary),#fb923c); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; margin-bottom:10px;">BuildingAI Pro'ya Hoş Geldiniz</h1>
+          <p style="color:var(--text-secondary); font-size:1rem;">Size en iyi deneyimi sunabilmek için kim olduğunuzu öğrenmek istiyoruz.</p>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:32px;">
+          <div class="rol-kart" data-rol="muhendis" onclick="rolSecimYap('muhendis')" style="background:rgba(255,255,255,0.04); border:2px solid rgba(255,255,255,0.08); border-radius:24px; padding:36px 24px; cursor:pointer; transition:all 0.3s var(--ease); animation:fadeInUp 0.6s var(--ease) 0.1s both; text-align:center;"
+            onmouseover="this.style.borderColor='rgba(249,115,22,0.4)'; this.style.background='rgba(249,115,22,0.06)'; this.style.transform='translateY(-4px)';"
+            onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'; this.style.background='rgba(255,255,255,0.04)'; this.style.transform='translateY(0)';">
+            <div style="font-size:3.5rem; margin-bottom:16px;">👷</div>
+            <h3 style="color:white; font-size:1.2rem; font-weight:800; margin-bottom:8px;">Saha Mühendisiyim</h3>
+            <p style="color:var(--text-muted); font-size:0.85rem; line-height:1.6;">Teknik hesaplamalar, kamera analizi ve mühendislik raporları.</p>
+            <div style="margin-top:20px; display:flex; flex-wrap:wrap; gap:6px; justify-content:center;">
+              <span style="background:rgba(249,115,22,0.1); color:var(--primary); border:1px solid rgba(249,115,22,0.2); border-radius:999px; padding:3px 10px; font-size:0.72rem; font-weight:700;">Kamera Analizi</span>
+              <span style="background:rgba(249,115,22,0.1); color:var(--primary); border:1px solid rgba(249,115,22,0.2); border-radius:999px; padding:3px 10px; font-size:0.72rem; font-weight:700;">Hesaplamalar</span>
+              <span style="background:rgba(249,115,22,0.1); color:var(--primary); border:1px solid rgba(249,115,22,0.2); border-radius:999px; padding:3px 10px; font-size:0.72rem; font-weight:700;">Teknik Raporlar</span>
+            </div>
+          </div>
+          <div class="rol-kart" data-rol="muteahhit" onclick="rolSecimYap('muteahhit')" style="background:rgba(255,255,255,0.04); border:2px solid rgba(255,255,255,0.08); border-radius:24px; padding:36px 24px; cursor:pointer; transition:all 0.3s var(--ease); animation:fadeInUp 0.6s var(--ease) 0.2s both; text-align:center;"
+            onmouseover="this.style.borderColor='rgba(99,102,241,0.4)'; this.style.background='rgba(99,102,241,0.06)'; this.style.transform='translateY(-4px)';"
+            onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'; this.style.background='rgba(255,255,255,0.04)'; this.style.transform='translateY(0)';">
+            <div style="font-size:3.5rem; margin-bottom:16px;">🏗️</div>
+            <h3 style="color:white; font-size:1.2rem; font-weight:800; margin-bottom:8px;">Müteahhit / Proje Yöneticisiyim</h3>
+            <p style="color:var(--text-muted); font-size:0.85rem; line-height:1.6;">Şantiye yönetimi, saha raporları ve proje takibi.</p>
+            <div style="margin-top:20px; display:flex; flex-wrap:wrap; gap:6px; justify-content:center;">
+              <span style="background:rgba(99,102,241,0.1); color:#818cf8; border:1px solid rgba(99,102,241,0.2); border-radius:999px; padding:3px 10px; font-size:0.72rem; font-weight:700;">Şantiye Takibi</span>
+              <span style="background:rgba(99,102,241,0.1); color:#818cf8; border:1px solid rgba(99,102,241,0.2); border-radius:999px; padding:3px 10px; font-size:0.72rem; font-weight:700;">Günlük Rapor</span>
+              <span style="background:rgba(99,102,241,0.1); color:#818cf8; border:1px solid rgba(99,102,241,0.2); border-radius:999px; padding:3px 10px; font-size:0.72rem; font-weight:700;">Saha Analizi</span>
+            </div>
+          </div>
+        </div>
+        <p style="color:var(--text-muted); font-size:0.8rem; animation:fadeIn 0.6s 0.4s both;">Bu seçim daha sonra Profil'den değiştirilebilir.</p>
+      </div>
+    </div>
+        <div class="main-content" id="mainContent">
+        <div class="container">
 
         <div class="input-wrapper">
             <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="resimSecildi(event)">
@@ -275,23 +387,54 @@ HTML_TEMPLATE = f"""
             <div class="res-detail">Veriler yüklendi. Hesaplama bekleniyor...</div>
         </div>
 
-        <div style="display: flex; gap: 10px; margin-top: 15px;">
-            <button class="btn-read btn-read-oku" onclick="sesliOku()">🔊 OKU</button>
-            <button class="btn-read stop-btn btn-read-dur" onclick="sesliDurdur()">🛑 DURDUR</button>
+        <div class="read-controls">
+            <button class="btn-read-new btn-read-oku" onclick="sesliOku()">🔊 Sesli Oku</button>
+            <button class="btn-stop-new btn-read-dur" onclick="sesliDurdur()">⏹ Durdur</button>
+            <button class="btn-save-new" onclick="gunlukRaporuKaydet()">💾 Kaydet</button>
         </div>
 
-        <!-- 📸 KAMERA BUTONLARI -->
-        <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
-            <button onclick="kameraAc('guvenlik')" style="flex:1; background:linear-gradient(135deg,#e74c3c,#c0392b); color:white; border:none; padding:10px 12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:0.85rem;">🦺 Güvenlik Analizi</button>
-            <button onclick="kameraAc('ilerleme')" style="flex:1; background:linear-gradient(135deg,#2980b9,#1a6fa8); color:white; border:none; padding:10px 12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:0.85rem;">📅 İlerleme Takibi</button>
-            <button onclick="kameraAc('genel')" style="flex:1; background:linear-gradient(135deg,#27ae60,#1e8449); color:white; border:none; padding:10px 12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:0.85rem;">🔍 Genel Analiz</button>
-            <button onclick="arsivAc()" style="flex:1; background:linear-gradient(135deg,#8e44ad,#6c3483); color:white; border:none; padding:10px 12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:0.85rem;">📁 Arşivim</button>
-            <button id="sesliRaporBtn" onclick="sesliRaporBaslat()" style="flex:1; background:linear-gradient(135deg,#8e44ad,#6c3483); color:white; border:none; padding:10px 12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:0.85rem;">🎤 Sesli Rapor</button>
-            <button onclick="document.getElementById('gunlukRaporModal').style.display='flex'" style="flex:1; background:linear-gradient(135deg,#f39c12,#e67e22); color:white; border:none; padding:10px 12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:0.85rem;">📝 Günlük Rapor</button>
+        <!-- QUICK ACTIONS -->
+        <div class="quick-actions">
+            <button class="qa-btn" onclick="kameraAc('guvenlik')">
+                <span class="qa-icon">🦺</span>
+                <span class="qa-label">Güvenlik</span>
+            </button>
+            <button class="qa-btn" onclick="kameraAc('ilerleme')">
+                <span class="qa-icon">📅</span>
+                <span class="qa-label">İlerleme</span>
+            </button>
+            <button class="qa-btn" onclick="kameraAc('genel')">
+                <span class="qa-icon">🔍</span>
+                <span class="qa-label">Analiz</span>
+            </button>
+            <button class="qa-btn" onclick="arsivAc()">
+                <span class="qa-icon">📁</span>
+                <span class="qa-label">Arşiv</span>
+            </button>
+            <button class="qa-btn" id="sesliRaporBtn" onclick="sesliRaporBaslat()">
+                <span class="qa-icon">🎤</span>
+                <span class="qa-label">Sesli Rapor</span>
+            </button>
+            <button class="qa-btn" onclick="document.getElementById('gunlukRaporModal').style.display='flex'">
+                <span class="qa-icon">📝</span>
+                <span class="qa-label">Günlük Rapor</span>
+            </button>
+            <button class="qa-btn" onclick="pdfIndir()">
+                <span class="qa-icon">📄</span>
+                <span class="qa-label">PDF İndir</span>
+            </button>
+            <button class="qa-btn" onclick="toggleSidebar()">
+                <span class="qa-icon">🛠️</span>
+                <span class="qa-label">Araçlar</span>
+            </button>
+            <button class="qa-btn" onclick="haftalikRaporIndir()">
+                <span class="qa-icon">📊</span>
+                <span class="qa-label">Haftalık Rapor</span>
+            </button>
         </div>
-
-        <div class="tool-fab" onclick="toggleSidebar()" title="Mühendislik Araçları">🛠️</div>
-    </div>
+        </div><!-- /container -->
+        </div><!-- /main-content -->
+    </div><!-- /mainApp -->
 
     <!-- 📸 KAMERA MODALİ -->
     <div id="kameraModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; align-items:center; justify-content:center;">
@@ -426,6 +569,298 @@ HTML_TEMPLATE = f"""
         <div id="odemeMsg" style="margin-top:12px; text-align:center; font-size:0.88rem;"></div>
     </div>
 </div>
+
+<!-- 📊 FİYAT TAKİBİ MODALİ -->
+<div id="fiyatModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9999; align-items:center; justify-content:center;">
+  <div style="background:#1a1d21; border:1px solid rgba(249,115,22,0.3); border-radius:24px; padding:28px; width:92%; max-width:640px; max-height:88vh; overflow-y:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <h3 style="color:var(--primary); margin:0; font-size:1.2rem;">📊 Malzeme Fiyat Takibi</h3>
+      <button onclick="fiyatModalKapat()" style="background:none; border:none; color:white; font-size:1.5rem; cursor:pointer;">×</button>
+    </div>
+    <div id="uyarilar" style="margin-bottom:16px;"></div>
+    <div id="fiyatKartlari" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px;"></div>
+    <div style="background:rgba(255,255,255,0.04); border-radius:14px; padding:16px; margin-bottom:20px;">
+      <div style="color:var(--primary); font-weight:700; font-size:0.85rem; margin-bottom:12px;">📈 Fiyat Geçmişi</div>
+      <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+        <select id="grafMalzeme" onchange="grafikYukle()" style="background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:8px 12px; border-radius:8px; outline:none; font-size:0.85rem;">
+          <option value="demir">Demir</option>
+          <option value="cimento">Çimento</option>
+          <option value="beton">Beton</option>
+          <option value="tugla">Tuğla</option>
+          <option value="kum">Kum</option>
+        </select>
+        <select id="grafGun" onchange="grafikYukle()" style="background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:8px 12px; border-radius:8px; outline:none; font-size:0.85rem;">
+          <option value="90" selected>Son 90 Gün</option>
+          <option value="365">Son 365 Gün</option>
+        </select>
+      </div>
+      <canvas id="fiyatGrafik" height="160"></canvas>
+      <div id="grafBosMesaj" style="text-align:center; color:#555; font-size:0.85rem; padding:40px 0; display:none;">Henüz yeterli veri yok.</div>
+    </div>
+    <div style="background:rgba(255,255,255,0.04); border-radius:14px; padding:16px;">
+      <div style="color:var(--primary); font-weight:700; font-size:0.85rem; margin-bottom:12px;">➕ Fiyat Gir / Güncelle</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+        <select id="fiyatMalzeme" style="background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:10px; border-radius:8px; outline:none;">
+          <option value="demir">Demir (ton)</option>
+          <option value="cimento">Çimento (çuval)</option>
+          <option value="beton">Beton (m³)</option>
+          <option value="tugla">Tuğla (adet)</option>
+          <option value="kum">Kum (ton)</option>
+        </select>
+        <input type="number" id="fiyatDeger" placeholder="Fiyat (₺)" style="background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:10px; border-radius:8px; outline:none;">
+      </div>
+      <select id="fiyatSehir" style="width:100%; background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:10px; border-radius:8px; outline:none; margin-bottom:10px;">
+        <option value="genel">Genel (Türkiye Ortalaması)</option>
+        <option value="Istanbul">İstanbul</option>
+        <option value="Ankara">Ankara</option>
+        <option value="Izmir">İzmir</option>
+        <option value="Sivas">Sivas</option>
+        <option value="Bursa">Bursa</option>
+      </select>
+      <button onclick="fiyatKaydet()" style="width:100%; padding:12px; background:var(--primary); color:white; border:none; border-radius:10px; cursor:pointer; font-weight:700;">💾 Fiyatı Kaydet</button>
+      <div id="fiyatMsg" style="margin-top:8px; font-size:0.85rem; text-align:center;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 📦 STOK TAKİBİ MODALİ -->
+<div id="stokModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9999; align-items:center; justify-content:center;">
+  <div style="background:#1a1d21; border:1px solid rgba(249,115,22,0.3); border-radius:24px; padding:28px; width:92%; max-width:680px; max-height:90vh; overflow-y:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <h3 style="color:var(--primary); margin:0; font-size:1.2rem;">📦 Malzeme Stok Takibi</h3>
+      <button onclick="stokModalKapat()" style="background:none; border:none; color:white; font-size:1.5rem; cursor:pointer;">×</button>
+    </div>
+
+    <!-- Uyarılar -->
+    <div id="stokUyarilar" style="margin-bottom:16px;"></div>
+
+    <!-- Stok Kartları -->
+    <div id="stokKartlar" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px;"></div>
+
+    <!-- Geçmiş -->
+    <div style="background:rgba(255,255,255,0.04); border-radius:14px; padding:16px; margin-bottom:20px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <div style="color:var(--primary); font-weight:700; font-size:0.85rem;">📋 Hareket Geçmişi</div>
+        <select id="stokGecmisMalzeme" onchange="stokGecmisYukle()" style="background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:6px 10px; border-radius:8px; outline:none; font-size:0.8rem;">
+          <option value="demir">Demir</option>
+          <option value="cimento">Çimento</option>
+          <option value="beton">Beton</option>
+          <option value="tugla">Tuğla</option>
+          <option value="kum">Kum</option>
+        </select>
+      </div>
+      <div id="stokGecmisListe" style="max-height:200px; overflow-y:auto;"></div>
+    </div>
+
+    <!-- Malzeme Ekle -->
+    <div style="background:rgba(255,255,255,0.04); border-radius:14px; padding:16px;">
+      <div style="color:var(--primary); font-weight:700; font-size:0.85rem; margin-bottom:12px;">➕ Malzeme Girişi / Çıkışı</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+        <select id="stokMalzeme" style="background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:10px; border-radius:8px; outline:none;">
+          <option value="demir">Demir</option>
+          <option value="cimento">Çimento</option>
+          <option value="beton">Beton</option>
+          <option value="tugla">Tuğla</option>
+          <option value="kum">Kum</option>
+        </select>
+        <select id="stokTip" style="background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:10px; border-radius:8px; outline:none;">
+          <option value="giris">📥 Giriş (Geldi)</option>
+          <option value="cikis">📤 Çıkış (Kullanıldı)</option>
+        </select>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+        <input type="number" id="stokMiktar" placeholder="Miktar" style="background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:10px; border-radius:8px; outline:none;">
+        <select id="stokBirim" style="background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:10px; border-radius:8px; outline:none;">
+          <option value="ton">Ton</option>
+          <option value="m³">m³</option>
+          <option value="adet">Adet</option>
+          <option value="çuval">Çuval</option>
+        </select>
+      </div>
+      <input type="text" id="stokTedarikci" placeholder="Tedarikçi (opsiyonel)" style="width:100%; background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:10px; border-radius:8px; outline:none; margin-bottom:10px; box-sizing:border-box;">
+      <input type="number" id="stokFiyat" placeholder="Birim Fiyat ₺ (opsiyonel)" style="width:100%; background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:10px; border-radius:8px; outline:none; margin-bottom:10px; box-sizing:border-box;">
+      <input type="text" id="stokNotlar" placeholder="Notlar (opsiyonel)" style="width:100%; background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:10px; border-radius:8px; outline:none; margin-bottom:10px; box-sizing:border-box;">
+      <button onclick="stokKaydet()" style="width:100%; padding:12px; background:var(--primary); color:white; border:none; border-radius:10px; cursor:pointer; font-weight:700;">💾 Kaydet</button>
+      <div id="stokMsg" style="margin-top:8px; font-size:0.85rem; text-align:center;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 🌍 DEPREM ANALİZİ MODALİ -->
+<div id="depremModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9999; align-items:center; justify-content:center;">
+  <div style="background:#1a1d21; border:1px solid rgba(249,115,22,0.3); border-radius:24px; padding:28px; width:95%; max-width:900px; max-height:92vh; overflow-y:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <h3 style="color:var(--primary); margin:0; font-size:1.2rem;">🌍 Deprem & Jeolojik Risk Analizi</h3>
+      <button onclick="depremModalKapat()" style="background:none; border:none; color:white; font-size:1.5rem; cursor:pointer;">×</button>
+    </div>
+
+    <!-- Konum Girişi -->
+    <div style="background:rgba(255,255,255,0.04); border-radius:14px; padding:16px; margin-bottom:16px;">
+      <div style="color:var(--primary); font-weight:700; font-size:0.85rem; margin-bottom:12px;">📍 Şantiye Konumu</div>
+      <div style="display:grid; grid-template-columns:1fr auto; gap:10px; margin-bottom:10px;">
+        <input type="text" id="depremAdres" placeholder="Şantiye adresi veya şehir (örn: Sivas, Merkez)" style="background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:10px; border-radius:8px; outline:none; font-size:0.9rem;">
+        <button onclick="depremKonumBul()" style="padding:10px 16px; background:var(--primary); color:white; border:none; border-radius:8px; cursor:pointer; font-weight:700; white-space:nowrap;">📍 Konumu Bul</button>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr auto; gap:10px;">
+        <input type="number" id="depremLat" placeholder="Enlem (ör: 39.74)" step="0.0001" style="background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:10px; border-radius:8px; outline:none;">
+        <input type="number" id="depremLon" placeholder="Boylam (ör: 37.01)" step="0.0001" style="background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:10px; border-radius:8px; outline:none;">
+        <button onclick="depremAnalizBaslat()" style="padding:10px 16px; background:#8b5cf6; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:700; white-space:nowrap;">🔍 Analiz Et</button>
+      </div>
+      <div id="depremKonumMsg" style="margin-top:8px; font-size:0.8rem; color:#aaa;"></div>
+    </div>
+
+    <!-- Harita -->
+    <div style="border-radius:14px; overflow:hidden; margin-bottom:16px; border:1px solid rgba(255,255,255,0.08);">
+      <div id="depremHarita" style="height:320px; width:100%;"></div>
+    </div>
+
+    <!-- Analiz Sonucu -->
+    <div id="depremAnalizSonuc" style="display:none;">
+
+      <!-- Risk Skoru -->
+      <div style="display:grid; grid-template-columns:auto 1fr; gap:16px; background:rgba(255,255,255,0.04); border-radius:14px; padding:16px; margin-bottom:16px; align-items:center;">
+        <div style="position:relative; width:90px; height:90px;">
+          <svg width="90" height="90" style="transform:rotate(-90deg)">
+            <circle cx="45" cy="45" r="36" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="8"/>
+            <circle id="riskCircle" cx="45" cy="45" r="36" fill="none" stroke="#ef4444" stroke-width="8"
+              stroke-dasharray="226" stroke-dashoffset="226" stroke-linecap="round"
+              style="transition:stroke-dashoffset 1.5s ease;"/>
+          </svg>
+          <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+            <span id="riskSkorText" style="color:white; font-size:1.3rem; font-weight:900; line-height:1;">0</span>
+            <span style="color:#aaa; font-size:0.6rem;">RİSK</span>
+          </div>
+        </div>
+        <div>
+          <div id="riskSeviyeText" style="font-size:1.4rem; font-weight:900; margin-bottom:4px;"></div>
+          <div id="riskZeminText" style="color:#aaa; font-size:0.85rem; margin-bottom:6px;"></div>
+          <div id="riskOzetText" style="color:#ccc; font-size:0.82rem; line-height:1.5;"></div>
+        </div>
+      </div>
+
+      <!-- Fay Hattı + TBDY -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
+        <div style="background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.2); border-radius:12px; padding:14px;">
+          <div style="color:#fca5a5; font-weight:700; font-size:0.8rem; margin-bottom:10px;">⚡ EN YAKIN FAY HATTI</div>
+          <div id="fayAd" style="color:white; font-weight:700; font-size:0.9rem; margin-bottom:4px;"></div>
+          <div id="fayMesafe" style="color:#ef4444; font-size:1.1rem; font-weight:800; margin-bottom:4px;"></div>
+          <div id="fayTip" style="color:#aaa; font-size:0.78rem;"></div>
+          <div id="faySonDeprem" style="color:#aaa; font-size:0.78rem; margin-top:4px;"></div>
+        </div>
+        <div style="background:rgba(99,102,241,0.08); border:1px solid rgba(99,102,241,0.2); border-radius:12px; padding:14px;">
+          <div style="color:#a5b4fc; font-weight:700; font-size:0.8rem; margin-bottom:10px;">📐 TBDY 2018 PARAMETRELERİ</div>
+          <div id="tbdyParams" style="font-size:0.82rem; line-height:1.8;"></div>
+        </div>
+      </div>
+
+      <!-- Son Depremler Listesi -->
+      <div style="background:rgba(255,255,255,0.04); border-radius:14px; padding:16px; margin-bottom:16px;">
+        <div style="color:var(--primary); font-weight:700; font-size:0.85rem; margin-bottom:12px;">📋 AFAD Son Depremler (200km çevre)</div>
+        <div id="sonDepremlerListe" style="max-height:180px; overflow-y:auto;"></div>
+      </div>
+
+      <!-- Öneriler -->
+      <div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.2); border-radius:14px; padding:16px;">
+        <div style="color:#fcd34d; font-weight:700; font-size:0.85rem; margin-bottom:10px;">💡 MÜHENDİSLİK ÖNERİLERİ</div>
+        <div id="depremOneriler"></div>
+      </div>
+
+    </div>
+
+    <!-- Loading -->
+    <div id="depremLoading" style="display:none; text-align:center; padding:40px;">
+      <div style="font-size:2rem; margin-bottom:12px;">🔍</div>
+      <div style="color:#aaa;">AFAD verileri çekiliyor, AI analiz yapıyor...</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== ŞANTİYE DASHBOARD MODAL ===== -->
+<div id="santiyeModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9000; overflow-y:auto; padding:20px;">
+  <div style="max-width:1100px; margin:0 auto; background:#1a1a2e; border-radius:24px; border:1px solid rgba(255,255,255,0.1); overflow:hidden;">
+    <div style="background:linear-gradient(135deg,#e67e22,#d35400); padding:24px 28px; display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <h2 style="margin:0; color:white; font-size:1.4rem;">🏗️ Şantiye Dashboard</h2>
+        <div style="color:rgba(255,255,255,0.7); font-size:0.85rem; margin-top:4px;">Tüm şantiyelerinizi yönetin</div>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <button onclick="santiyeEkleModalAc(null)" style="background:rgba(255,255,255,0.2); border:1px solid rgba(255,255,255,0.3); color:white; padding:8px 18px; border-radius:10px; cursor:pointer; font-weight:700;">+ Yeni Şantiye</button>
+        <button onclick="santiyeModalKapat()" style="background:rgba(255,255,255,0.1); border:none; color:white; width:36px; height:36px; border-radius:50%; cursor:pointer; font-size:1.2rem;">✕</button>
+      </div>
+    </div>
+    <div style="padding:24px;">
+      <!-- Özet Kartlar -->
+      <div id="santiyeOzet" style="display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px;"></div>
+      <!-- Harita + Tablo -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:24px;">
+        <div>
+          <div style="color:#aaa; font-size:0.8rem; font-weight:700; text-transform:uppercase; letter-spacing:1px; margin-bottom:10px;">📍 Harita</div>
+          <div id="santiyeHarita" style="height:300px; border-radius:14px; overflow:hidden; border:1px solid rgba(255,255,255,0.1);"></div>
+        </div>
+        <div>
+          <div style="color:#aaa; font-size:0.8rem; font-weight:700; text-transform:uppercase; letter-spacing:1px; margin-bottom:10px;">📊 Karşılaştırma</div>
+          <div id="santiyeTablo" style="max-height:300px; overflow-y:auto;"></div>
+        </div>
+      </div>
+      <!-- Şantiye Kartları -->
+      <div style="color:#aaa; font-size:0.8rem; font-weight:700; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px;">🗂️ Şantiyeler</div>
+      <div id="santiyeKartlar" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ŞANTİYE FORM MODAL ===== -->
+<div id="santiyeFormModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:9100; display:flex; align-items:center; justify-content:center; padding:20px;">
+  <div style="background:#1a1a2e; border-radius:20px; border:1px solid rgba(255,255,255,0.1); width:100%; max-width:500px; overflow:hidden;">
+    <div style="background:linear-gradient(135deg,#e67e22,#d35400); padding:20px 24px; display:flex; justify-content:space-between; align-items:center;">
+      <h3 id="santiyeFormBaslik" style="margin:0; color:white;">Şantiye Ekle</h3>
+      <button onclick="santiyeFormKapat()" style="background:rgba(255,255,255,0.1); border:none; color:white; width:32px; height:32px; border-radius:50%; cursor:pointer; font-size:1.1rem;">✕</button>
+    </div>
+    <div style="padding:24px;">
+      <input type="hidden" id="santiyeFormId">
+      <input type="text" id="santiyeFormAd" class="auth-input" placeholder="Şantiye Adı *">
+      <input type="text" id="santiyeFormKonum" class="auth-input" placeholder="Konum (Şehir, İlçe) *">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+        <input type="number" id="santiyeFormLat" class="auth-input" placeholder="Enlem (opsiyonel)" step="0.0001" style="margin-bottom:0;">
+        <input type="number" id="santiyeFormLon" class="auth-input" placeholder="Boylam (opsiyonel)" step="0.0001" style="margin-bottom:0;">
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+        <div>
+          <label style="color:#aaa; font-size:0.78rem; display:block; margin-bottom:4px;">İlerleme (%)</label>
+          <input type="number" id="santiyeFormIlerleme" class="auth-input" placeholder="0-100" min="0" max="100" value="0" style="margin-bottom:0;">
+        </div>
+        <div>
+          <label style="color:#aaa; font-size:0.78rem; display:block; margin-bottom:4px;">İşçi Sayısı</label>
+          <input type="number" id="santiyeFormIsci" class="auth-input" placeholder="Kişi sayısı" min="0" value="0" style="margin-bottom:0;">
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+        <div>
+          <label style="color:#aaa; font-size:0.78rem; display:block; margin-bottom:4px;">Durum</label>
+          <select id="santiyeFormDurum" class="auth-input" style="margin-bottom:0;">
+            <option value="iyi">✅ İyi</option>
+            <option value="dikkat">⚠️ Dikkat</option>
+            <option value="sorun">❌ Sorun</option>
+          </select>
+        </div>
+        <div>
+          <label style="color:#aaa; font-size:0.78rem; display:block; margin-bottom:4px;">İSG Durumu</label>
+          <input type="text" id="santiyeFormIsg" class="auth-input" placeholder="İSG notu" style="margin-bottom:0;">
+        </div>
+      </div>
+      <textarea id="santiyeFormNotlar" class="auth-input" placeholder="Notlar (opsiyonel)" rows="3" style="resize:vertical;"></textarea>
+      <div id="santiyeFormMsg" style="margin-top:8px;"></div>
+      <button onclick="santiyeKaydet()" class="auth-btn" style="margin-top:12px;">💾 Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<!-- 🔒 PLAN KİLİT MODALI (JS tarafından doldurulur) -->
+<div id="planKilitModal" style="display:none;"></div>
+
+<!-- 💳 ÖDEME MODALI (JS tarafından doldurulur) -->
+<div id="odemeModal" style="display:none;"></div>
 
 {JS_SCRIPT}
 </body>

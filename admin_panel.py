@@ -77,6 +77,11 @@ body{background:#0d1117;color:#f0f0f0;font-family:Arial,sans-serif;min-height:10
     <div id="sekme-istatistik">
       <div class="stats-grid" id="statsGrid"><div class="stat-card"><div class="num">...</div><div class="label">Yükleniyor</div></div></div>
       <div class="section"><h2>💰 Gelir Özeti</h2><div id="gelirOzet" style="color:#aaa">Yükleniyor...</div></div>
+      <div class="section">
+        <h2>🤖 AI İşlemleri</h2>
+        <button onclick="aiPiyasaGuncelle()" style="background:linear-gradient(135deg,#f97316,#fb923c);color:white;border:none;padding:12px 24px;border-radius:12px;cursor:pointer;font-weight:700;font-size:0.9rem;width:100%">🤖 AI ile Fiyatları Güncelle</button>
+        <div id="fiyatGuncelMsg" style="margin-top:8px;font-size:0.85rem;text-align:center"></div>
+      </div>
     </div>
 
     <div id="sekme-kullanicilar" style="display:none">
@@ -180,13 +185,16 @@ function kullanicilariRender(liste) {
   tbody.innerHTML = liste.map(u => {
     const isAdmin = u.email === 'erdemirakif007@gmail.com';
     const badge = isAdmin ? '<span class="badge badge-admin">ADMIN</span>' :
-                  u.plan==='pro' ? '<span class="badge badge-pro">PRO</span>' :
+                  u.plan==='max' ? '<span class="badge badge-pro" style="background:rgba(241,196,15,0.15);border-color:#f1c40f;color:#f1c40f;">👑 MAX</span>' :
+                  u.plan==='pro' ? '<span class="badge badge-pro">⚡ PRO</span>' :
                   '<span class="badge badge-free">FREE</span>';
     const tarih = u.created_at ? u.created_at.substring(0,10) : '-';
     const islemler = isAdmin ? '<span style="color:#555;font-size:0.8rem">—</span>' :
-      (u.plan==='pro'
-        ? `<button class="btn btn-small btn-red" style="margin-right:6px" onclick="planDegistir(${u.id},'free')">Free Yap</button>`
-        : `<button class="btn btn-small btn-green" style="margin-right:6px" onclick="planDegistir(${u.id},'pro')">Pro Yap ⚡</button>`
+      (u.plan==='free'
+        ? `<button class="btn btn-small btn-green" style="margin-right:4px" onclick="planDegistir(${u.id},'pro')">Pro ⚡</button><button class="btn btn-small btn-green" style="margin-right:4px;background:#b7791f" onclick="planDegistir(${u.id},'max')">Max 👑</button>`
+        : u.plan==='pro'
+        ? `<button class="btn btn-small btn-red" style="margin-right:4px" onclick="planDegistir(${u.id},'free')">Free Yap</button><button class="btn btn-small btn-green" style="margin-right:4px;background:#b7791f" onclick="planDegistir(${u.id},'max')">Max 👑</button>`
+        : `<button class="btn btn-small btn-red" style="margin-right:4px" onclick="planDegistir(${u.id},'free')">Free Yap</button><button class="btn btn-small btn-green" style="margin-right:4px" onclick="planDegistir(${u.id},'pro')">Pro ⚡</button>`
       ) + `<button class="btn btn-small btn-red" onclick="kullaniciyiSil(${u.id},'${u.email}')">Sil</button>`;
     return `<tr><td style="color:#555">#${u.id}</td><td>${u.full_name}</td><td style="color:#aaa">${u.email}</td><td>${badge}</td><td style="color:#555">${tarih}</td><td>${islemler}</td></tr>`;
   }).join('');
@@ -226,6 +234,19 @@ function mesajGoster(msg, tip) {
   const el = document.getElementById('islemMsg');
   el.innerHTML = '<div class="msg msg-'+tip+'">'+msg+'</div>';
   setTimeout(()=>el.innerHTML='',4000);
+}
+
+async function aiPiyasaGuncelle() {
+  const el = document.getElementById('fiyatGuncelMsg');
+  el.style.color = '#aaa';
+  el.textContent = '⏳ AI fiyatları güncelleniyor...';
+  try {
+    const res = await fetch('/fiyat-ai-guncelle', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token:adminToken})});
+    const data = await res.json();
+    if(res.ok) { el.style.color = '#2ecc71'; el.textContent = '✅ ' + (data.mesaj || 'Fiyatlar güncellendi.'); }
+    else { el.style.color = '#e74c3c'; el.textContent = '❌ ' + (data.detail || 'Hata oluştu.'); }
+  } catch(e) { el.style.color = '#e74c3c'; el.textContent = '❌ Bağlantı hatası.'; }
+  setTimeout(() => el.textContent = '', 6000);
 }
 
 function adminCikis() {
