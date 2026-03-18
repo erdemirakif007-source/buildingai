@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(pip install slowapi)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(python migrate.py)",
+      "Bash(python -c \"import models, database; models.Base.metadata.create_all\\(bind=database.engine\\); print\\(''Tablolar oluşturuldu.''\\)\")"
     ]
   }
 }

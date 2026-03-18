@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Bool
 from sqlalchemy.orm import relationship
 from database import Base
 import datetime
+from datetime import datetime as dt
 
 class User(Base):
     __tablename__ = "users"
@@ -10,6 +11,7 @@ class User(Base):
     hashed_password  = Column(String, nullable=False)
     full_name        = Column(String, default="")
     plan             = Column(String, default="free")   # "free" | "pro" | "max" | "admin"
+    is_admin         = Column(Boolean, default=False, nullable=False)
     created_at       = Column(DateTime, default=datetime.datetime.utcnow)
 
     reports          = relationship("Report", back_populates="owner")
@@ -97,3 +99,20 @@ class Santiye(Base):
     aktif        = Column(Boolean, default=True)
     created_at   = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at   = Column(DateTime, default=datetime.datetime.utcnow)
+
+class ResetToken(Base):
+    __tablename__ = "reset_tokens"
+    id         = Column(Integer, primary_key=True)
+    email      = Column(String, nullable=False)
+    token      = Column(String, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    used       = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=dt.utcnow)
+
+class LoginAttempt(Base):
+    __tablename__ = "login_attempts"
+    id            = Column(Integer, primary_key=True)
+    email         = Column(String, nullable=False, unique=True, index=True)
+    attempt_count = Column(Integer, default=0)
+    last_attempt  = Column(DateTime, default=dt.utcnow)
+    locked_until  = Column(DateTime, nullable=True)

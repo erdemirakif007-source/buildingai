@@ -1,5 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, status, Body, Request
-from fastapi.responses import HTMLResponse, Response, JSONResponse
+from fastapi.responses import HTMLResponse, Response, JSONResponse, FileResponse
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -24,7 +26,7 @@ load_dotenv()
 GMAIL_ADRES = os.getenv("GMAIL_ADRES")
 GMAIL_UYGULAMA_SIFRESI = os.getenv("GMAIL_UYGULAMA_SIFRESI")
 import models, schemas, auth, database
-from models import Santiye
+from models import Santiye, ResetToken, LoginAttempt
 from interface import HTML_TEMPLATE
 from admin_panel import ADMIN_HTML
 from weather import hava_getir
@@ -43,6 +45,11 @@ logger = logging.getLogger("buildingai")
 models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI()
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/favicon.ico")
+async def favicon():
+    return FileResponse("static/favicon.ico")
 
 # Rate Limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -132,11 +139,7 @@ async def ai_cevap(prompt: str) -> str:
     )
     return response.text
 
-# Şifre sıfırlama token'larını geçici hafızada tut
-reset_tokens = {}
-
-# Başarısız giriş takibi: {email: {"count": int, "locked_until": datetime | None}}
-login_attempts: dict = {}
+# reset_tokens ve login_attempts artık DB'de (ResetToken, LoginAttempt tabloları)
 
 def email_gonder(alici: str, konu: str, html_icerik: str) -> bool:
     try:
@@ -366,7 +369,8 @@ def register_user(request: Request, user: schemas.UserCreate, db: Session = Depe
     new_user = models.User(
         email=user.email,
         hashed_password=auth.get_password_hash(user.password),
-        full_name=user.full_name
+        full_name=user.full_name,
+        plan=user.plan if user.plan in ('free', 'pro', 'max') else 'free'
     )
     db.add(new_user)
     db.commit()
@@ -379,34 +383,44 @@ def login(request: Request, body: dict = Body(...), db: Session = Depends(databa
     email = body.get("email")
     password = body.get("password")
 
-    # Hesap kilitli mi kontrol et
-    attempt = login_attempts.get(email)
-    if attempt and attempt.get("locked_until"):
-        if datetime.datetime.utcnow() < attempt["locked_until"]:
-            remaining = int((attempt["locked_until"] - datetime.datetime.utcnow()).total_seconds() / 60) + 1
+    # Hesap kilitli mi kontrol et (DB)
+    attempt = db.query(LoginAttempt).filter(LoginAttempt.email == email).first()
+    if attempt and attempt.locked_until:
+        if datetime.datetime.utcnow() < attempt.locked_until:
+            remaining = int((attempt.locked_until - datetime.datetime.utcnow()).total_seconds() / 60) + 1
             raise HTTPException(
                 status_code=429,
                 detail=f"Çok fazla başarısız giriş denemesi. Hesap {remaining} dakika kilitli."
             )
         else:
             # Kilit süresi doldu, sıfırla
-            login_attempts.pop(email, None)
+            attempt.attempt_count = 0
+            attempt.locked_until = None
+            db.commit()
 
     user = db.query(models.User).filter(models.User.email == email).first()
     if not user or not auth.verify_password(password[:72], user.hashed_password):
-        # Başarısız denemeyi kaydet
-        rec = login_attempts.setdefault(email, {"count": 0, "locked_until": None})
-        rec["count"] += 1
-        if rec["count"] >= 5:
-            rec["locked_until"] = datetime.datetime.utcnow() + datetime.timedelta(minutes=15)
-            rec["count"] = 0
+        # Başarısız denemeyi DB'ye kaydet
+        if not attempt:
+            attempt = LoginAttempt(email=email, attempt_count=0)
+            db.add(attempt)
+        attempt.attempt_count += 1
+        attempt.last_attempt = datetime.datetime.utcnow()
+        if attempt.attempt_count >= 5:
+            attempt.locked_until = datetime.datetime.utcnow() + datetime.timedelta(minutes=15)
+            attempt.attempt_count = 0
+            db.commit()
             logger.warning(f"ACCOUNT LOCKED: {email}")
             raise HTTPException(status_code=429, detail="5 başarısız deneme. Hesap 15 dakika kilitlendi.")
+        db.commit()
         logger.warning(f"LOGIN FAILED: {email}")
         raise HTTPException(status_code=400, detail="E-posta veya şifre hatalı!")
 
     # Başarılı girişte sayacı temizle
-    login_attempts.pop(email, None)
+    if attempt:
+        attempt.attempt_count = 0
+        attempt.locked_until = None
+        db.commit()
     logger.info(f"LOGIN SUCCESS: {email}")
 
     token = auth.create_access_token({"email": user.email})
@@ -446,7 +460,13 @@ def request_password_reset(request: Request, payload: dict = Body(...), db: Sess
         return {"mesaj": "Kod gönderildi."}  # Security: don't reveal if email exists
 
     kod = str(random.randint(100000, 999999))
-    reset_tokens[kod] = {"email": email, "created_at": datetime.datetime.utcnow()}
+    db_token = ResetToken(
+        email=email,
+        token=kod,
+        expires_at=datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+    )
+    db.add(db_token)
+    db.commit()
 
     html = f"""
     <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;background:#1a1d21;color:#f0f0f0;padding:30px;border-radius:12px;">
@@ -475,29 +495,43 @@ def update_password(request: Request, payload: dict = Body(...), db: Session = D
     kod = payload.get("token")
     yeni_sifre = payload.get("yeni_sifre")
 
-    token_data = reset_tokens.get(kod)
-    if not token_data:
-        raise HTTPException(status_code=400, detail="Geçersiz kod.")
-
-    gecen = (datetime.datetime.utcnow() - token_data["created_at"]).total_seconds()
-    if gecen > 3600:
-        del reset_tokens[kod]
-        raise HTTPException(status_code=400, detail="Kodun süresi dolmuş. Yeni kod isteyin.")
+    db_token = db.query(ResetToken).filter(
+        ResetToken.token == kod,
+        ResetToken.expires_at > datetime.datetime.utcnow(),
+        ResetToken.used == False
+    ).first()
+    if not db_token:
+        raise HTTPException(status_code=400, detail="Geçersiz veya süresi dolmuş kod.")
 
     if len(yeni_sifre) < 8:
         raise HTTPException(status_code=400, detail="Şifre en az 8 karakter olmalıdır.")
 
-    user = db.query(models.User).filter(models.User.email == token_data["email"]).first()
+    user = db.query(models.User).filter(models.User.email == db_token.email).first()
     user.hashed_password = auth.get_password_hash(yeni_sifre[:72])
+    db_token.used = True
     db.commit()
-    del reset_tokens[kod]
-    logger.info(f"PASSWORD RESET SUCCESS: {token_data['email']}")
+    logger.info(f"PASSWORD RESET SUCCESS: {db_token.email}")
     return {"mesaj": "Şifreniz güncellendi!"}
 
 @app.get("/", response_class=HTMLResponse)
 @limiter.limit("60/minute")
+async def root(request: Request):
+    token = request.cookies.get("access_token") or request.headers.get("Authorization")
+    if token:
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/app")
+    else:
+        return HTMLResponse(Path("landing.html").read_text(encoding="utf-8"))
+
+@app.get("/app", response_class=HTMLResponse)
+@limiter.limit("60/minute")
 async def main_page(request: Request):
     return HTML_TEMPLATE
+
+@app.get("/landing", response_class=HTMLResponse)
+@limiter.limit("60/minute")
+async def landing_redirect(request: Request):
+    return Path("landing.html").read_text(encoding="utf-8")
 
 # --- 🎤 SESLİ RAPOR ---
 @app.post("/sesli-rapor")
@@ -1291,7 +1325,7 @@ async def odeme_bildir(request: Request, payload: dict = Body(...), db: Session 
 # --- 🔧 ADMIN PANELİ ---
 def admin_kontrol(token: str, db: Session):
     user = kullanici_dogrula(token, db)
-    if user.email != ADMIN_EMAIL:
+    if not user.is_admin:
         raise HTTPException(status_code=403, detail="Yetkisiz erişim.")
     return user
 

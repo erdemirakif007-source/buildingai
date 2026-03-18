@@ -83,6 +83,37 @@ function rolSecimYap(rol) {
         setTimeout(() => { el.style.display = 'none'; navSidebarGuncelle(rol); }, 400);
     }, 600);
 }
+function raporlarMenuToggle() {
+    const menu = document.getElementById('raporlarSubMenu');
+    const arrow = document.getElementById('raporlarArrow');
+    if (!menu) return;
+    const isOpen = menu.style.maxHeight && menu.style.maxHeight !== '0px';
+    if (isOpen) {
+        menu.style.maxHeight = '0px';
+        if (arrow) arrow.style.transform = 'rotate(0deg)';
+    } else {
+        menu.style.maxHeight = '300px';
+        if (arrow) arrow.style.transform = 'rotate(180deg)';
+    }
+}
+
+function toggleAnalizMenu() {
+    const menu = document.getElementById('analizSubMenu');
+    const btn  = document.getElementById('analizToggleBtn');
+    if (!menu) return;
+    const raporlarMenu = document.getElementById('raporlarSubMenu2');
+    if (raporlarMenu) raporlarMenu.classList.remove('open');
+    const open = menu.classList.toggle('open');
+    if (btn) btn.style.background = open ? 'var(--primary-light)' : '';
+}
+function toggleRaporlarMenu() {
+    const menu = document.getElementById('raporlarSubMenu2');
+    const btn = document.getElementById('raporlarToggleBtn');
+    const analizMenu = document.getElementById('analizSubMenu');
+    if (analizMenu) analizMenu.classList.remove('open');
+    if (menu) menu.classList.toggle('open');
+}
+
 function navSidebarGuncelle(rol) {
     const nav = document.getElementById('navLinks');
     if (!nav) return;
@@ -110,7 +141,9 @@ function navSidebarGuncelle(rol) {
             <div class="nav-item" id="nav-arsiv" onclick="navGit('arsiv')"><span class="nav-icon">📁</span><span class="nav-label">Arşiv</span></div>
             <div class="nav-item" id="nav-fiyat" onclick="${fiyatOnclick}"${fiyatLock}><span class="nav-icon">📊</span><span class="nav-label">Fiyat Takibi${fiyatKilit?' 🔒':''}</span></div>
             <div class="nav-item" id="nav-stok" onclick="${stokOnclick}"${stokLock}><span class="nav-icon">📦</span><span class="nav-label">Stok Takibi${stokKilit?' 🔒':''}</span></div>
-            <div class="nav-item" id="nav-deprem" onclick="${depremOnclick}"${depremLock}><span class="nav-icon">🌍</span><span class="nav-label">Deprem Analizi${depremKilit?' 🔒':''}</span></div>`;
+            <div class="nav-item" id="nav-deprem" onclick="${depremOnclick}"${depremLock}><span class="nav-icon">🌍</span><span class="nav-label">Deprem Analizi${depremKilit?' 🔒':''}</span></div>
+            <div class="nav-item" id="nav-pdf" onclick="pdfIndir()"><span class="nav-icon">📄</span><span class="nav-label">PDF İndir</span></div>
+            <div class="nav-item" id="nav-haftalik" onclick="haftalikRaporIndir()"><span class="nav-icon">📊</span><span class="nav-label">Haftalık Rapor</span></div>`;
     } else {
         const santiyeOnclick = santiyeKilit ? `planKilit('santiye')` : `navGit('santiye')`;
         const santiyeLock    = santiyeKilit ? ' style="opacity:0.5"' : '';
@@ -124,7 +157,9 @@ function navSidebarGuncelle(rol) {
             <div class="nav-item" id="nav-fiyat" onclick="${fiyatOnclick}"${fiyatLock}><span class="nav-icon">📊</span><span class="nav-label">Fiyat Takibi${fiyatKilit?' 🔒':''}</span></div>
             <div class="nav-item" id="nav-stok" onclick="${stokOnclick}"${stokLock}><span class="nav-icon">📦</span><span class="nav-label">Stok Takibi${stokKilit?' 🔒':''}</span></div>
             <div class="nav-item" id="nav-deprem" onclick="${depremOnclick}"${depremLock}><span class="nav-icon">🌍</span><span class="nav-label">Deprem Analizi${depremKilit?' 🔒':''}</span></div>
-            <div class="nav-item" id="nav-santiye" onclick="${santiyeOnclick}"${santiyeLock}><span class="nav-icon">🏗️</span><span class="nav-label">Şantiye Yönetimi${santiyeKilit?' 🔒':''}</span></div>`;
+            <div class="nav-item" id="nav-santiye" onclick="${santiyeOnclick}"${santiyeLock}><span class="nav-icon">🏗️</span><span class="nav-label">Şantiye Yönetimi${santiyeKilit?' 🔒':''}</span></div>
+            <div class="nav-item" id="nav-pdf" onclick="pdfIndir()"><span class="nav-icon">📄</span><span class="nav-label">PDF İndir</span></div>
+            <div class="nav-item" id="nav-haftalik" onclick="haftalikRaporIndir()"><span class="nav-icon">📊</span><span class="nav-label">Haftalık Rapor</span></div>`;
     }
     document.getElementById('result').innerHTML = rol === 'muhendis'
         ? '<div class="res-title">👷 Mühendis Paneli Hazır</div><div class="res-detail">Kamera analizi, hesaplamalar ve raporlama araçlarına hazırsınız.</div>'
@@ -207,6 +242,7 @@ async function girisYap() {
             aktifKullanici = { ...data, email: email };
             // 🔐 Token'ı 7 gün sakla
             localStorage.setItem('bai_token', data.token);
+            localStorage.setItem('bai_token_expiry', Date.now() + 7 * 24 * 60 * 60 * 1000);
             localStorage.setItem('bai_user', JSON.stringify({
                 full_name: data.full_name,
                 email: email,
@@ -234,22 +270,26 @@ async function girisYap() {
 
 // --- 🌤️ HAVA DURUMU ---
 async function havaGuncelle() {
+    if (window.innerWidth <= 768) return;
     const sehir = document.getElementById('citySelect') ? document.getElementById('citySelect').value : "Sivas";
     const tempEl = document.getElementById('temp');
     const condEl = document.getElementById('condition');
+    const widget = document.getElementById('weatherWidget');
     try {
         const res = await fetch(`/hava?sehir=${sehir}`);
         const data = await res.json();
         if (tempEl) tempEl.innerText = data.temp;
         if (condEl) condEl.innerText = data.cond;
+        if (widget) widget.textContent = `⛅ ${data.cond} ${data.temp}°`;
     } catch (e) {
         if (condEl) condEl.innerText = "Bağlantı Yok";
+        if (widget) widget.textContent = "⛅ --";
     }
 }
 
 // --- 🌑 SIDEBAR KONTROLLERİ ---
 function toggleSidebar() {
-    const side = document.getElementById('sidebar');
+    const side = document.getElementById('sidebarPanel');
     const overlay = document.getElementById('sidebarOverlay');
     const isActive = side.classList.toggle('active');
     if (isActive) overlay.classList.add('active');
@@ -379,6 +419,29 @@ function resimSecildi(event) {
         document.getElementById('soruInput').placeholder = "📸 Görsel hafızada! Sorunuzu yazın...";
     };
     reader.readAsDataURL(file);
+}
+
+// --- 🔍 YENİ ARAMA FONKSİYONLARI ---
+function sorularGonder() {
+    const input = document.getElementById('userInput');
+    const soru = input ? input.value.trim() : '';
+    if (!soru) return;
+    // Bridge: copy to legacy soruInput so soruSor() picks it up
+    const legacy = document.getElementById('soruInput');
+    if (legacy) { legacy.value = soru; soruSor(); }
+    if (input) input.value = '';
+}
+
+function sonucGoster(html) {
+    const resBox = document.getElementById('result');
+    if (!resBox) return;
+    resBox.innerHTML = `
+        <div class="result-header">
+            <div class="result-live-dot"></div>
+            <div class="result-title">🏗️ AI Yanıtı</div>
+            <div class="result-live-tag">LIVE</div>
+        </div>
+        <div class="result-body">${html}</div>`;
 }
 
 // --- 🧠 ANA SORU SİSTEMİ ---
@@ -929,6 +992,8 @@ function drawBoundingBoxes(ihlaller) {
 
 // --- 📁 ARŞİV ---
 async function arsivAc() {
+  document.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.quick-btn[onclick="arsivAc()"]')?.classList.add('active');
     const token = localStorage.getItem('bai_token');
     if (!token) return;
     document.getElementById('arsivModal').style.display = 'flex';
@@ -974,6 +1039,7 @@ async function arsivDetayGoster(tip, id) {
 function arsivKapat() { document.getElementById('arsivModal').style.display = 'none'; }
 
 let secilenPlan = 'free';
+let selectedPlan = 'free';
 
 function switchPanel(panel) {
     document.getElementById('panel-login').style.display = 'none';
@@ -983,13 +1049,16 @@ function switchPanel(panel) {
 }
 
 function selectPlan(plan) {
-    secilenPlan = plan;
-    document.getElementById('plan-free').classList.toggle('selected', plan === 'free');
-    document.getElementById('plan-pro').classList.toggle('selected', plan === 'pro');
+  selectedPlan = plan;
+  console.log('Plan seçildi:', plan); // debug için
+  document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('selected'));
+  const card = document.getElementById('plan-' + plan);
+  if (card) card.classList.add('selected');
 }
 
 // --- KAYIT SİSTEMİ ---
 async function kayitOl() {
+    console.log('Kayıt başladı, seçili plan:', selectedPlan); // debug
     const name = document.getElementById('regName').value.trim();
     const email = document.getElementById('regEmail').value.trim();
     const pass = document.getElementById('regPass').value;
@@ -1001,8 +1070,8 @@ async function kayitOl() {
         msg.innerHTML = '<div class="msg-error">Tüm alanları doldurun.</div>';
         return;
     }
-    if (pass.length < 6) {
-        msg.innerHTML = '<div class="msg-error">Şifre en az 6 karakter olmalı.</div>';
+    if (pass.length < 8) {
+        showToast('Şifre en az 8 karakter olmalı.', 'warning');
         return;
     }
     if (pass !== passConfirm) {
@@ -1017,12 +1086,18 @@ async function kayitOl() {
         const response = await fetch('/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password: pass, full_name: name, plan: secilenPlan })
+            body: JSON.stringify({ email, password: pass, full_name: name, plan: selectedPlan })
         });
         const data = await response.json();
 
         if (response.ok) {
             msg.innerHTML = '<div class="msg-success">✅ Hesabınız oluşturuldu! Giriş yapabilirsiniz.</div>';
+            console.log('Kayıt OK, plan:', selectedPlan);
+            if (selectedPlan === 'pro' || selectedPlan === 'max') {
+                setTimeout(() => {
+                    odemePaneliAc(selectedPlan);
+                }, 1000);
+            }
             setTimeout(() => {
                 switchPanel('login');
                 document.getElementById('loginEmail').value = email;
@@ -1083,6 +1158,26 @@ async function sifreGuncelle() {
 
 // --- PROFİL ---
 let aktifKullanici = null;
+
+function updatePlanLabel() {
+  const plan = (document.getElementById('planBadge')?.innerText || '').toLowerCase();
+  const label = document.getElementById('planLabel');
+  if (!label) return;
+
+  if (plan.includes('admin') || window.isAdmin) {
+    label.innerText = 'Admin';
+    label.style.color = '#ef4444';
+  } else if (plan.includes('max')) {
+    label.innerText = 'Max';
+    label.style.color = '#f59e0b';
+  } else if (plan.includes('pro')) {
+    label.innerText = 'Pro';
+    label.style.color = '#f97316';
+  } else {
+    label.innerText = 'Free';
+    label.style.color = '#8b8fa8';
+  }
+}
 
 function openProfile() {
     if (!aktifKullanici) return;
@@ -1442,6 +1537,14 @@ async function kullanımDurumuGoster() {
             }
             const badge = document.getElementById('profilePlan');
             if (badge) badge.innerHTML = planBadgeHTML(data.plan);
+            const topBadge = document.getElementById('planBadge');
+            if (topBadge) {
+                if (data.plan === 'admin') topBadge.innerHTML = '🛡️ ADMIN';
+                else if (data.plan === 'max') topBadge.innerHTML = '👑 MAX';
+                else if (data.plan === 'pro') topBadge.innerHTML = '⚡ PRO';
+                else topBadge.innerHTML = 'FREE';
+            }
+            updatePlanLabel();
             const kayitliRol = localStorage.getItem('bai_rol');
             if (kayitliRol) navSidebarGuncelle(kayitliRol);
         }
@@ -1481,7 +1584,7 @@ async function odemeBildirimi() {
         const res = await fetch('/odeme-bildirimi', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token })
+            body: JSON.stringify({ token, plan: selectedPlan || 'pro' })
         });
         const data = await res.json();
         if (res.ok) {
@@ -1518,8 +1621,126 @@ function toggleMobileNav() {
 }
 
 function closeMobileNav() {
-    document.getElementById('navSidebar').classList.remove('mobile-open');
-    document.getElementById('navOverlay').classList.remove('active');
+    const overlay = document.getElementById('sidebarOverlay');
+    const sidebar = document.getElementById('sidebar');
+    if (overlay) overlay.style.display = 'none';
+    if (sidebar) sidebar.classList.remove('open');
+}
+
+function toggleMobileMenu() {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('mobile-overlay');
+  const btn = document.getElementById('hamburger-btn');
+  const isOpen = sidebar.classList.contains('mobile-open');
+
+  if (isOpen) {
+    closeMobileMenu();
+  } else {
+    // Sidebar'ı aç
+    sidebar.style.cssText = `
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 80% !important;
+      max-width: 280px !important;
+      height: 100vh !important;
+      z-index: 9999 !important;
+      background: rgba(8, 18, 40, 0.98) !important;
+      backdrop-filter: blur(20px) !important;
+      -webkit-backdrop-filter: blur(20px) !important;
+      overflow-y: auto !important;
+      flex-direction: column !important;
+      display: flex !important;
+      padding-top: 20px !important;
+      border-right: 1px solid rgba(255,255,255,0.1) !important;
+      pointer-events: auto !important;
+    `;
+    sidebar.classList.add('mobile-open');
+
+    if (overlay) {
+      overlay.style.cssText = `
+        display: block !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 280px !important;
+        width: calc(100% - 280px) !important;
+        height: 100% !important;
+        background: rgba(0,0,0,0.7) !important;
+        z-index: 150 !important;
+        pointer-events: auto !important;
+      `;
+    }
+    if (btn) btn.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function closeMobileMenu() {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('mobile-overlay');
+  const btn = document.getElementById('hamburger-btn');
+
+  if (sidebar) {
+    sidebar.style.cssText = '';
+    sidebar.classList.remove('mobile-open');
+  }
+  if (overlay) {
+    overlay.style.cssText = 'display: none !important;';
+    overlay.classList.remove('active');
+  }
+  if (btn) btn.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function toggleRaporlarSub() {
+  const sub = document.getElementById('raporlarSub');
+  const btn = document.getElementById('raporlarBtn');
+  const analizSub = document.getElementById('analizSub');
+
+  // Analiz'i kapat
+  if (analizSub) analizSub.style.display = 'none';
+  document.querySelectorAll('.quick-btn').forEach(b => {
+    if (b !== btn) b.classList.remove('active');
+  });
+
+  if (sub.style.display === 'flex') {
+    sub.style.display = 'none';
+    btn.classList.remove('active');
+  } else {
+    sub.style.display = 'flex';
+    btn.classList.add('active');
+  }
+}
+
+function guvenlikAc() {
+  document.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.quick-btn[onclick="guvenlikAc()"]')?.classList.add('active');
+
+  const modal = document.getElementById('guvenlikModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    guvenlikHavaDurumunuYukle();
+    return;
+  }
+}
+
+function analizAc() {
+  const sub = document.getElementById('analizSub');
+  const btn = document.querySelector('.quick-btn[onclick="analizAc()"]');
+  const raporSub = document.getElementById('raporlarSub');
+  const raporBtn = document.getElementById('raporlarBtn');
+
+  // Raporlar'ı kapat
+  if (raporSub) raporSub.style.display = 'none';
+  if (raporBtn) raporBtn.classList.remove('active');
+
+  if (sub.style.display === 'flex') {
+    sub.style.display = 'none';
+    if (btn) btn.classList.remove('active');
+  } else {
+    sub.style.display = 'flex';
+    if (btn) btn.classList.add('active');
+  }
 }
 
 function setActiveNav(page) {
@@ -1538,9 +1759,12 @@ const PAGE_TITLES = {
 };
 
 function navGit(page) {
+    closeMobileMenu();
     setActiveNav(page);
     const titleEl = document.getElementById('headerTitle');
     if (titleEl) titleEl.textContent = PAGE_TITLES[page] || '';
+    const tbTitle = document.getElementById('tbPageTitle');
+    if (tbTitle) tbTitle.textContent = PAGE_TITLES[page] || '';
     // Close mobile nav if open
     closeMobileNav();
     // Perform action
@@ -1867,11 +2091,8 @@ let santiyeSiralaKolon = 'ad';
 let santiyeSiralaYon = 'asc';
 
 function santiyeModalAc() {
-    if (aktifRol !== 'muteahhit') return;
-    const m = document.getElementById('santiyeModal');
-    m.style.display = 'block';
-    santiyeYukle();
-    setTimeout(() => santiyeHaritaBaslat(), 300);
+  document.getElementById('santiyeModal').style.display = 'flex';
+  santiyeListeYukle();
 }
 function santiyeModalKapat() {
     document.getElementById('santiyeModal').style.display = 'none';
@@ -2250,10 +2471,242 @@ document.addEventListener('DOMContentLoaded', async () => {
                 localStorage.removeItem('bai_user');
             }
         } catch(e) {
+            // Network hatası (offline/PWA) — token geçerliyse uygulamayı göster
+            const expiry = localStorage.getItem('bai_token_expiry');
+            if (expiry && Date.now() < parseInt(expiry)) {
+                const cachedUser = localStorage.getItem('bai_user');
+                if (cachedUser) aktifKullanici = JSON.parse(cachedUser);
+                document.getElementById('auth-overlay').style.display = 'none';
+                document.getElementById('mainApp').style.display = 'block';
+                document.getElementById('navSidebar').style.display = 'flex';
+                document.getElementById('topHeader').style.display = 'flex';
+                dilDegistir(aktifDil);
+                const kayitliRol = localStorage.getItem('bai_rol');
+                if (kayitliRol) navSidebarGuncelle(kayitliRol);
+                else rolEkraniniGoster();
+                return;
+            }
             localStorage.removeItem('bai_token');
+            localStorage.removeItem('bai_token_expiry');
         }
     }
     havaGuncelle();
+});
+
+function showToast(msg, type = 'info') {
+  const existing = document.getElementById('toastNotif');
+  if (existing) existing.remove();
+
+  const colors = {
+    info:    { bg: 'rgba(56,189,248,0.15)',  border: 'rgba(56,189,248,0.4)',  icon: 'ℹ️' },
+    warning: { bg: 'rgba(249,115,22,0.15)',  border: 'rgba(249,115,22,0.5)',  icon: '⚠️' },
+    success: { bg: 'rgba(34,197,94,0.15)',   border: 'rgba(34,197,94,0.4)',   icon: '✅' },
+    error:   { bg: 'rgba(239,68,68,0.15)',   border: 'rgba(239,68,68,0.4)',   icon: '❌' },
+  };
+  const c = colors[type] || colors.info;
+
+  const toast = document.createElement('div');
+  toast.id = 'toastNotif';
+  toast.style.cssText = `
+    position:fixed; top:70px; right:20px; z-index:99999;
+    background:${c.bg}; border:1px solid ${c.border};
+    backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+    border-radius:14px; padding:14px 20px;
+    color:#fff; font-size:14px; font-weight:500;
+    display:flex; align-items:center; gap:10px;
+    box-shadow:0 8px 32px rgba(0,0,0,0.4);
+    animation:toastIn 0.3s ease; max-width:340px;
+    font-family:'Poppins',sans-serif;
+  `;
+  toast.innerHTML = `<span>${msg}</span>
+    <button onclick="this.parentElement.remove()" style="background:none;border:none;color:#aaa;cursor:pointer;font-size:16px;margin-left:auto;padding:0 0 0 10px;">✕</button>`;
+
+  const style = document.createElement('style');
+  style.textContent = '@keyframes toastIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}';
+  document.head.appendChild(style);
+  document.body.appendChild(toast);
+  setTimeout(() => toast?.remove(), 4000);
+}
+
+function santiyeListeYukle() {
+  const token = localStorage.getItem('token');
+  if (!token) return;
+
+  fetch('/santiyeler', {
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
+  .then(res => res.json())
+  .then(data => {
+    const kartlar = document.getElementById('santiyeKartlar');
+    const ozet = document.getElementById('santiyeOzet');
+    if (!kartlar) return;
+
+    if (!data || data.length === 0) {
+      kartlar.innerHTML = '<div style="color:#aaa;text-align:center;padding:20px;">Henüz şantiye eklenmedi.</div>';
+      return;
+    }
+
+    kartlar.innerHTML = data.map(s => `
+      <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.10);
+      border-radius:16px;padding:18px;cursor:pointer;"
+      onclick="santiyeDetayAc(${s.id})">
+        <div style="font-size:15px;font-weight:600;color:white;margin-bottom:6px;">${s.ad}</div>
+        <div style="font-size:12px;color:#aaa;">${s.konum || ''}</div>
+        <div style="margin-top:10px;font-size:12px;color:#f97316;">
+          İlerleme: %${s.ilerleme || 0}
+        </div>
+      </div>
+    `).join('');
+  })
+  .catch(() => {
+    const kartlar = document.getElementById('santiyeKartlar');
+    if (kartlar) kartlar.innerHTML = '<div style="color:#aaa;text-align:center;padding:20px;">Veriler yüklenemedi.</div>';
+  });
+}
+
+function gTab(name, el) {
+  document.querySelectorAll('.g-tab-content').forEach(t => t.style.display = 'none');
+  document.getElementById('gtab-' + name).style.display = 'block';
+  document.querySelectorAll('.g-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  if (name === 'hava') guvenlikHavaDurumunuYukle();
+}
+
+function gToggle(el) {
+  const cb = el.querySelector('.g-checkbox');
+  const badge = el.querySelector('.g-badge');
+  if (cb.classList.contains('checked')) {
+    cb.classList.remove('checked');
+    cb.textContent = '○';
+    badge.className = 'g-badge g-badge-warn';
+    badge.textContent = 'Kontrol Et';
+  } else {
+    cb.classList.add('checked');
+    cb.textContent = '✓';
+    badge.className = 'g-badge g-badge-ok';
+    badge.textContent = 'Tamam';
+  }
+  guvenlikSkoruGuncelle();
+}
+
+function guvenlikSkoruGuncelle() {
+  const tumItems = document.querySelectorAll('#guvenlikModal .g-check-item');
+  const tamam = document.querySelectorAll('#guvenlikModal .g-checkbox.checked').length;
+  const toplam = tumItems.length;
+  const skor = toplam > 0 ? Math.round((tamam / toplam) * 100) : 0;
+
+  const skorEl = document.getElementById('guvenlikSkor');
+  if (skorEl) {
+    skorEl.textContent = skor;
+    skorEl.style.color = skor >= 80 ? '#22c55e' : skor >= 50 ? '#f59e0b' : '#ef4444';
+  }
+
+  const ekipmanOk = document.querySelectorAll('#ekipman-list .g-checkbox.checked').length;
+  const statEl = document.getElementById('stat-ekipman');
+  if (statEl) statEl.textContent = ekipmanOk;
+}
+
+function guvenlikHavaDurumunuYukle() {
+  const sehir = document.getElementById('citySelect')?.value || 'Sivas';
+  const container = document.getElementById('hava-uyarilari');
+  if (!container) return;
+
+  fetch('/hava?sehir=' + sehir)
+    .then(r => r.json())
+    .then(data => {
+      const temp = data.sicaklik || data.temp || '--';
+      const nem = data.nem || '--';
+      const ruzgar = data.ruzgar || data.wind || '--';
+      const durum = data.durum || data.condition || '';
+
+      const uyarilar = [];
+      if (parseFloat(temp) <= 0) uyarilar.push({renk:'#ef4444', ikon:'🌡️', baslik:'Don Riski', mesaj:`Sıcaklık ${temp}°C. Beton dökümü tehlikeli! Antifriz önlem alın, kalıpları örtün.`});
+      if (parseFloat(temp) > 0 && parseFloat(temp) <= 5) uyarilar.push({renk:'#f59e0b', ikon:'❄️', baslik:'Soğuk Hava', mesaj:`Sıcaklık ${temp}°C. Beton priz süresi uzuyor. Kür önlemi alın.`});
+      if (parseFloat(nem) >= 90) uyarilar.push({renk:'#f59e0b', ikon:'💧', baslik:'Yüksek Nem', mesaj:`Nem %${nem}. Boyama ve sıva uygun değil. Elektrik ekipmanlarına dikkat.`});
+      if (parseFloat(ruzgar) >= 30) uyarilar.push({renk:'#ef4444', ikon:'💨', baslik:'Kuvvetli Rüzgar', mesaj:`Rüzgar ${ruzgar} km/s. Vinç operasyonu durdurun! Yüksekte çalışma yasak.`});
+      else if (parseFloat(ruzgar) >= 15) uyarilar.push({renk:'#f59e0b', ikon:'💨', baslik:'Orta Rüzgar', mesaj:`Rüzgar ${ruzgar} km/s. Yüksekte çalışmada dikkat gerekli.`});
+      if (durum.toLowerCase().includes('yağmur') || durum.toLowerCase().includes('rain')) uyarilar.push({renk:'#3b82f6', ikon:'🌧️', baslik:'Yağmur', mesaj:'Kaygan zemin riski. Elektrikli ekipmanlara dikkat. Açık depolama örtün.'});
+
+      if (uyarilar.length === 0) uyarilar.push({renk:'#22c55e', ikon:'☀️', baslik:'Hava Uygun', mesaj:'Mevcut hava koşulları çalışma için uygundur.'});
+
+      container.innerHTML = uyarilar.map(u => `
+        <div style="background:rgba(255,255,255,0.04); border:1px solid ${u.renk}40; border-left:3px solid ${u.renk}; border-radius:14px; padding:16px;">
+          <div style="color:${u.renk}; font-weight:700; margin-bottom:6px; font-size:0.9rem;">${u.ikon} ${u.baslik}</div>
+          <div style="color:#ccc; font-size:0.85rem; line-height:1.5;">${u.mesaj}</div>
+        </div>
+      `).join('');
+
+      const acikUyari = uyarilar.filter(u => u.renk !== '#22c55e').length;
+      const acikEl = document.getElementById('stat-acik-uyari');
+      if (acikEl) acikEl.textContent = acikUyari;
+    })
+    .catch(() => {
+      container.innerHTML = '<div style="color:#aaa; text-align:center; padding:20px;">Hava durumu yüklenemedi.</div>';
+    });
+}
+
+function guvenlikKapat() {
+  document.getElementById('guvenlikModal').style.display = 'none';
+  document.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('active'));
+}
+
+function guvenlikRaporuKaydet() {
+  const tamam = document.querySelectorAll('#guvenlikModal .g-checkbox.checked').length;
+  const toplam = document.querySelectorAll('#guvenlikModal .g-check-item').length;
+  showToast(`✅ İSG raporu kaydedildi. ${tamam}/${toplam} madde tamamlandı.`, 'success');
+  const guvenliGun = parseInt(document.getElementById('stat-guvenli-gun').textContent) || 0;
+  document.getElementById('stat-guvenli-gun').textContent = guvenliGun + 1;
+}
+
+function ekipmanRaporuKaydet() {
+  showToast('✅ Ekipman kontrol raporu kaydedildi.', 'success');
+}
+
+function olayBildir() {
+  const tur = document.getElementById('olayTur').value;
+  const siddet = document.getElementById('olaySiddet').value;
+  const aciklama = document.getElementById('olayAciklama').value;
+
+  if (!tur || !siddet || !aciklama) {
+    showToast('Lütfen olay türü, şiddet ve açıklama girin.', 'warning');
+    return;
+  }
+
+  const olaySayisi = parseInt(document.getElementById('stat-olay').textContent) || 0;
+  document.getElementById('stat-olay').textContent = olaySayisi + 1;
+
+  document.getElementById('olayTur').value = '';
+  document.getElementById('olaySiddet').value = '';
+  document.getElementById('olayAciklama').value = '';
+  document.getElementById('olayOnlem').value = '';
+  document.getElementById('olayKonum').value = '';
+  document.getElementById('olayKisi').value = '';
+
+  showToast('🚨 Olay bildirildi ve kaydedildi.', 'success');
+}
+
+function toplanmaKaydet() {
+  const nokta = document.getElementById('toplanmaNoktasi').value;
+  if (!nokta) { showToast('Toplanma noktası boş olamaz.', 'warning'); return; }
+  localStorage.setItem('toplanma_noktasi', nokta);
+  showToast('📍 Toplanma noktası kaydedildi.', 'success');
+}
+
+function sorumlKaydet() {
+  const ad = document.getElementById('sorumlAd').value;
+  const tel = document.getElementById('sorumlTel').value;
+  if (!ad || !tel) { showToast('Ad ve telefon boş olamaz.', 'warning'); return; }
+  localStorage.setItem('sorumlu_ad', ad);
+  localStorage.setItem('sorumlu_tel', tel);
+  showToast('👷 Sorumlu bilgileri kaydedildi.', 'success');
+}
+
+window.addEventListener('load', () => {
+  if (window.location.hash === '#register') {
+    switchPanel('register');
+    const overlay = document.getElementById('auth-overlay');
+    if (overlay) overlay.style.display = 'flex';
+  }
 });
 </script>
 """

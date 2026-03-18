@@ -6,6 +6,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     full_name: str
+    plan: Optional[str] = "free"
 
     @field_validator('password')
     @classmethod

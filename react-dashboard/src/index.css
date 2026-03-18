@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Base ── */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background-color: #060a14;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+  overflow: hidden;
+  color: #dce8f5;
+}
+
+/* ── Blueprint grid background ── */
+.blueprint-grid {
+  background-image:
+    linear-gradient(rgba(0, 160, 200, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 160, 200, 0.055) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* ── Construction site SVG silhouette ── */
+.construction-bg {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1400 900' preserveAspectRatio='xMidYMid slice'%3E%3Cg opacity='0.38' stroke='%231a7090' fill='none' stroke-width='1.4'%3E%3Cline x1='240' y1='0' x2='240' y2='900' stroke-width='3.2'/%3E%3Cline x1='80' y1='60' x2='450' y2='60' stroke-width='2.4'/%3E%3Crect x='81' y='43' width='38' height='22' rx='2'/%3E%3Cline x1='310' y1='60' x2='310' y2='240' stroke-width='1.0'/%3E%3Cline x1='332' y1='60' x2='332' y2='195' stroke-width='1.0'/%3E%3Cline x1='240' y1='60' x2='272' y2='126'/%3E%3Cline x1='240' y1='126' x2='272' y2='60'/%3E%3Cline x1='240' y1='126' x2='272' y2='192'/%3E%3Cline x1='240' y1='192' x2='272' y2='126'/%3E%3Cline x1='240' y1='192' x2='272' y2='258'/%3E%3Cline x1='240' y1='258' x2='272' y2='192'/%3E%3Cline x1='240' y1='258' x2='272' y2='324'/%3E%3Cline x1='240' y1='324' x2='272' y2='258'/%3E%3Cline x1='240' y1='324' x2='272' y2='390'/%3E%3Cline x1='240' y1='390' x2='272' y2='324'/%3E%3Crect x='206' y='882' width='68' height='14' rx='2'/%3E%3Cline x1='188' y1='882' x2='292' y2='882'/%3E%3C/g%3E%3Cg opacity='0.28' stroke='%231a5878' fill='none' stroke-width='0.9'%3E%3Crect x='52' y='320' width='162' height='580'/%3E%3Cline x1='52' y1='390' x2='214' y2='390'/%3E%3Cline x1='52' y1='460' x2='214' y2='460'/%3E%3Cline x1='52' y1='530' x2='214' y2='530'/%3E%3Cline x1='52' y1='600' x2='214' y2='600'/%3E%3Cline x1='133' y1='320' x2='133' y2='900'/%3E%3C/g%3E%3Cg opacity='0.22' stroke='%231a5878' fill='none' stroke-width='0.85'%3E%3Crect x='1050' y='80' width='210' height='820'/%3E%3Cline x1='1050' y1='170' x2='1260' y2='170'/%3E%3Cline x1='1050' y1='260' x2='1260' y2='260'/%3E%3Cline x1='1050' y1='350' x2='1260' y2='350'/%3E%3Cline x1='1155' y1='80' x2='1155' y2='900'/%3E%3C/g%3E%3Cline x1='0' y1='892' x2='1400' y2='892' stroke='%231a4060' stroke-width='1.4'/%3E%3C/svg%3E");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(249,115,22,0.3); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: #FF6200; }
+
+/* ── Glass card ── */
+.glass-card {
+  background: rgba(6, 11, 22, 0.82);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/* ── Gradient border util ── */
+.grad-border-teal::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(0,210,220,0.30), rgba(139,92,246,0.20), rgba(0,180,200,0.10));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}

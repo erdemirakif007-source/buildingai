@@ -9,7 +9,9 @@ load_dotenv()
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-SECRET_KEY = os.getenv("SECRET_KEY", "buildingai-super-gizli-anahtar-2024")
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY .env dosyasında tanımlanmamış!")
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_DAYS = 7
 
