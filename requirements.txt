@@ -22,3 +22,4 @@ edge-tts
 python-jose
 pdfplumber
 iyzipay
+PyJWT
