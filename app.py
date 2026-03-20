@@ -533,6 +533,10 @@ async def main_page(request: Request):
 async def landing_redirect(request: Request):
     return Path("landing.html").read_text(encoding="utf-8")
 
+@app.get("/kvkk", response_class=HTMLResponse)
+async def kvkk_page():
+    return HTMLResponse(Path("kvkk.html").read_text(encoding="utf-8"))
+
 # --- 🎤 SESLİ RAPOR ---
 @app.post("/sesli-rapor")
 @limiter.limit("10/minute")
