@@ -1,0 +1,27 @@
+{
+  "_aciklama": "Bu dosyayı doldurun. AI buradan okur. Alanı boş bırakmak yerine 0 yazın.",
+  "tarih_guncelleme": "2026-03-24 09:00",
+
+  "stok": {
+    "Çimento (ton)": 0,
+    "Demir (kg)": 0,
+    "Ahşap kalıp (m²)": 0,
+    "Kum-çakıl (m³)": 0
+  },
+
+  "hava": {
+    "durum": "Veri girilmedi",
+    "sicaklik": null,
+    "ruzgar": "— km/s",
+    "nem": "%—"
+  },
+
+  "ekip": {
+    "Aktif işçi": 0,
+    "İş makinesi": 0,
+    "Devam oranı": "%0",
+    "Aktif iş emirleri": 0
+  },
+
+  "notlar": "Buraya günlük şantiye notu ekleyebilirsiniz."
+}

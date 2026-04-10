@@ -1,0 +1,434 @@
+================================================================================
+  BuildingAI — PROJE KURALLARI, TEKNİK STANDARTLAR VE KRİTİK UYARILAR
+================================================================================
+Son güncelleme: Orijinal manifesto + Genişletilmiş vizyon katkısı birleşimi
+Not: "BuildingAI Pro" ifadesi projenin tamamında "BuildingAI" olarak güncellenmiştir.
+================================================================================
+
+
+════════════════════════════════════════════════════════════════════════════════
+  BÖLÜM 1 — MARKA VE İSİMLENDİRME KURALLARI
+════════════════════════════════════════════════════════════════════════════════
+
+KURAL 1.1 — Proje adı her yerde "BuildingAI" olarak kullanılır.
+           "BuildingAI Pro" ifadesi artık geçersizdir. Tüm dosyalarda,
+           UI bileşenlerinde, API yanıtlarında, e-posta şablonlarında
+           ve dokümantasyonda bu isim kullanılır.
+
+KURAL 1.2 — Plan isimleri: Free | Pro | Max | Kurumsal
+           Plan isimleri değiştirilirken tüm backend enum'ları,
+           frontend koşulları ve veritabanı değerlerinin senkronize
+           güncellenmesi zorunludur.
+
+KURAL 1.3 — Ürün pozisyonlaması:
+           BuildingAI bir "şantiye yönetim yazılımı" değil,
+           "Türkiye inşaat güven altyapısı"dır.
+           Bu fark, tüm pazarlama metinlerinde, pitch deck'te ve
+           yatırımcı sunumlarında korunmalıdır.
+
+
+════════════════════════════════════════════════════════════════════════════════
+  BÖLÜM 2 — TEKNİK MİMARİ KURALLARI
+════════════════════════════════════════════════════════════════════════════════
+
+KURAL 2.1 — BACKEND STACK
+  - Framework   : FastAPI (Python)
+  - DB (şimdi)  : SQLite (geliştirme ve erken deploy)
+  - DB (hedef)  : PostgreSQL (Railway üzerinde, Faz 15'te geçiş)
+  - ORM         : SQLAlchemy (göç için zorunlu — raw SQL yazılmaz)
+  - Kimlik doğr.: JWT + bcrypt (mevcut) | Google OAuth 2.0 (mevcut)
+  - Cache       : Redis (Faz 18+ için hedef)
+  - Dosya depo  : S3 (yedekleme ve medya)
+  - Deploy      : Railway (birincil) | AWS (uzun vade)
+
+KURAL 2.2 — AI & MODELLER
+  - Birincil AI   : Google Gemini 2.5 Flash
+  - Vision AI     : Gemini Vision (kamera analizi, video, metraj)
+  - Ses asistanı  : Edge TTS — tr-TR-AhmetNeural
+  - RAG motoru    : Agentic RAG (PDF yönetmelik okuma altyapısı)
+  - Gemini modeli değiştirilecekse tüm prompt şablonları
+    yeniden test edilmeli ve output formatları doğrulanmalıdır.
+
+KURAL 2.3 — GÜVENLİK STANDARTLARI
+  - Brute-force koruması: 5 yanlış giriş → 15 dakika kilit (değiştirilemez)
+  - Rate limiting: 60 istek/dk (genel) | 5 istek/dk (login endpoint)
+  - Şifre sıfırlama: Gmail SMTP üzerinden 6 haneli kod, süre sınırlı
+  - Tüm hassas endpoint'ler JWT middleware'inden geçmeli
+  - Admin paneli ayrı yetkilendirme katmanı gerektirir
+  - Gelecekte eklenecek: 2FA (Google Authenticator veya SMS)
+  - Gelecekte eklenecek: Cihaz parmak izi (hesap paylaşımı tespiti)
+
+KURAL 2.4 — VERİTABANI GEÇİŞ KURALI (SQLite → PostgreSQL)
+  - Geçiş SQLAlchemy migration script'i ile yapılır
+  - Ham SQL sorgusu YAZILMAZ; ORM modelleri üzerinden çalışılır
+  - Geçiş öncesi tam SQLite yedeği alınır
+  - Gece 03:00 otomatik yedekleme S3'e aktarılır
+  - /health endpoint'i Railway deploy'dan önce aktif edilir
+  - Graceful shutdown mekanizması deploy sırasında devreye girer
+
+KURAL 2.5 — API TASARIM KURALLARI
+  - Versiyonlama: /api/v1/ (mevcut) → /api/v2/ (büyük değişikliklerde)
+  - Eski versiyon en az 6 ay desteklenir
+  - Tüm endpoint'ler OpenAPI/Swagger dokümantasyonuna sahip olmalı
+  - Webhook altyapısı SAP/Logo/Procore entegrasyonu için hazırlanacak
+  - B2B API (banka, sigorta) ayrı kimlik doğrulama katmanı gerektirir
+
+KURAL 2.6 — FRONTEND MİMARİSİ
+  - Arayüz dili: Türkçe (birincil) | İngilizce ve Arapça (yol haritasında)
+  - Tasarım dili: Glassmorphic (cam panel), indigo/teal renk paleti
+  - Arka plan: Şantiye blueprint motifi
+  - PWA hedefi: iOS + Android, gerçek offline-first (sadece "offline-capable" değil)
+  - WebSockets: Canlı bildirim altyapısı Faz 18+'de
+  - Ctrl+K: Global kısayol araması (uzun vade)
+  - Sidebar: İçe katlanabilir mimari (uzun vade)
+
+
+════════════════════════════════════════════════════════════════════════════════
+  BÖLÜM 3 — GELİŞTİRME & KOD YAZIM KURALLARI
+════════════════════════════════════════════════════════════════════════════════
+
+KURAL 3.1 — YENİ ÖZELLİK EKLEMESİ
+  Her yeni özellik şu adımları izler:
+    1. Plan bazlı erişim kontrolü tanımlanır (Free/Pro/Max/Kurumsal)
+    2. Feature flag ile deploy edilir
+    3. "Yükselt" satış modalı için hook noktası belirlenir
+    4. Türkçe hata mesajları ve UI metinleri yazılır
+    5. Rate limiting gereksinimleri değerlendirilir
+
+KURAL 3.2 — PLAN KONTROLÜ
+  Her korumalı endpoint veya UI bileşeni için:
+    - Kullanıcının plan seviyesi JWT claim'inden okunur
+    - Yetersiz plan → 403 döner + frontend "Yükselt" modal'ı açar
+    - Admin kullanıcıları plan kısıtlamalarından muaftır
+    - Soft limit (kullanım sayısı) ve hard limit (erişim yasağı) ayrı ele alınır
+
+KURAL 3.3 — AI PROMPT YAZIMI
+  - Her prompt Türkçe saha bağlamını içermeli
+  - TBDY 2018 ve TS 500 referansları kritik hesap promptlarında yer almalı
+  - Gemini Vision prompt'ları bounding box çıktısı için formatlanmalı
+  - RAG promptları PDF kaynak referansını zorunlu kılar
+  - Hallüsinasyon riskini azaltmak için "bilmiyorum" davranışı tanımlanmalı
+
+KURAL 3.4 — PDF & RAPOR ÜRETIMI
+  - Tüm PDF çıktıları ReportLab ile üretilir
+  - Türkçe karakter desteği (ş, ğ, ü, ö, ç, ı) zorunludur
+  - Haftalık PDF raporlar şantiye logosu ve tarih damgası içermeli
+  - ISG tutanakları SGK formatına uygun üretilmeli
+  - İhtarnameler noter standartında formatlanmalı
+
+KURAL 3.5 — VERİ GİRİŞİ VE DOĞRULAMA
+  - Tüm kullanıcı girdileri backend'de Pydantic ile doğrulanır
+  - Frontend doğrulama UX için, backend doğrulama güvenlik için yapılır
+  - Koordinat verileri GPS formatında saklanır (WGS84)
+  - Tarih/saat verileri UTC olarak saklanır, Türkiye saatiyle gösterilir
+  - Para birimi: TL (₺), ondalık: virgül, binlik: nokta
+
+
+════════════════════════════════════════════════════════════════════════════════
+  BÖLÜM 4 — KRİTİK RİSKLER VE UYARILAR
+════════════════════════════════════════════════════════════════════════════════
+
+RİSK 4.1 — KVKK UYUMLULUĞU [ÖNCELİK: KRİTİK]
+  Durum: Henüz ele alınmamış
+  Neden önemli:
+    Şantiye fotoğrafları + GPS koordinatları + personel kimlik bilgileri
+    = KVKK kapsamında kişisel ve hassas veri işleme yükümlülüğü
+  Riskler:
+    - Büyük müteahhitler bu yüzden sözleşme imzalamayı reddedebilir
+    - İdari para cezası riski (ihlalin boyutuna göre)
+    - Kurumsal satışlarda hukuki engel
+  Aksiyon planı:
+    - KVKK danışmanlık firmasıyla çerçeve oluşturulmalı (Faz 15 öncesi)
+    - Gizlilik politikası, aydınlatma metni ve veri işleme sözleşmesi hazırlanmalı
+    - "KVKK Uyumlu" rozeti bir satış argümanı olarak konumlandırılmalı
+    - Veri minimizasyonu prensibi: sadece gerekli veri toplanmalı
+
+RİSK 4.2 — REGÜLASYON VE LOBİCİLİK [ÖNCELİK: ORTA-YÜKSEK]
+  Durum: Türkiye'de inşaat yazılımı sektörü henüz denetimsiz
+  Fırsat:
+    Çevre Bakanlığı veya TBMM bir dijital raporlama zorunluluğu
+    çıkardığında sektörde yerleşik olmak kritik avantaj sağlar
+  Riskler:
+    - Zorunluluk farklı bir standart üzerinden gelirse uyum maliyeti artar
+    - Devlet destekli rakip platform çıkarılabilir
+  Aksiyon planı:
+    - Çevre ve Şehircilik Bakanlığı ile erken diyalog kurulmalı
+    - TBMM inşaat alt komisyonlarında teknik danışman rolü aranmalı
+    - Sektör sivil toplum kuruluşları (İMO, İnşaat Müteahhitleri Birliği) ile iş birliği
+
+RİSK 4.3 — OFFLİNE-FIRST EKSİKLİĞİ [ÖNCELİK: YÜKSEK]
+  Durum: PWA offline-first olarak planlanmış ama henüz uygulanmamış
+  Neden kritik:
+    Türkiye'nin en değerli ve büyük şantiyeleri
+    (tüneller, köprüler, barajlar, enerji santralleri)
+    internet bağlantısının zayıf veya hiç olmadığı bölgelerde
+  Sonuç:
+    "Saha odaklı" iddiası, offline çalışmayan bir ürünle çelişir
+  Aksiyon planı:
+    - Service Worker ile kritik modüller offline çalışabilmeli
+    - Günlük rapor, fotoğraf ve stok girişi offline kaydedilmeli
+    - Bağlantı gelince otomatik senkronizasyon
+    - IndexedDB veya SQLite (WASM) yerel depolama çözümü
+
+RİSK 4.4 — VERİ GİZLİLİĞİ VE SEKTÖR GÜVENSIZLIĞI [ÖNCELİK: ORTA]
+  Durum: Türk inşaat sektörü dijital araçlara tarihsel güvensizlik taşır
+  Neden:
+    - "Şantiyemi birisi izliyor" algısı
+    - Rakip firmaların veri ele geçirme korkusu
+    - Vergi/SGK kaçakçılığının tespitinden çekinme
+  Aksiyon planı:
+    - Veri yalnızca o şantiyenin yöneticisine görünür, cross-tenant görünürlük yok
+    - Anonimleştirilmiş agregat veri kullanımı açıkça belirtilmeli
+    - "Verileriniz rakiplerinizle paylaşılmaz" garantisi teknik mimariye işlenmeli
+
+RİSK 4.5 — CBAM VE KARBON RAPORLAMA [ÖNCELİK: ORTA (18 ay içinde kritik)]
+  Durum: Manifestoda hiç ele alınmamış
+  Bağlam:
+    AB'nin Carbon Border Adjustment Mechanism (CBAM) mekanizması
+    Avrupa'ya ihracat yapan veya AB finansmanlı projeler yürüten
+    Türk firmaları için inşaat karbon raporlamasını zorunlu kılacak
+  Aksiyon planı:
+    - Malzeme modülüne CO₂ katsayıları veritabanı eklenmeli
+    - Her malzeme alımına otomatik karbon etiketi
+    - Yıllık karbon özeti raporu (ESG raporlama formatı)
+    - "Yeşil Şantiye" sertifikası ve fire oranı metriği
+
+RİSK 4.6 — YAPAY ZEKA BAĞIMLILIĞI [ÖNCELİK: DÜŞÜK-ORTA]
+  Durum: Tüm AI işlevleri Gemini API'sine bağımlı
+  Riskler:
+    - Google Gemini fiyat değişikliği → operasyonel maliyet artışı
+    - API kesintisi → kritik saha özellikleri çalışmaz
+    - Model değişikliği → prompt çıktıları bozulur
+  Aksiyon planı:
+    - AI işlevlerini soyutlama katmanı (adapter pattern) ile sarmal
+    - Kritik olmayan işlevler için önbellekleme
+    - Fallback: Offline temel hesaplamalar Gemini olmadan çalışmalı
+    - Uzun vadede: Açık kaynak model alternatifi değerlendirmesi
+
+
+════════════════════════════════════════════════════════════════════════════════
+  BÖLÜM 5 — KULLANICI ROLLERI VE YETKİLENDİRME MATRİSİ
+════════════════════════════════════════════════════════════════════════════════
+
+ROL 5.1 — Öğrenci / Stajyer (Free)
+  Erişim:
+    + AI Chat (günlük limit ile)
+    + Mühendislik hesap makinesi (temel)
+    + Deprem risk haritası (okuma)
+    + Günlük rapor (sınırlı)
+  Kısıtlı:
+    - Kamera analizi
+    - Stok yönetimi
+    - Çoklu şantiye
+    - PDF rapor indirme
+
+ROL 5.2 — Saha Mühendisi / Şantiye Şefi (Pro — 650 TL/ay)
+  Erişim:
+    + Tüm Free özellikleri (limitsiz)
+    + Kamera analizi (haftalık kota)
+    + Stok yönetimi (giriş/çıkış)
+    + Haftalık PDF rapor
+    + Sesli rapor
+    + Malzeme fiyat takibi
+    + Arşiv sistemi
+  Kısıtlı:
+    - Çoklu şantiye yönetimi
+    - Taşeron yönetimi (Max)
+    - Hakediş modülü (Max)
+
+ROL 5.3 — Müteahhit / Proje Müdürü (Max — 1.990 TL/ay)
+  Erişim:
+    + Tüm Pro özellikleri (limitsiz)
+    + Çoklu şantiye dashboard
+    + Taşeron yönetimi
+    + Hakediş jeneratörü
+    + "My Home" müşteri portalı
+    + Hukuki modül araçları
+    + Finansal zeka modülü
+
+ROL 5.4 — Kurumsal (Teklif)
+  Erişim:
+    + Tüm Max özellikleri
+    + 10+ kullanıcı yönetimi
+    + Özel subdomain
+    + SLA garantisi
+    + Öncelikli destek
+    + Özel entegrasyon
+
+ROL 5.5 — B2B API (Bankalar / Sigorta / Kamu — Teklif)
+  Erişim:
+    + Hakediş ilerleme API'si
+    + Risk skoru API'si
+    + Depreme Dayanıklı Şantiye Sertifikası doğrulama
+    + Karbon raporu API'si
+
+ROL 5.6 — Admin (Platform Yöneticisi)
+  Erişim:
+    + Tüm özellikler (limitsiz)
+    + Kullanıcı yönetimi (plan değiştirme, kilitleme)
+    + Manuel ödeme onayı
+    + Sistem sağlık monitöründe
+    + Tüm şantiyeleri okuma (KVKK kısıtlamalarına tabi)
+
+
+════════════════════════════════════════════════════════════════════════════════
+  BÖLÜM 6 — ÖDEMELERİ VE ABONELİK KURALLARI
+════════════════════════════════════════════════════════════════════════════════
+
+KURAL 6.1 — Şu anki ödeme yöntemi: Manuel IBAN bildirimi + admin onayı
+KURAL 6.2 — Hedef ödeme yöntemi: Stripe abonelik sistemi (Faz 16)
+KURAL 6.3 — Stripe entegrasyonu tamamlanana kadar mevcut akış değiştirilmez
+KURAL 6.4 — Fatura otomasyonu: Stripe webhook ile tetiklenecek, PDF olarak e-posta
+KURAL 6.5 — İptal politikası: Ay sonuna kadar erişim devam eder, pro-rata iade yok
+KURAL 6.6 — Yükseltme: Anında aktif, kalan günler orantılı hesaplanır
+KURAL 6.7 — Düşürme: Bir sonraki faturalama döneminde geçerli olur
+KURAL 6.8 — Kurumsal plan: Yıllık faturalama seçeneği sunulabilir (%15 indirim önerisi)
+
+
+════════════════════════════════════════════════════════════════════════════════
+  BÖLÜM 7 — TÜRKÇE STANDARTLARI VE YERELLEŞTİRME
+════════════════════════════════════════════════════════════════════════════════
+
+KURAL 7.1 — Tüm UI metinleri Türkçe yazılır, İngilizce teknik terimler
+           parantez içinde gösterilebilir (örn. "Stok Yönetimi (Inventory)")
+
+KURAL 7.2 — Para birimi: ₺ TL (nokta değil virgül; örn. 1.990,00 TL)
+
+KURAL 7.3 — Tarih formatı: GG.AA.YYYY (örn. 15.08.2025)
+
+KURAL 7.4 — Saat formatı: 24 saat (örn. 14:30)
+
+KURAL 7.5 — Adres ve koordinatlar: Türkiye il/ilçe yapısına göre
+
+KURAL 7.6 — Yönetmelik referansları: "TBDY 2018" ve "TS 500" tam adıyla
+           yazılır (kısaltma kabul edilmez)
+
+KURAL 7.7 — Sesli asistan: Edge TTS tr-TR-AhmetNeural sabit tutulur;
+           farklı ses kullanılacaksa A/B testi yapılır
+
+KURAL 7.8 — Hata mesajları: Teknik jargon kullanılmaz, saha çalışanının
+           anlayacağı Türkçe açıklama yazılır
+
+
+════════════════════════════════════════════════════════════════════════════════
+  BÖLÜM 8 — VİZYON KORUMA KURALLARI
+════════════════════════════════════════════════════════════════════════════════
+
+KURAL 8.1 — "ÜRÜN DEĞİL ALTYAPI" İLKESİ
+  Her yeni özellik veya pazarlama kararı şu soruyu geçmeli:
+  "Bu, bir yazılım özelliği mi, yoksa Türkiye inşaatının bir
+  altyapı bileşeni mi?"
+  Altyapı bileşeni olan her şey önceliklendirilir.
+
+KURAL 8.2 — DEPREM ÜLKESİ ÇERÇEVESİ
+  Güvenlik özellikleri "ekstra" olarak sunulmaz.
+  Her ISG ve deprem özelliği ürünün birincil değer önerisidir.
+  Raporlama atlamaları loglanır ve uyarı sistemiyle desteklenir.
+
+KURAL 8.3 — VERİ UÇURUMU KORUMASI
+  Kullanıcı verisinden üretilen agregat bilgiler (fiyat endeksleri,
+  bölgesel risk skorları, taşeron performansları) platformun
+  rekabetçi savunma duvarıdır.
+  Bu veriler üçüncü taraflara bireysel düzeyde asla satılmaz.
+  Yalnızca anonimleştirilmiş B2B API çıktıları sunulabilir.
+
+KURAL 8.4 — GÜVEN PROTOKOLÜ İLKESİ
+  Platform; müteahhit, taşeron, banka, sigorta ve alıcının
+  aynı değiştirilemez veri kaydına bakabildiği tarafsız bir
+  güven protokolüdür.
+  Hiçbir tarafın verisi diğerine karşı araç olarak kullanılamaz.
+
+KURAL 8.5 — KUŞAK KÖPRÜSÜ İLKESİ
+  Deneyimli usta ve kalfa bilgisi, platform hafızasına
+  aktarılabilir formatlarda (sesli not, yapılandırılmış log)
+  toplanmalıdır.
+  Free plan her zaman var olacak — öğrenci mühendis asla
+  kapıdan çevrilmez.
+
+KURAL 8.6 — SÜRDÜRÜLEBİLİRLİK SORUMLULUĞU
+  Karbon takibi ve Yeşil Şantiye özelliği, sadece pazar
+  fırsatı olarak değil; gelecek nesil inşaatçılar için
+  sorumlu bir platform olma taahhüdü olarak konumlandırılır.
+
+
+════════════════════════════════════════════════════════════════════════════════
+  BÖLÜM 9 — KRİTİK YASAKLAR (YAPILMAMASI GEREKENLER)
+════════════════════════════════════════════════════════════════════════════════
+
+YASAK 9.1 — Tek kiracı (tenant) verisi başka kiracıya görünür hale getirilemez.
+YASAK 9.2 — AI çıktısı yasal tutanak olarak direkt kullanılamaz; onay akışı zorunlu.
+YASAK 9.3 — Stok veya hakediş verisinde onaysız geriye dönük düzenleme yapılamaz.
+YASAK 9.4 — Gemini API anahtarı frontend'e gömülemez; her zaman backend proxy ile çağrılır.
+YASAK 9.5 — SQLite production'da birincil veritabanı olarak kullanılamaz (PostgreSQL geçişi zorunlu).
+YASAK 9.6 — Admin endpoint'leri kimlik doğrulamasız bırakılamaz.
+YASAK 9.7 — Kullanıcı verisi (fotoğraf, GPS, personel bilgisi) KVKK onayı olmadan üçüncü tarafa aktarılamaz.
+YASAK 9.8 — WhatsApp entegrasyonu kişisel hesap API'siyle değil, yalnızca resmi Twilio/Meta Business API ile yapılır.
+YASAK 9.9 — Offline-first iddiası, gerçek Service Worker implementasyonu olmadan kullanılamaz.
+YASAK 9.10— "BuildingAI Pro" adı artık kullanılamaz. Tüm referanslar "BuildingAI" olmalıdır.
+
+
+════════════════════════════════════════════════════════════════════════════════
+  BÖLÜM 10 — DEPLOY VE OPERASYON KURALLARI
+════════════════════════════════════════════════════════════════════════════════
+
+KURAL 10.1 — Sağlık kontrolü: /health endpoint'i deploy öncesi aktif edilmeli
+KURAL 10.2 — Otomatik yedek: Her gece 03:00 TR saatiyle PostgreSQL → S3
+KURAL 10.3 — Graceful shutdown: Aktif istekler tamamlanmadan process sonlandırılmaz
+KURAL 10.4 — Environment variables: Tüm sırlar .env'de, asla kaynak koduna gömülmez
+KURAL 10.5 — Staging ortamı: Production deploy öncesi Railway staging branch test edilir
+KURAL 10.6 — Rollback planı: Her deploy için önceki versiyon 24 saat hazırda bekler
+KURAL 10.7 — Log seviyesi: Production'da INFO; debug log hassas veri içeremez
+KURAL 10.8 — Uptime hedefi: %99.5 (ayda ~3.6 saat bakım penceresi)
+KURAL 10.9 — Bakım bildirimi: Planlı bakım en az 24 saat önceden kullanıcılara duyurulur
+KURAL 10.10— Hata izleme: Sentry veya eşdeğeri entegrasyonu Faz 15'te tamamlanmalı
+
+
+════════════════════════════════════════════════════════════════════════════════
+  BÖLÜM 11 — ÖNCELİK SIRASI VE YOL HARİTASI KURALI
+════════════════════════════════════════════════════════════════════════════════
+
+Özellik geliştirme sırası şu kriterlere göre belirlenir:
+
+1. ÖNCE GELİR:  Gelir getiren veya churn azaltan özellikler
+2. ÖNCE GELİR:  Altyapı stabilitesi ve güvenlik güncellemeleri
+3. SONRA GELİR: Nice-to-have UX iyileştirmeleri
+4. SONRA GELİR: Rekabetçi parité özellikleri (rakiplerde var, bizde yok)
+
+Fazlar sırayla tamamlanır:
+  Faz 15 (Deploy) → Faz 16 (Ödeme) → Faz 17 (Fotoğraf) →
+  Faz 18 (Video) → Faz 19 (Metraj) → Faz 20 (WhatsApp)
+
+Faz atlama yapılmaz; bir faz tamamlanmadan sonrakine geçilmez.
+Acil güvenlik yamaları faz sırasını geçersiz kılar.
+
+
+════════════════════════════════════════════════════════════════════════════════
+  BÖLÜM 12 — REKABET VE PAZAR KONUMLANDIRMA KURALLARI
+════════════════════════════════════════════════════════════════════════════════
+
+KURAL 12.1 — BuildingAI, Procore ve OpenSpace ile doğrudan rekabet iddiasında
+            bulunmaz; "Türkiye için tasarlanmış yerli altyapı" olarak konumlanır.
+
+KURAL 12.2 — Fiyatlandırma karşılaştırması yapılırken mutlaka TL/USD paritesi
+            ve yerel satın alma gücü belirtilir.
+
+KURAL 12.3 — Rakip tablosunda sadece doğrulanabilir özellikler işaretlenir;
+            "planlanan" özellikler "(yol haritasında)" notu ile gösterilir.
+
+KURAL 12.4 — TBDY 2018, TS 500, AFAD entegrasyonu ve Türk malzeme fiyatları;
+            savunulabilir hendek olarak her pazarlama materyalinde öne çıkarılır.
+
+KURAL 12.5 — Kullanıcı referansı ve vaka çalışması olmadan "Türkiye lideri"
+            iddiasında bulunulmaz.
+
+
+================================================================================
+  ÖZET: BuildingAI'in Altın Kuralı
+================================================================================
+
+  "Her karar, her özellik, her satır kod şu soruyu geçmeli:
+   Bu, Türkiye'yi daha güvenli ve daha adil inşa etmeye katkı sağlıyor mu?
+   Eğer evet ise önceliklendir.
+   Eğer hayır ise neden yapıyoruz?"
+
+================================================================================

@@ -23,3 +23,7 @@ python-jose
 pdfplumber
 iyzipay
 PyJWT
+# ── Yerel Kamera & Video Analiz ──────────────────
+opencv-python-headless
+ultralytics
+# Not: FFmpeg sistem düzeyinde kurulmalı (apt/brew/winget)

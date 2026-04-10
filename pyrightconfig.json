@@ -1,0 +1,11 @@
+{
+  "pythonVersion": "3.12",
+  "pythonPlatform": "Windows",
+  "venvPath": ".",
+  "include": ["."],
+  "exclude": ["react-dashboard", "**/__pycache__"],
+  "reportMissingModuleSource": "none",
+  "reportMissingImports": "none",
+  "reportMissingModuleAttribute": "none",
+  "extraPaths": ["."]
+}

@@ -1,4 +1,10 @@
 import sqlite3
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "erdemirakif007@gmail.com")
 
 conn = sqlite3.connect('santiye_proje.db')
 
@@ -21,8 +27,15 @@ try:
 except Exception as e:
     print(f"is_admin: {e}")
 
+# Şantiye foto kolonu
+try:
+    conn.execute('ALTER TABLE santiyeler ADD COLUMN foto TEXT DEFAULT NULL')
+    print("foto kolonu eklendi")
+except Exception as e:
+    print(f"foto: {e}")
+
 # Admin kullanıcıyı güncelle
-conn.execute("UPDATE users SET is_admin = 1 WHERE email = 'erdemirakif007@gmail.com'")
+conn.execute(f"UPDATE users SET is_admin = 1 WHERE email = '{ADMIN_EMAIL}'")
 print(f"Admin güncellendi: {conn.total_changes} satır etkilendi")
 
 conn.commit()

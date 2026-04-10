@@ -5,7 +5,7 @@ Faz 14 Migration — 3 Kademeli Plan Sistemi
 import sqlite3
 import os
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "buildingai.db")
+DB_PATH = os.path.join(os.path.dirname(__file__), "santiye_proje.db")
 
 def migrate():
     conn = sqlite3.connect(DB_PATH)
