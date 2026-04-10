@@ -4,418 +4,1167 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BuildingAI — Şantiyenin Yapay Zekası</title>
+<meta name="description" content="50+ mühendislik hesabı, TBDY 2018 uyumlu AI asistan. Türkiye'nin şantiye platformu.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Bebas+Neue&family=Syne:wght@700;800&family=DM+Mono:wght@300;400;500&family=Instrument+Sans:ital,wght@0,400;0,500;0,600&display=swap" rel="stylesheet">
+
+<!-- GSAP Suite (head = no FOUC) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/TextPlugin.min.js"></script>
+
 <style>
+/* ================================================================
+   DESIGN SYSTEM — BuildingAI
+   ================================================================ */
 :root {
-  --navy: #060d1a;
-  --navy2: #0a1628;
-  --navy3: #0f2040;
-  --amber: #f97316;
-  --amber2: #fb923c;
-  --amber-glow: rgba(249,115,22,0.18);
-  --cyan: #22d3ee;
-  --cyan-dim: rgba(34,211,238,0.12);
-  --text1: #f0f4ff;
-  --text2: #94a3b8;
-  --text3: #3d5070;
-  --border: rgba(255,255,255,0.07);
-  --border2: rgba(255,255,255,0.14);
+  --bg:        #030712;
+  --navy:      #060d1a;
+  --amber:     #f97316;
+  --amber2:    #fb923c;
+  --cyan:      #22d3ee;
+  --text1:     #f0f4ff;
+  --text2:     #94a3b8;
+  --text3:     #3d5070;
+  --border:    rgba(255,255,255,0.07);
+  --border2:   rgba(255,255,255,0.14);
 }
-
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; }
-
-body {
-  font-family: 'Instrument Sans', sans-serif;
-  background: var(--navy);
-  color: var(--text1);
-  overflow-x: hidden;
-}
-
-/* Grid texture */
-body::before {
-  content: '';
-  position: fixed; inset: 0;
-  background-image:
-    linear-gradient(rgba(34,211,238,0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(34,211,238,0.03) 1px, transparent 1px);
-  background-size: 60px 60px;
-  pointer-events: none; z-index: 0;
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:'Instrument Sans',sans-serif;
+  background:var(--bg); color:var(--text1);
+  overflow-x:hidden;
 }
 
 /* ── NAV ── */
-nav {
-  position: fixed; top: 0; left: 0; right: 0;
-  z-index: 100;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0 5%;
-  height: 64px;
-  background: rgba(6,13,26,0.85);
-  backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border);
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:500;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 5%;height:64px;
+  background:rgba(3,7,18,0.82);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+}
+.nav-logo{
+  display:flex;align-items:center;gap:10px;
+  font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:.08em;
+}
+.nav-logo span{color:var(--amber)}
+.nav-right{display:flex;align-items:center;gap:12px}
+.lang-btn{
+  background:none;border:1px solid var(--border2);
+  color:var(--text2);font-size:12px;font-family:'DM Mono',monospace;
+  padding:5px 12px;border-radius:6px;cursor:pointer;transition:all .15s;
+}
+.lang-btn:hover,.lang-btn.active{border-color:var(--amber);color:var(--amber)}
+.nav-cta{
+  background:var(--amber);color:#000;font-weight:600;font-size:13px;
+  padding:8px 20px;border-radius:8px;text-decoration:none;transition:all .15s;
+}
+.nav-cta:hover{background:var(--amber2);transform:translateY(-1px)}
+.btn-ghost-nav{
+  padding:8px 18px;font-size:13px;border-radius:8px;text-decoration:none;
+  border:1px solid rgba(255,255,255,0.2);color:white;transition:all .15s;
 }
 
-.nav-logo {
-  display: flex; align-items: center; gap: 10px;
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 22px; letter-spacing: .08em;
-  color: var(--text1);
-}
-.nav-logo span { color: var(--amber); }
-.nav-logo img { width: 28px; height: 28px; border-radius: 6px; }
+/* ================================================================
+   HERO — LINEAR / VERCEL STYLE PREMIUM DARK SAAS
+   ================================================================ */
 
-.nav-right { display: flex; align-items: center; gap: 12px; }
-
-.lang-btn {
-  background: none; border: 1px solid var(--border2);
-  color: var(--text2); font-size: 12px; font-family: 'DM Mono', monospace;
-  padding: 5px 12px; border-radius: 6px; cursor: pointer; transition: all .15s;
-}
-.lang-btn:hover, .lang-btn.active { border-color: var(--amber); color: var(--amber); }
-
-.nav-cta {
-  background: var(--amber); color: #000; font-weight: 600; font-size: 13px;
-  padding: 8px 20px; border-radius: 8px; border: none; cursor: pointer;
-  transition: all .15s; text-decoration: none;
-}
-.nav-cta:hover { background: var(--amber2); transform: translateY(-1px); }
-
-/* ── HERO ── */
-.hero {
-  min-height: 100vh;
-  display: flex; align-items: center; justify-content: center;
-  flex-direction: column; text-align: center;
-  padding: 100px 5% 60px;
-  position: relative; z-index: 1;
+.hero-wrap{
+  position:relative;
+  min-height:100vh;
+  display:flex;align-items:center;justify-content:center;
+  overflow:hidden;
+  background:var(--bg);
 }
 
-.hero-badge {
-  display: inline-flex; align-items: center; gap: 8px;
-  background: var(--amber-glow); border: 1px solid rgba(249,115,22,0.3);
-  border-radius: 20px; padding: 6px 16px;
-  font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: .1em;
-  color: var(--amber); text-transform: uppercase; margin-bottom: 28px;
-  animation: fadeUp .6s ease both;
+/* ── Abstract aurora glow blobs ── */
+.aurora-layer{
+  position:absolute;inset:-20%;z-index:0;
+  pointer-events:none;
+}
+.glow-blob{
+  position:absolute;border-radius:50%;
+  filter:blur(100px);
+  opacity:0;
+  animation:blobFadeIn 1.8s ease-out forwards;
+}
+.glow-blob-1{
+  width:65vw;height:55vw;
+  top:-15%;left:-10%;
+  background:radial-gradient(circle,rgba(249,115,22,0.07) 0%,transparent 70%);
+  animation-delay:0.2s;
+}
+.glow-blob-2{
+  width:60vw;height:50vw;
+  top:5%;right:-10%;
+  background:radial-gradient(circle,rgba(99,102,241,0.06) 0%,transparent 70%);
+  animation-delay:0.5s;
+}
+.glow-blob-3{
+  width:45vw;height:40vw;
+  bottom:-10%;left:30%;
+  background:radial-gradient(circle,rgba(34,211,238,0.04) 0%,transparent 70%);
+  animation-delay:0.8s;
+}
+@keyframes blobFadeIn{
+  from{opacity:0;transform:scale(0.92)}
+  to{opacity:1;transform:scale(1)}
 }
 
-.hero-badge::before {
-  content: '';
-  width: 6px; height: 6px; border-radius: 50%;
-  background: var(--amber); box-shadow: 0 0 8px var(--amber);
-  animation: pulse 2s infinite;
+/* ── Dot grid overlay (Linear.app style) ── */
+.hero-dots{
+  position:absolute;inset:0;z-index:1;pointer-events:none;
+  background-image:radial-gradient(circle,rgba(255,255,255,0.08) 1px,transparent 1px);
+  background-size:28px 28px;
+  mask-image:radial-gradient(ellipse 70% 60% at 50% 30%,black 40%,transparent 100%);
+  -webkit-mask-image:radial-gradient(ellipse 70% 60% at 50% 30%,black 40%,transparent 100%);
 }
 
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-@keyframes fadeUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:none} }
-
-.hero h1 {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: clamp(52px, 9vw, 110px);
-  letter-spacing: .03em; line-height: .95;
-  margin-bottom: 24px;
-  animation: fadeUp .6s .1s ease both;
+/* ── Subtle grid lines (secondary layer) ── */
+.hero-grid-lines{
+  position:absolute;inset:0;z-index:1;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,0.025) 1px,transparent 1px);
+  background-size:80px 80px;
 }
 
-.hero h1 span { color: var(--amber); }
-.hero h1 em { color: var(--cyan); font-style: normal; }
-
-.hero-sub {
-  font-size: clamp(15px, 2vw, 18px);
-  color: var(--text2); max-width: 560px; line-height: 1.7;
-  margin-bottom: 40px;
-  animation: fadeUp .6s .2s ease both;
+/* ── Bottom fade to next section ── */
+.hero-bottom-fade{
+  position:absolute;bottom:0;left:0;right:0;height:200px;
+  background:linear-gradient(to top,var(--navy) 0%,transparent 100%);
+  z-index:5;pointer-events:none;
 }
 
-.hero-btns {
-  display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;
-  animation: fadeUp .6s .3s ease both;
+/* ── Hero content ── */
+.hero-content{
+  position:relative;z-index:10;
+  text-align:center;
+  max-width:960px;width:92%;padding:100px 24px 80px;
 }
 
-.btn-primary {
-  background: var(--amber); color: #000; font-weight: 700; font-size: 15px;
-  padding: 14px 32px; border-radius: 10px; border: none; cursor: pointer;
-  transition: all .2s; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
+/* Badge */
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  font-family:'DM Mono',monospace;font-size:11px;
+  letter-spacing:0.18em;text-transform:uppercase;
+  color:rgba(249,115,22,0.9);
+  background:rgba(249,115,22,0.06);
+  border:1px solid rgba(249,115,22,0.2);
+  border-radius:100px;
+  padding:7px 18px;
+  margin-bottom:36px;
+  opacity:0;
+  animation:heroFadeUp 0.8s cubic-bezier(.16,1,.3,1) 0.3s forwards;
 }
-.btn-primary:hover { background: var(--amber2); transform: translateY(-2px); box-shadow: 0 12px 32px rgba(249,115,22,0.35); }
-
-.btn-secondary {
-  background: transparent; color: var(--text1); font-weight: 500; font-size: 15px;
-  padding: 14px 32px; border-radius: 10px; border: 1px solid var(--border2); cursor: pointer;
-  transition: all .2s; text-decoration: none;
+.badge-dot{
+  width:6px;height:6px;background:var(--amber);border-radius:50%;
+  box-shadow:0 0 8px var(--amber);
+  animation:pulse 2s ease-in-out infinite;
 }
-.btn-secondary:hover { border-color: var(--text2); background: rgba(255,255,255,0.05); }
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.6)}}
 
-/* Glow behind hero */
-.hero-glow {
-  position: absolute; width: 600px; height: 600px;
-  background: radial-gradient(circle, rgba(249,115,22,0.12) 0%, transparent 70%);
-  top: 50%; left: 50%; transform: translate(-50%, -50%);
-  pointer-events: none;
+/* Main heading */
+.hero-h1{
+  font-family:'Plus Jakarta Sans','Syne',sans-serif;
+  font-size:clamp(44px,7.5vw,112px);
+  font-weight:800;
+  line-height:1.1;
+  letter-spacing:-0.04em;
+  margin-bottom:28px;
+  color:#ffffff;
+  opacity:0;
+  animation:heroFadeUp 1s cubic-bezier(.16,1,.3,1) 0.5s forwards;
 }
-
-/* Stats row */
-.hero-stats {
-  display: flex; gap: 40px; flex-wrap: wrap; justify-content: center;
-  margin-top: 60px; padding-top: 40px;
-  border-top: 1px solid var(--border);
-  animation: fadeUp .6s .4s ease both;
+/* "Şantiyeni" — premium turuncu */
+.hero-h1 .orange-highlight{
+  color:#F97316;
 }
-
-.stat-item { text-align: center; }
-.stat-num {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 42px; letter-spacing: .03em; color: var(--amber);
-  line-height: 1;
-}
-.stat-lbl { font-size: 12px; color: var(--text3); margin-top: 4px; font-family: 'DM Mono', monospace; letter-spacing: .08em; }
-
-/* ── SECTION BASE ── */
-section { position: relative; z-index: 1; }
-.section-inner { max-width: 1100px; margin: 0 auto; padding: 100px 5%; }
-
-.section-label {
-  font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: .16em;
-  color: var(--cyan); text-transform: uppercase; margin-bottom: 16px;
-}
-.section-title {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: clamp(36px, 5vw, 60px); letter-spacing: .04em; line-height: 1;
-  margin-bottom: 16px;
-}
-.section-sub { font-size: 16px; color: var(--text2); line-height: 1.7; max-width: 520px; }
-
-/* ── FEATURES ── */
-.features-grid {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px; margin-top: 56px;
+/* "Yapay Zeka" — saf beyaz + çok ince indigo glow */
+.hero-h1 .accent{
+  color:#ffffff;
+  text-shadow:0 0 48px rgba(99,102,241,0.30);
 }
 
-.feature-card {
-  background: rgba(15, 32, 64, 0.5);
-  border: 1px solid var(--border);
-  border-radius: 16px; padding: 28px;
-  transition: all .2s; cursor: default;
-  position: relative; overflow: hidden;
-}
-.feature-card::before {
-  content: '';
-  position: absolute; top: 0; left: 0; right: 0; height: 2px;
-  background: var(--c, transparent);
-  opacity: 0; transition: opacity .2s;
-}
-.feature-card:hover { border-color: var(--border2); transform: translateY(-4px); }
-.feature-card:hover::before { opacity: 1; }
-
-.feature-icon { font-size: 32px; margin-bottom: 16px; }
-.feature-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
-.feature-desc { font-size: 14px; color: var(--text2); line-height: 1.6; }
-.feature-tag {
-  display: inline-block; margin-top: 14px;
-  font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .08em;
-  padding: 3px 10px; border-radius: 4px;
-  background: var(--bg, rgba(255,255,255,0.06));
-  color: var(--tc, var(--text3));
-  border: 1px solid var(--bc, var(--border));
+/* Subtitle */
+.hero-sub{
+  font-size:clamp(15px,1.7vw,20px);
+  color:var(--text2);
+  max-width:560px;margin:0 auto 48px;
+  line-height:1.7;
+  opacity:0;
+  animation:heroFadeUp 0.9s cubic-bezier(.16,1,.3,1) 0.75s forwards;
 }
 
-/* ── HOW IT WORKS ── */
-.how-section { background: rgba(10,22,40,0.6); }
+/* Buttons */
+.hero-btns{
+  display:flex;gap:14px;justify-content:center;flex-wrap:wrap;
+  margin-bottom:64px;
+  opacity:0;
+  animation:heroFadeUp 0.9s cubic-bezier(.16,1,.3,1) 0.95s forwards;
+}
+.btn-fire{
+  background:var(--amber);color:#000!important;
+  font-weight:700;font-size:15px;padding:14px 40px;
+  border-radius:10px;text-decoration:none;border:none;cursor:pointer;
+  box-shadow:0 0 28px rgba(249,115,22,.38),0 6px 18px rgba(0,0,0,.3);
+  transition:all .3s cubic-bezier(.16,1,.3,1);
+  font-family:'Instrument Sans',sans-serif;
+  letter-spacing:.01em;
+}
+.btn-fire:hover{transform:translateY(-2px) scale(1.03);box-shadow:0 0 44px rgba(249,115,22,.55)}
+.btn-ghost{
+  background:rgba(255,255,255,.05);color:#fff!important;
+  font-weight:500;font-size:15px;padding:14px 40px;
+  border-radius:10px;border:1px solid rgba(255,255,255,.12);
+  text-decoration:none;transition:all .25s;cursor:pointer;
+  letter-spacing:.01em;
+}
+.btn-ghost:hover{background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.3);transform:translateY(-2px)}
 
-.steps { display: flex; flex-direction: column; gap: 0; margin-top: 56px; position: relative; }
-.steps::before {
-  content: '';
-  position: absolute; left: 23px; top: 0; bottom: 0; width: 2px;
-  background: linear-gradient(to bottom, var(--amber), var(--cyan), transparent);
-  opacity: .3;
+/* ── Stats card — premium glassmorphism ── */
+.eng-card{
+  background:linear-gradient(135deg,rgba(255,255,255,0.06) 0%,rgba(255,255,255,0.02) 100%);
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,0.09);
+  border-top:1px solid rgba(255,255,255,0.15);
+  box-shadow:
+    0 24px 60px rgba(0,0,0,.5),
+    inset 0 1px 0 rgba(255,255,255,.1),
+    0 0 0 1px rgba(249,115,22,.05),
+    0 0 50px rgba(249,115,22,0.04);
+  display:flex;flex-wrap:wrap;
+  max-width:760px;margin:0 auto;
+  overflow:hidden;
+  opacity:0;
+  animation:heroFadeUp 1s cubic-bezier(.16,1,.3,1) 1.2s forwards;
+}
+.eng-cell{
+  flex:1;min-width:140px;
+  padding:24px 20px;text-align:center;
+  border-right:1px solid rgba(255,255,255,.06);
+  position:relative;
+  transition:background .25s;
+}
+.eng-cell:last-child{border-right:none}
+.eng-cell:hover{background:rgba(249,115,22,0.04)}
+.eng-cell::before{
+  content:'';position:absolute;top:0;left:20%;right:20%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(249,115,22,.18),transparent);
+}
+.eng-val{
+  font-family:'DM Mono',monospace;font-weight:500;
+  font-size:clamp(20px,2.8vw,36px);color:#fff;
+  letter-spacing:-0.03em;line-height:1.1;
+}
+.eng-lbl{
+  font-size:9.5px;color:#4a6080;font-family:'DM Mono',monospace;
+  text-transform:uppercase;letter-spacing:0.12em;
+  margin-top:7px;font-weight:600;
 }
 
-.step { display: flex; gap: 28px; padding: 32px 0; }
-.step-num {
-  width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;
-  background: var(--navy2); border: 2px solid var(--amber);
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: var(--amber);
-  position: relative; z-index: 1;
-}
-.step-content { padding-top: 8px; }
-.step-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
-.step-desc { font-size: 14px; color: var(--text2); line-height: 1.6; max-width: 480px; }
-
-/* ── MEVZUAT ── */
-.mevzuat-grid {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px; margin-top: 48px;
-}
-.mevzuat-card {
-  background: var(--cyan-dim); border: 1px solid rgba(34,211,238,0.15);
-  border-radius: 12px; padding: 20px 22px;
-  display: flex; align-items: center; gap: 14px;
-}
-.mevzuat-icon { font-size: 24px; flex-shrink: 0; }
-.mevzuat-text { font-size: 14px; font-weight: 500; }
-.mevzuat-sub { font-size: 12px; color: var(--text2); margin-top: 3px; }
-
-/* ── CTA ── */
-.cta-section {
-  text-align: center;
-  background: linear-gradient(135deg, rgba(249,115,22,0.08) 0%, rgba(34,211,238,0.05) 100%);
-  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+/* Hero entrance animation */
+@keyframes heroFadeUp{
+  from{opacity:0;transform:translateY(22px)}
+  to{opacity:1;transform:translateY(0)}
 }
 
-.cta-section .section-title { font-size: clamp(40px, 6vw, 72px); }
-
-/* ── FOOTER ── */
-footer {
-  padding: 40px 5%;
-  border-top: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: space-between;
-  flex-wrap: wrap; gap: 16px;
-  position: relative; z-index: 1;
+/* ── Hero foreground content ── */
+.hero-content{
+  position:relative;z-index:10;
+  text-align:center;
+  max-width:1100px;width:92%;padding:0 24px;
+  will-change:transform,opacity;
 }
-.footer-logo {
-  font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: .08em;
+
+/* System label */
+.hero-sys-label{
+  display:inline-flex;align-items:center;gap:10px;
+  font-family:'DM Mono',monospace;font-size:11px;
+  letter-spacing:0.22em;text-transform:uppercase;color:var(--amber);
+  margin-bottom:28px;
 }
-.footer-logo span { color: var(--amber); }
-.footer-copy { font-size: 12px; color: var(--text3); font-family: 'DM Mono', monospace; }
+.sys-dot{
+  width:7px;height:7px;background:var(--amber);border-radius:50%;
+  box-shadow:0 0 10px var(--amber);
+  animation:pulse 2s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.6)}}
 
-/* ── SCROLL ANIMATIONS ── */
-.reveal { opacity: 0; transform: translateY(24px); transition: all .6s ease; }
-.reveal.visible { opacity: 1; transform: none; }
+/* Main heading */
+.hero-h1{
+  font-family:'Plus Jakarta Sans','Syne',sans-serif;
+  font-size:clamp(44px,7.5vw,112px);
+  font-weight:800;
+  line-height:1.1;
+  letter-spacing:-0.04em;
+  color:#ffffff;
+  margin-bottom:32px;
+}
+/* "Şantiyeni" — premium turuncu */
+.hero-h1 .orange-highlight{
+  color:#F97316;
+}
+/* "Yapay Zeka" — saf beyaz + çok ince indigo glow */
+.hero-h1 .accent{
+  color:#ffffff;
+  text-shadow:0 0 48px rgba(99,102,241,0.30);
+}
+.hero-h1 .word-ai{color:var(--cyan);text-shadow:0 0 40px rgba(34,211,238,0.35)}
 
-/* ── RESPONSIVE ── */
-@media (max-width: 768px) {
-  .hero h1 { font-size: 52px; }
-  .hero-stats { gap: 24px; }
-  .step { flex-direction: column; gap: 12px; }
-  .steps::before { display: none; }
-  footer { flex-direction: column; text-align: center; }
-  .nav-right .btn-secondary { display: none; }
+/* Subtitle */
+.hero-sub{
+  font-size:clamp(15px,1.8vw,19px);color:var(--text2);
+  max-width:580px;margin:0 auto 52px;line-height:1.65;
+}
+
+/* Buttons */
+.hero-btns{
+  display:flex;gap:18px;justify-content:center;flex-wrap:wrap;
+  margin-bottom:60px;
+}
+.btn-fire{
+  background:var(--amber);color:#000!important;
+  font-weight:700;font-size:16px;padding:16px 48px;
+  border-radius:8px;text-decoration:none;border:none;cursor:pointer;
+  box-shadow:0 0 30px rgba(249,115,22,.45),0 8px 22px rgba(0,0,0,.35);
+  transition:all .35s cubic-bezier(.16,1,.3,1);
+  font-family:'Instrument Sans',sans-serif;
+}
+.btn-fire:hover{transform:translateY(-3px) scale(1.04);box-shadow:0 0 52px rgba(249,115,22,.65)}
+.btn-ghost{
+  background:rgba(255,255,255,.04);color:#fff!important;
+  font-weight:500;font-size:16px;padding:16px 48px;
+  border-radius:8px;border:1px solid rgba(255,255,255,.13);
+  text-decoration:none;transition:all .3s;cursor:pointer;
+}
+.btn-ghost:hover{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.38);transform:translateY(-3px)}
+
+/* ── Engineering Data Card — Premium Dark Glassmorphism ── */
+.eng-card{
+  background:linear-gradient(135deg,rgba(255,255,255,0.055) 0%,rgba(255,255,255,0.02) 100%);
+  backdrop-filter:blur(32px);-webkit-backdrop-filter:blur(32px);
+  border-radius:20px;
+  border-top: 1px solid rgba(255,255,255,0.16);
+  border-left: 1px solid rgba(255,255,255,0.12);
+  border-right:1px solid rgba(255,255,255,0.04);
+  border-bottom:1px solid rgba(255,255,255,0.04);
+  box-shadow:
+    0 40px 80px rgba(0,0,0,.6),
+    inset 0 1px 0 rgba(255,255,255,.14),
+    inset 0 0 0 1px rgba(255,255,255,.04),
+    0 0 0 1px rgba(249,115,22,.08),
+    0 0 60px rgba(249,115,22,0.06);
+  display:flex;flex-wrap:wrap;
+  max-width:840px;margin:0 auto;
+  overflow:hidden;
+}
+.eng-cell{
+  flex:1;min-width:160px;
+  padding:28px 20px;text-align:center;
+  border-right:1px solid rgba(255,255,255,.06);
+  position:relative;
+  transition:background .3s;
+}
+.eng-cell:last-child{border-right:none}
+.eng-cell:hover{background:rgba(249,115,22,0.04)}
+.eng-cell::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(249,115,22,.2),transparent);
+}
+.eng-val{
+  font-family:'DM Mono',monospace;font-weight:500;
+  font-size:clamp(22px,3vw,40px);color:#fff;
+  letter-spacing:-0.03em;line-height:1.1;
+}
+.eng-lbl{
+  font-size:10px;color:#4a6080;font-family:'DM Mono',monospace;
+  text-transform:uppercase;letter-spacing:0.1em;
+  margin-top:8px;font-weight:600;
+}
+
+/* ── Seamless bottom gradient ── */
+.hero-fade{
+  position:absolute;bottom:0;left:0;width:100%;height:260px;
+  background:linear-gradient(to top,var(--navy) 0%,transparent 100%);
+  z-index:20;pointer-events:none;
+}
+
+/* ================================================================
+   TOAST
+   ================================================================ */
+.toast-container{position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:12px;pointer-events:none}
+.toast{
+  background:rgba(8,15,30,.93);backdrop-filter:blur(16px);
+  border:1px solid rgba(244,63,94,.4);border-radius:12px;
+  padding:16px 20px;min-width:300px;max-width:400px;
+  box-shadow:0 10px 30px rgba(244,63,94,.2);
+  display:flex;align-items:flex-start;gap:14px;
+  transform:translateX(120%);opacity:0;pointer-events:auto;
+  transition:all .5s cubic-bezier(.16,1,.3,1);
+}
+.toast.show{transform:translateX(0);opacity:1}
+.toast-icon{font-size:22px;line-height:1}
+.toast-title{font-weight:600;color:#fff;font-size:14px;margin-bottom:3px}
+.toast-desc{font-size:12px;color:#cbd5e1;line-height:1.4}
+
+/* ================================================================
+   PREMIUM SAAS SECTIONS (Features, Pricing, How it Works, etc.)
+   ================================================================ */
+section{position:relative;z-index:1;overflow:hidden;}
+.section-inner{max-width:1140px;margin:0 auto;padding:120px 5%;position:relative;z-index:10;}
+
+/* Titles */
+.section-label{
+  display:inline-flex;align-items:center;gap:8px;
+  font-family:'DM Mono',monospace;font-size:12px;
+  letter-spacing:0.18em;text-transform:uppercase;
+  color:var(--amber);margin-bottom:20px;
+}
+.section-title{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:clamp(42px,6vw,72px);
+  letter-spacing:.02em;line-height:.95;margin-bottom:20px;
+  color:#fff;
+}
+.section-sub{
+  font-size:17px;color:var(--text2);
+  line-height:1.65;max-width:580px;
+}
+
+/* Background Grids for Sections */
+.bg-grid{
+  position:absolute;inset:0;z-index:0;pointer-events:none;
+  background-image:radial-gradient(circle,rgba(255,255,255,0.06) 1px,transparent 1px);
+  background-size:32px 32px;
+  mask-image:radial-gradient(ellipse 70% 80% at 50% 50%,black 20%,transparent 100%);
+  -webkit-mask-image:radial-gradient(ellipse 70% 80% at 50% 50%,black 20%,transparent 100%);
+}
+
+/* Base Glass Card */
+.glass-card{
+  background:linear-gradient(135deg,rgba(255,255,255,0.03) 0%,rgba(255,255,255,0.01) 100%);
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  border:1px solid rgba(255,255,255,0.08);
+  border-top:1px solid rgba(255,255,255,0.12);
+  border-radius:24px;
+  position:relative;overflow:hidden;
+  transition:all 0.4s cubic-bezier(0.16,1,0.3,1);
+}
+.glass-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--c,rgba(255,255,255,0.2)),transparent);
+  opacity:0.3;transition:opacity 0.4s;
+}
+.glass-card:hover{
+  border-color:rgba(255,255,255,0.16);
+  transform:translateY(-4px);
+  box-shadow:0 30px 60px rgba(0,0,0,0.5), 0 0 40px var(--c-alpha,rgba(255,255,255,0.03));
+}
+.glass-card:hover::before{opacity:1;}
+
+/* FEATURES */
+.features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:24px;margin-top:64px;}
+.feature-card{padding:36px;display:flex;flex-direction:column;align-items:flex-start;}
+.feature-icon-wrap{
+  width:56px;height:56px;border-radius:14px;
+  background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.1);
+  display:flex;align-items:center;justify-content:center;
+  font-size:24px;margin-bottom:24px;
+  box-shadow:inset 0 0 20px var(--c-alpha,transparent);
+}
+.feature-title{font-size:20px;font-weight:600;margin-bottom:12px;color:#fff;}
+.feature-desc{font-size:15px;color:var(--text2);line-height:1.6;margin-bottom:24px;flex-grow:1;}
+.feature-tag{
+  font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.08em;
+  padding:6px 14px;border-radius:6px;
+  background:var(--c-alpha);color:var(--c);
+  border:1px solid rgba(255,255,255,0.05);
+}
+
+/* HOW IT WORKS */
+.how-section{background:rgba(6,13,26,0.6);border-top:1px solid rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.03);}
+.steps-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:32px;margin-top:64px;position:relative;}
+.step-card{padding:32px;text-align:center;position:relative;}
+.step-num{
+  width:64px;height:64px;margin:0 auto 24px;border-radius:50%;
+  background:var(--bg);border:1px solid rgba(249,115,22,0.3);
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--amber);
+  box-shadow:0 0 30px rgba(249,115,22,0.15);
+}
+.step-title{font-size:20px;font-weight:600;margin-bottom:12px;}
+.step-desc{font-size:15px;color:var(--text2);line-height:1.6;}
+
+/* PRICING */
+.pricing-section{position:relative;}
+.pricing-glow{
+  position:absolute;top:30%;left:50%;transform:translate(-50%,-50%);
+  width:80vw;height:500px;
+  background:radial-gradient(ellipse,rgba(34,211,238,0.08) 0%,transparent 70%);
+  z-index:0;pointer-events:none;
+}
+.pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:64px;align-items:center;}
+.pricing-card{padding:40px 32px;display:flex;flex-direction:column;}
+.pricing-card.pro{
+  border-color:rgba(249,115,22,0.3);
+  box-shadow:0 20px 80px rgba(249,115,22,0.12),inset 0 0 40px rgba(249,115,22,0.03);
+  transform:scale(1.03);z-index:2;
+}
+.pricing-card.pro:hover{transform:scale(1.05) translateY(-4px);border-color:rgba(249,115,22,0.5);}
+.price-name{font-family:'DM Mono',monospace;font-size:13px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text2);margin-bottom:16px;}
+.pro .price-name{color:var(--amber);}
+.price-val{font-family:'Bebas Neue',sans-serif;font-size:64px;line-height:1;margin-bottom:8px;display:flex;align-items:baseline;gap:6px;}
+.price-val span{font-family:'Instrument Sans',sans-serif;font-size:16px;color:var(--text2);font-weight:400;}
+.price-desc{font-size:14px;color:var(--text2);margin-bottom:32px;line-height:1.5;min-height:42px;}
+.price-btn{
+  width:100%;padding:14px 0;border-radius:10px;font-size:15px;font-weight:600;
+  text-align:center;text-decoration:none;transition:all 0.3s;
+  background:rgba(255,255,255,0.05);color:#fff;border:1px solid rgba(255,255,255,0.1);
+  margin-bottom:32px;
+}
+.price-btn:hover{background:rgba(255,255,255,0.1);}
+.pro .price-btn{background:var(--amber);color:#000;border:none;box-shadow:0 0 20px rgba(249,115,22,0.3);}
+.pro .price-btn:hover{background:#fb923c;box-shadow:0 0 30px rgba(249,115,22,0.5);}
+.price-features{list-style:none;display:flex;flex-direction:column;gap:16px;}
+.price-features li{display:flex;align-items:flex-start;gap:12px;font-size:14px;color:var(--text1);}
+.price-features li svg{width:18px;height:18px;flex-shrink:0;color:var(--cyan);}
+.pro .price-features li svg{color:var(--amber);}
+
+/* REGULATIONS (MEVZUAT) */
+.mevzuat-section{background:rgba(3,7,18,0.8);}
+.mevzuat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-top:56px;}
+.mevzuat-card{
+  padding:24px;display:flex;align-items:center;gap:16px;
+  background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);
+  border-radius:16px;transition:background 0.3s;
+}
+.mevzuat-card:hover{background:rgba(255,255,255,0.05);}
+.mevzuat-icon{font-size:28px;}
+.mevzuat-text{font-size:16px;font-weight:600;}
+.mevzuat-sub{font-size:13px;color:var(--text2);margin-top:4px;}
+
+/* CTA */
+.cta-section{
+  text-align:center;
+  background:linear-gradient(to top, rgba(249,115,22,0.06) 0%, transparent 100%);
+  border-top:1px solid rgba(255,255,255,0.04);
+}
+.cta-section .section-title{font-size:clamp(48px,8vw,96px);}
+
+/* ── ABOUT SECTION ── */
+.about-section{
+  background:rgba(3,7,18,0.95);
+  border-top:1px solid rgba(255,255,255,0.05);
+  position:relative;
+  overflow:hidden;
+}
+.about-section::before{
+  content:'';position:absolute;top:-50%;left:-10%;
+  width:70vw;height:60vw;border-radius:50%;
+  background:radial-gradient(circle,rgba(99,102,241,0.08) 0%,transparent 70%);
+  pointer-events:none;
+}
+.about-grid{
+  display:grid;grid-template-columns:1.1fr 1fr;
+  gap:80px;align-items:start;
+}
+.about-label{
+  display:inline-flex;align-items:center;gap:8px;
+  font-family:'DM Mono',monospace;font-size:11px;
+  letter-spacing:0.18em;text-transform:uppercase;
+  color:var(--amber);margin-bottom:20px;
+}
+.about-title{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:clamp(36px,5vw,60px);
+  letter-spacing:.02em;line-height:.95;color:#fff;margin-bottom:20px;
+}
+.about-body{
+  font-size:15px;color:var(--text2);line-height:1.75;margin-bottom:28px;
+}
+.about-mission{
+  background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.07);
+  border-left:3px solid var(--amber);
+  border-radius:12px;padding:20px 22px;
+  font-size:14px;color:var(--text1);
+  line-height:1.65;font-style:italic;
+  margin-bottom:36px;
+}
+.about-team-row{display:flex;gap:20px;flex-wrap:wrap;}
+.about-badge{
+  display:flex;align-items:center;gap:10px;
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:10px;padding:10px 16px;
+  font-size:13px;color:var(--text1);font-weight:500;
+}
+.about-badge-icon{font-size:18px;}
+
+/* Contact Form */
+.contact-card{
+  background:linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%);
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  border:1px solid rgba(255,255,255,0.08);
+  border-top:1px solid rgba(255,255,255,0.14);
+  border-radius:24px;padding:40px;
+}
+.contact-title{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:32px;letter-spacing:.02em;color:#fff;
+  margin-bottom:8px;
+}
+.contact-sub{font-size:14px;color:var(--text2);margin-bottom:28px;line-height:1.5;}
+.contact-input{
+  width:100%;background:rgba(255,255,255,0.05);
+  border:1px solid rgba(255,255,255,0.1);
+  border-radius:10px;padding:13px 16px;
+  color:#fff;font-size:14px;outline:none;
+  margin-bottom:14px;box-sizing:border-box;
+  font-family:'Instrument Sans',sans-serif;
+  transition:border-color .2s, box-shadow .2s;
+}
+.contact-input:focus{
+  border-color:rgba(249,115,22,0.5);
+  box-shadow:0 0 0 3px rgba(249,115,22,0.08);
+}
+.contact-input::placeholder{color:rgba(255,255,255,0.3);}
+textarea.contact-input{resize:vertical;min-height:100px;}
+.contact-btn{
+  width:100%;padding:14px;
+  background:var(--amber);color:#000;
+  font-weight:700;font-size:15px;
+  border:none;border-radius:10px;cursor:pointer;
+  font-family:'Instrument Sans',sans-serif;
+  box-shadow:0 0 24px rgba(249,115,22,.35);
+  transition:all .3s cubic-bezier(.16,1,.3,1);
+}
+.contact-btn:hover{transform:translateY(-2px);box-shadow:0 0 40px rgba(249,115,22,.55);}
+.contact-success{
+  text-align:center;padding:20px;
+  color:#4ade80;font-size:14px;font-weight:600;
+  display:none;
+}
+
+/* ── RICH FOOTER ── */
+.rich-footer{
+  background:#01030a;
+  border-top:1px solid rgba(255,255,255,0.05);
+  padding:64px 5% 36px;
+}
+.rich-footer-grid{
+  display:grid;
+  grid-template-columns:1.8fr 1fr 1fr 1fr;
+  gap:48px;
+  margin-bottom:56px;
+}
+.rf-brand p{font-size:14px;color:var(--text2);line-height:1.7;margin:14px 0 24px;}
+.rf-social{display:flex;gap:10px;}
+.rf-social-btn{
+  width:38px;height:38px;border-radius:10px;
+  background:rgba(255,255,255,0.05);
+  border:1px solid rgba(255,255,255,0.1);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--text2);text-decoration:none;font-size:16px;
+  transition:all .2s;
+}
+.rf-social-btn:hover{background:rgba(249,115,22,0.1);border-color:rgba(249,115,22,0.3);color:var(--amber);}
+.rf-col-title{
+  font-family:'DM Mono',monospace;font-size:11px;
+  letter-spacing:0.14em;text-transform:uppercase;
+  color:var(--text2);margin-bottom:20px;
+}
+.rf-links{list-style:none;display:flex;flex-direction:column;gap:12px;}
+.rf-links a{color:rgba(255,255,255,0.55);text-decoration:none;font-size:14px;transition:color .2s;}
+.rf-links a:hover{color:#fff;}
+.rf-divider{height:1px;background:rgba(255,255,255,0.05);margin-bottom:28px;}
+.rf-bottom{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;}
+.rf-copy{font-size:12px;color:var(--text3);font-family:'DM Mono',monospace;}
+.rf-badges{display:flex;gap:10px;flex-wrap:wrap;}
+.rf-badge{
+  font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;
+  padding:4px 12px;border-radius:6px;
+  background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+  color:var(--text2);
+}
+
+@media(max-width:900px){
+  .about-grid{grid-template-columns:1fr;gap:48px;}
+  .rich-footer-grid{grid-template-columns:1fr 1fr;gap:32px;}
+}
+@media(max-width:600px){
+  .rich-footer-grid{grid-template-columns:1fr;}
+  .rf-bottom{flex-direction:column;text-align:center;}
+}
+
+/* FOOTER legacy (kept for fallback) */
+footer{display:none;}
+
+/* Smooth Scroll Reveal */
+.reveal{opacity:0;transform:translateY(40px) scale(0.98);transition:all 0.8s cubic-bezier(0.16,1,0.3,1);}
+.reveal.visible{opacity:1;transform:translateY(0) scale(1);}
+
+/* ── TOAST NOTIFICATIONS ── */
+.toast-container{position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:10px;}
+.toast{
+  display:flex;align-items:center;gap:14px;
+  background:rgba(15,20,35,0.95);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,0.1);
+  border-left:3px solid var(--amber);
+  border-radius:12px;padding:14px 18px;
+  min-width:280px;max-width:360px;
+  box-shadow:0 20px 50px rgba(0,0,0,0.5);
+  transform:translateX(120%);opacity:0;
+  transition:all 0.4s cubic-bezier(0.16,1,0.3,1);
+}
+.toast.show{transform:translateX(0);opacity:1;}
+.toast-icon{font-size:20px;flex-shrink:0;}
+.toast-title{font-weight:600;font-size:14px;color:#fff;}
+.toast-desc{font-size:12px;color:var(--text2);margin-top:3px;}
+
+/* ── SOCIAL PROOF SECTION ── */
+.social-section{border-top:1px solid rgba(255,255,255,0.04);border-bottom:1px solid rgba(255,255,255,0.04);background:rgba(6,13,26,0.5);}
+.social-strip{display:flex;align-items:center;justify-content:space-between;gap:32px;flex-wrap:wrap;padding:64px 0;}
+.social-stat{text-align:center;flex:1;min-width:140px;}
+.social-stat-val{font-family:'Bebas Neue',sans-serif;font-size:clamp(36px,5vw,64px);line-height:1;letter-spacing:.02em;}
+.social-stat-val.orange{color:var(--amber);text-shadow:0 0 30px rgba(249,115,22,0.3);}
+.social-stat-val.cyan{color:var(--cyan);text-shadow:0 0 30px rgba(34,211,238,0.3);}
+.social-stat-val.white{color:#fff;}
+.social-stat-lbl{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text2);margin-top:8px;}
+.social-divider{width:1px;height:64px;background:rgba(255,255,255,0.06);flex-shrink:0;}
+
+/* ── HERO FLOATING CARD ── */
+.hero-float-card{
+  position:absolute;
+  right:5%;bottom:20%;
+  background:rgba(15,20,35,0.9);
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  border:1px solid rgba(255,255,255,0.1);
+  border-top:1px solid rgba(255,255,255,0.2);
+  border-radius:16px;
+  padding:18px 22px;
+  min-width:230px;
+  box-shadow:0 24px 60px rgba(0,0,0,0.5);
+  z-index:15;
+  animation:heroFadeUp 0.9s cubic-bezier(.16,1,.3,1) 1.6s both;
+  display:none;
+}
+@media(min-width:1100px){.hero-float-card{display:block;}}
+.hfc-label{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--text2);margin-bottom:12px;}
+.hfc-row{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:10px;}
+.hfc-row:last-child{margin-bottom:0;}
+.hfc-name{font-size:13px;color:var(--text1);}
+.hfc-val{font-family:'DM Mono',monospace;font-size:13px;font-weight:500;}
+.hfc-val.up{color:#34d399;}
+.hfc-val.warn{color:var(--amber);}
+.hfc-val.ok{color:#60a5fa;}
+.hfc-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.hfc-dot.green{background:#34d399;box-shadow:0 0 6px #34d399;}
+.hfc-dot.amber{background:var(--amber);box-shadow:0 0 6px var(--amber);}
+.hfc-sep{height:1px;background:rgba(255,255,255,0.06);margin:12px 0;}
+
+/* Scroll progress bar */
+#scroll-prog{
+  position:fixed;top:0;left:0;height:2px;background:var(--amber);
+  transform-origin:left;transform:scaleX(0);z-index:9999;
+  transition:transform .1s linear;
+  box-shadow:0 0 8px rgba(249,115,22,0.6);
+}
+
+/* Responsive */
+@media(max-width:992px){
+  .pricing-grid{grid-template-columns:1fr;max-width:500px;margin-left:auto;margin-right:auto;}
+  .pricing-card.pro{transform:none;}
+  .pricing-card.pro:hover{transform:translateY(-4px);}
+}
+@media(max-width:768px){
+  .eng-card{flex-wrap:wrap}
+  .eng-cell{min-width:50%;border-bottom:1px solid rgba(255,255,255,.06)}
+  .eng-cell:nth-child(2){border-right:none}
+  .hero-btns{gap:12px}
+  footer{flex-direction:column;text-align:center;}
+  .nav-right .btn-ghost-nav{display:none}
+  .hero-h1{font-size:clamp(36px,10vw,72px);letter-spacing:-0.04em;}
+}
+
+/* ══════════════════════════════════════════════
+   LANDING MOBİL — KAPSAMLI RESPONSIVE
+   ══════════════════════════════════════════════ */
+
+/* ── HERO BAŞLIK: küçük ekranlarda okunabilir boyut ── */
+@media(max-width:600px){
+  .hero-h1{
+    font-size:clamp(28px,9vw,56px);
+    line-height:1.1;
+    letter-spacing:-0.035em;
+  }
+  .hero-sub{
+    font-size:14px;
+    margin-bottom:32px;
+    padding:0 8px;
+  }
+  .hero-btns{
+    flex-direction:column;
+    align-items:center;
+    gap:10px;
+    width:100%;
+  }
+  .hero-btns .btn-primary,
+  .hero-btns .btn-ghost{
+    width:100%;
+    max-width:320px;
+    min-height:50px;
+    font-size:15px;
+    justify-content:center;
+  }
+  /* Hero badge */
+  .hero-badge{ font-size:11px; padding:6px 14px; }
+}
+
+@media(max-width:400px){
+  .hero-h1{ font-size:clamp(34px,10.5vw,56px); letter-spacing:-0.025em; }
+}
+
+/* ── SOSYAL PROOF STATS: 2x2 grid ── */
+@media(max-width:640px){
+  .social-strip{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:32px 16px;
+    padding:40px 16px;
+    justify-items:center;
+  }
+  /* Dikey ayraçları gizle */
+  .social-divider{ display:none; }
+  .social-stat{ min-width:unset; width:100%; }
+  .social-stat-val{ font-size:clamp(28px,9vw,48px); }
+  .social-stat-lbl{ font-size:10px; }
+}
+
+@media(max-width:380px){
+  .social-strip{ grid-template-columns:1fr; gap:24px; }
+}
+
+/* ── FLOATING KART: mobilde zaten gizli (min-width:1100px) ── */
+/* Güvenlik katmanı — 1099px altında kesinlikle gizle */
+@media(max-width:1099px){
+  .hero-float-card{ display:none !important; }
+}
+
+/* ── NAV MOBİL ── */
+@media(max-width:600px){
+  .nav-inner{ padding:0 16px; }
+  .nav-logo{ font-size:16px; }
+  /* Nav buton dokunma alanı */
+  .nav-right a, .nav-right button{
+    min-height:40px;
+    min-width:40px;
+    display:flex; align-items:center; justify-content:center;
+  }
+}
+
+/* ── FEATURE CARDS: tek kolon ── */
+@media(max-width:600px){
+  .features-grid{
+    grid-template-columns:1fr;
+    gap:16px;
+  }
+  .feature-card{padding:24px 20px;}
+  .feature-icon-wrap{width:48px;height:48px;font-size:22px;}
+}
+
+/* ── PRICING: mobil aralıklar ── */
+@media(max-width:480px){
+  .pricing-card{padding:28px 20px;}
+  .pricing-card .btn-primary{min-height:50px;font-size:15px;}
+}
+
+/* ── ABOUT / CONTACT: tek kolon ── */
+@media(max-width:600px){
+  .about-badges{flex-wrap:wrap;gap:8px;}
+  .about-badge{font-size:11px;padding:6px 12px;}
+  .contact-form{padding:24px 18px;}
+  .contact-input,.contact-textarea{font-size:16px;} /* iOS zoom önlemi */
+  .contact-btn{min-height:50px;font-size:15px;}
+}
+
+/* ── TOAST: mobilde tam genişlik alttan ── */
+@media(max-width:600px){
+  .toast-container{
+    bottom:16px; right:16px; left:16px;
+  }
+  .toast{
+    min-width:unset; max-width:100%;
+    padding:12px 14px;
+  }
+}
+
+/* ── GENEL DOKUNMA ALANLARI ── */
+@media(max-width:768px){
+  a, button, [role="button"]{
+    min-height:44px; /* Apple HIG minimum */
+  }
+}
+
+/* ── GSAP PERFORMANS: mobilde smooth ── */
+@media(max-width:768px) and (prefers-reduced-motion:no-preference){
+  .reveal{
+    transition-duration:0.5s;    /* Masaüstü 0.8s → mobil 0.5s */
+    transform:translateY(24px) scale(0.99); /* Daha az hareket */
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .reveal,.reveal.visible{
+    opacity:1;transform:none;transition:none;
+  }
 }
 </style>
 </head>
 <body>
+<div id="scroll-prog"></div>
 
 <!-- NAV -->
 <nav>
-  <div class="nav-logo">
-    🏗️ Building<span>AI</span>
-  </div>
+  <div class="nav-logo">🏗️ Building<span>AI</span></div>
   <div class="nav-right">
     <button class="lang-btn active" onclick="setLang('tr')" id="btn-tr">TR</button>
     <button class="lang-btn" onclick="setLang('en')" id="btn-en">EN</button>
-    <a href="/app" class="btn-secondary" style="padding:8px 18px;font-size:13px;border-radius:8px;text-decoration:none;border:1px solid rgba(255,255,255,0.2);color:white;transition:all .15s;" data-tr="Giriş Yap" data-en="Sign In">Giriş Yap</a>
+    <a href="/app" class="btn-ghost-nav" data-tr="Giriş Yap" data-en="Sign In">Giriş Yap</a>
     <a href="/app#register" class="nav-cta" data-tr="Ücretsiz Dene" data-en="Try Free">Ücretsiz Dene</a>
   </div>
 </nav>
 
-<!-- HERO -->
-<section class="hero">
-  <div class="hero-glow"></div>
+<!-- ============================================================
+     HERO — PREMIUM DARK SAAS (Linear / Vercel Style)
+     ============================================================ -->
+<div class="hero-wrap" id="heroWrap">
 
-  <div class="hero-badge" data-tr="🇹🇷 Türkiye'nin Şantiye AI Platformu" data-en="🇹🇷 Turkey's Construction AI Platform">
-    🇹🇷 Türkiye'nin Şantiye AI Platformu
+  <!-- Abstract aurora glow blobs (background) -->
+  <div class="aurora-layer" id="auroraLayer" aria-hidden="true">
+    <div class="glow-blob glow-blob-1" id="blob1"></div>
+    <div class="glow-blob glow-blob-2" id="blob2"></div>
+    <div class="glow-blob glow-blob-3" id="blob3"></div>
   </div>
 
-  <h1>
-    <span data-tr="Şantiyeni" data-en="Manage Your">Şantiyeni</span><br>
-    <em data-tr="Yapay Zeka" data-en="with AI">Yapay Zeka</em><br>
-    <span data-tr="ile Yönet" data-en="Construction">ile Yönet</span>
-  </h1>
+  <!-- Dot grid -->
+  <div class="hero-dots" aria-hidden="true"></div>
+  <!-- Subtle grid lines -->
+  <div class="hero-grid-lines" aria-hidden="true"></div>
 
-  <p class="hero-sub" data-tr="Kamera analizi, AI raporlama, fiyat takibi ve Türkiye mevzuatına uygun hesaplamalar. Saha mühendisleri ve müteahhitler için tasarlandı." data-en="Camera analysis, AI reporting, price tracking and calculations compliant with Turkish regulations. Designed for field engineers and contractors.">
-    Kamera analizi, AI raporlama, fiyat takibi ve Türkiye mevzuatına uygun hesaplamalar. Saha mühendisleri ve müteahhitler için tasarlandı.
-  </p>
+  <!-- Content -->
+  <div class="hero-content">
 
-  <div class="hero-btns">
-    <a href="/app#register" class="btn-primary" data-tr="🚀 Ücretsiz Başla" data-en="🚀 Start Free">🚀 Ücretsiz Başla</a>
-    <a href="#features" class="btn-secondary" data-tr="Özellikleri Gör" data-en="See Features">Özellikleri Gör</a>
+    <!-- Badge -->
+    <div class="hero-badge">
+      <span class="badge-dot"></span>
+      <span id="heroBadge"
+            data-tr="🇹🇷 Türkiye'nin İlk Yapay Zeka Destekli Şantiye Platformu"
+            data-en="🇹🇷 Turkey's First AI-Powered Construction Platform">
+        🇹🇷 Türkiye'nin İlk Yapay Zeka Destekli Şantiye Platformu
+      </span>
+    </div>
+
+    <!-- Main heading -->
+    <h1 class="hero-h1" id="heroH1">
+      <span class="orange-highlight" data-tr="Şantiyeni" data-en="Manage Your">Şantiyeni</span>
+      <span class="accent" data-tr=" Yapay Zeka " data-en=" with AI "> Yapay Zeka </span>
+      <span data-tr="ile Yönet" data-en="Construction">ile Yönet</span>
+    </h1>
+
+    <!-- Subtitle -->
+    <p class="hero-sub" id="heroSub"
+       data-tr="Kamera analizi, AI raporlama, fiyat takibi ve Türkiye mevzuatına uygun hesaplamalar. Saha mühendisleri ve müteahhitler için tasarlandı."
+       data-en="Camera analysis, AI reporting, price tracking and calculations compliant with Turkish regulations. Designed for field engineers and contractors.">
+      Kamera analizi, AI raporlama, fiyat takibi ve Türkiye mevzuatına uygun hesaplamalar.
+      Saha mühendisleri ve müteahhitler için tasarlandı.
+    </p>
+
+    <!-- Buttons -->
+    <div class="hero-btns" id="heroBtns">
+      <a href="/app#register" class="btn-fire"
+         data-tr="🚀 Ücretsiz Başla" data-en="🚀 Start Free">🚀 Ücretsiz Başla</a>
+      <a href="#features" class="btn-ghost"
+         data-tr="Özellikleri Gör" data-en="See Features">Özellikleri Gör</a>
+    </div>
+
+    <!-- Stats card -->
+    <div class="eng-card" id="engCard">
+      <div class="eng-cell">
+        <div class="eng-val">50+</div>
+        <div class="eng-lbl" data-tr="Mühendislik Hesabı" data-en="Eng. Calculations">Mühendislik Hesabı</div>
+      </div>
+      <div class="eng-cell">
+        <div class="eng-val">7/24</div>
+        <div class="eng-lbl" data-tr="AI Asistan" data-en="AI Assistant">AI Asistan</div>
+      </div>
+      <div class="eng-cell">
+        <div class="eng-val">TBDY 2018</div>
+        <div class="eng-lbl" data-tr="Tam Uyumlu" data-en="Fully Compliant">Tam Uyumlu</div>
+      </div>
+      <div class="eng-cell">
+        <div class="eng-val">₺</div>
+        <div class="eng-lbl" data-tr="Yerel Fiyat" data-en="Local Pricing">Yerel Fiyat</div>
+      </div>
+    </div>
+
+  </div><!-- /hero-content -->
+
+  <!-- Floating live-data card (desktop only) -->
+  <div class="hero-float-card" aria-hidden="true">
+    <div class="hfc-label">🔴 Canlı Şantiye Verileri</div>
+    <div class="hfc-row">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="hfc-dot green"></div>
+        <span class="hfc-name">Demir Q235</span>
+      </div>
+      <span class="hfc-val up">₺28.450 / ton</span>
+    </div>
+    <div class="hfc-row">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="hfc-dot amber"></div>
+        <span class="hfc-name">Çimento CEM II</span>
+      </div>
+      <span class="hfc-val warn">₺1.890 / ton</span>
+    </div>
+    <div class="hfc-sep"></div>
+    <div class="hfc-row">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="hfc-dot green"></div>
+        <span class="hfc-name">TBDY Uyumu</span>
+      </div>
+      <span class="hfc-val ok">%98 ✓</span>
+    </div>
+    <div class="hfc-row">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="hfc-dot green"></div>
+        <span class="hfc-name">İSG Skoru</span>
+      </div>
+      <span class="hfc-val up">87 / 100</span>
+    </div>
   </div>
 
-  <div class="hero-stats">
-    <div class="stat-item">
-      <div class="stat-num">50+</div>
-      <div class="stat-lbl" data-tr="Mühendislik Hesabı" data-en="Engineering Calculations">Mühendislik Hesabı</div>
+  <div class="hero-bottom-fade" aria-hidden="true"></div>
+</div><!-- /hero-wrap -->
+
+
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="bg-grid"></div>
+  <div class="section-inner">
+    <div class="reveal">
+      <div class="section-label" data-tr="Özellikler" data-en="Features">Özellikler</div>
+      <h2 class="section-title" data-tr="Tek Platformda<br>Tam Kontrol" data-en="Full Control in<br>One Platform">Tek Platformda<br>Tam Kontrol</h2>
+      <p class="section-sub" data-tr="Sahadan ofise tüm mühendislik ihtiyaçların yüksek teknolojili yapay zeka ile çözülüyor." data-en="All your engineering needs solved with high-tech AI from field to office.">
+        Sahadan ofise tüm mühendislik ihtiyaçların yüksek teknolojili yapay zeka ile çözülüyor.
+      </p>
     </div>
-    <div class="stat-item">
-      <div class="stat-num">7/24</div>
-      <div class="stat-lbl" data-tr="AI Asistan" data-en="AI Assistant">AI Asistan</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-num">TBDY</div>
-      <div class="stat-lbl" data-tr="2018 Uyumlu" data-en="2018 Compliant">2018 Uyumlu</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-num">TL</div>
-      <div class="stat-lbl" data-tr="Yerel Fiyatlandırma" data-en="Local Pricing">Yerel Fiyatlandırma</div>
+    <div class="features-grid">
+      <!-- Feature 1: AI Kamera Analizi -->
+      <div class="glass-card feature-card reveal" style="--c:#22d3ee;--c-alpha:rgba(34,211,238,0.1)">
+        <div class="feature-icon-wrap" style="color:#22d3ee;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+        </div>
+        <div class="feature-title" data-tr="AI Kamera Analizi" data-en="AI Camera Analysis">AI Kamera Analizi</div>
+        <div class="feature-desc" data-tr="Sahadan fotoğraf yükle, yapay zeka anlık çatlak, donatı ve kalıp analizi yapsın. Milimetrik hataları saniyeler içinde tespit et." data-en="Upload site photos, AI instantly analyzes cracks, rebar, and formwork. Detect sub-millimeter errors in seconds.">Sahadan fotoğraf yükle, yapay zeka anlık çatlak, donatı ve kalıp analizi yapsın. Milimetrik hataları saniyeler içinde tespit et.</div>
+        <span class="feature-tag" data-tr="Anlık Görüntü İşleme" data-en="Real-time Vision">Anlık Görüntü İşleme</span>
+      </div>
+      <!-- Feature 2: TBDY 2018 Otomatik Raporlama -->
+      <div class="glass-card feature-card reveal" style="--c:#f97316;--c-alpha:rgba(249,115,22,0.1)">
+        <div class="feature-icon-wrap" style="color:#f97316;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        </div>
+        <div class="feature-title" data-tr="TBDY 2018 Otomatik Rapor" data-en="TBDY 2018 Auto Reports">TBDY 2018 Otomatik Rapor</div>
+        <div class="feature-desc" data-tr="Tüm mühendislik hesaplamaların Türkiye Bina Deprem Yönetmeliği'ne tam uyumlu olarak otomatik raporlanır ve arşivlenir." data-en="All calculations are auto-reported and archived in full compliance with the Turkish Earthquake Code.">Tüm mühendislik hesaplamaların Türkiye Bina Deprem Yönetmeliği'ne tam uyumlu olarak otomatik raporlanır ve arşivlenir.</div>
+        <span class="feature-tag" data-tr="Mevzuat Uyumlu" data-en="Fully Compliant">Mevzuat Uyumlu</span>
+      </div>
+      <!-- Feature 3: Anlık Maliyet Takibi -->
+      <div class="glass-card feature-card reveal" style="--c:#34d399;--c-alpha:rgba(52,211,153,0.1)">
+        <div class="feature-icon-wrap" style="color:#34d399;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
+        <div class="feature-title" data-tr="Anlık Maliyet Takibi" data-en="Live Cost Tracking">Anlık Maliyet Takibi</div>
+        <div class="feature-desc" data-tr="Demir, çimento ve hazır beton fiyatlarındaki anlık değişimleri takip et. Canlı veriler ile şantiye bütçeni optimize et." data-en="Track instant changes in rebar, cement, and concrete prices. Optimize your site budget with live data.">Demir, çimento ve hazır beton fiyatlarındaki anlık değişimleri takip et. Canlı veriler ile şantiye bütçeni optimize et.</div>
+        <span class="feature-tag" data-tr="Canlı Ekosistem" data-en="Live Ecosystem">Canlı Ekosistem</span>
+      </div>
+      <!-- Feature 4: AI Asistan -->
+      <div class="glass-card feature-card reveal" style="--c:#a78bfa;--c-alpha:rgba(167,139,250,0.1);transition-delay:.05s">
+        <div class="feature-icon-wrap" style="color:#a78bfa;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="12" y1="7" x2="12" y2="13"/></svg>
+        </div>
+        <div class="feature-title" data-tr="7/24 AI Asistan" data-en="24/7 AI Assistant">7/24 AI Asistan</div>
+        <div class="feature-desc" data-tr="Teknik şartname, yönetmelik ve mühendislik soruların için hiç uyumayan bir danışman. TBDY 2018, TS 500 ve İSG 6331 konularında anlık cevap al." data-en="A never-sleeping advisor for technical specs, codes, and engineering questions. Get instant answers on TBDY 2018, TS 500, and OHS 6331.">Teknik şartname, yönetmelik ve mühendislik soruların için hiç uyumayan bir danışman. TBDY 2018, TS 500 ve İSG 6331 konularında anlık cevap al.</div>
+        <span class="feature-tag" data-tr="Gemini 2.5 Destekli" data-en="Gemini 2.5 Powered">Gemini 2.5 Destekli</span>
+      </div>
+      <!-- Feature 5: Deprem Analizi -->
+      <div class="glass-card feature-card reveal" style="--c:#fb923c;--c-alpha:rgba(251,146,60,0.1);transition-delay:.1s">
+        <div class="feature-icon-wrap" style="color:#fb923c;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <div class="feature-title" data-tr="Deprem Risk Analizi" data-en="Earthquake Risk Analysis">Deprem Risk Analizi</div>
+        <div class="feature-desc" data-tr="Koordinat gir, AFAD verisiyle hızlı sismik değerlendirme al. Bina risk skorlaması ve öneri raporunu saniyeler içinde oluştur." data-en="Enter coordinates, get rapid seismic assessment from AFAD data. Generate risk scores and recommendation reports in seconds.">Koordinat gir, AFAD verisiyle hızlı sismik değerlendirme al. Bina risk skorlaması ve öneri raporunu saniyeler içinde oluştur.</div>
+        <span class="feature-tag" data-tr="AFAD Entegreli" data-en="AFAD Integrated">AFAD Entegreli</span>
+      </div>
+      <!-- Feature 6: Şantiye Yönetimi -->
+      <div class="glass-card feature-card reveal" style="--c:#38bdf8;--c-alpha:rgba(56,189,248,0.1);transition-delay:.15s">
+        <div class="feature-icon-wrap" style="color:#38bdf8;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </div>
+        <div class="feature-title" data-tr="Şantiye Yönetim Merkezi" data-en="Site Management Hub">Şantiye Yönetim Merkezi</div>
+        <div class="feature-desc" data-tr="Puantaj, stok takibi ve ekip koordinasyonu tek ekranda. Birden fazla şantiyeyi eş zamanlı yönet, ilerleme yüzdelerini gerçek zamanlı izle." data-en="Timekeeping, inventory, and team coordination on one screen. Manage multiple sites simultaneously with real-time progress tracking.">Puantaj, stok takibi ve ekip koordinasyonu tek ekranda. Birden fazla şantiyeyi eş zamanlı yönet, ilerleme yüzdelerini gerçek zamanlı izle.</div>
+        <span class="feature-tag" data-tr="Çok Şantiye Desteği" data-en="Multi-Site Support">Çok Şantiye Desteği</span>
+      </div>
+      <!-- Feature 7: Sesli Rapor -->
+      <div class="glass-card feature-card reveal" style="--c:#f43f5e;--c-alpha:rgba(244,63,94,0.1);transition-delay:.2s">
+        <div class="feature-icon-wrap" style="color:#f43f5e;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </div>
+        <div class="feature-title" data-tr="Sesli Saha Raporu" data-en="Voice Field Report">Sesli Saha Raporu</div>
+        <div class="feature-desc" data-tr="Sahada konuş, AI dinlesin ve profesyonel günlük raporu otomatik oluştursun. Ellerin doluyken bile veri girişi yap." data-en="Speak on site, let AI listen and auto-generate professional daily reports. Enter data even with hands full.">Sahada konuş, AI dinlesin ve profesyonel günlük raporu otomatik oluştursun. Ellerin doluyken bile veri girişi yap.</div>
+        <span class="feature-tag" data-tr="Eller Serbest" data-en="Hands-Free">Eller Serbest</span>
+      </div>
+      <!-- Feature 8: Mobil & Offline -->
+      <div class="glass-card feature-card reveal" style="--c:#4ade80;--c-alpha:rgba(74,222,128,0.1);transition-delay:.25s">
+        <div class="feature-icon-wrap" style="color:#4ade80;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        </div>
+        <div class="feature-title" data-tr="Mobil & Offline Çalışma" data-en="Mobile & Offline Ready">Mobil & Offline Çalışma</div>
+        <div class="feature-desc" data-tr="Sahadan anlık veri girişi ve analiz. İnternet bağlantısı olmayan alanlarda çevrimdışı mod ile çalışmaya devam et, sync otomatik yapılır." data-en="Real-time data entry and analysis from the field. Continue working offline in no-coverage areas — sync happens automatically.">Sahadan anlık veri girişi ve analiz. İnternet bağlantısı olmayan alanlarda çevrimdışı mod ile çalışmaya devam et, sync otomatik yapılır.</div>
+        <span class="feature-tag" data-tr="PWA · Offline Sync" data-en="PWA · Offline Sync">PWA · Offline Sync</span>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- FEATURES -->
-<section id="features">
-  <div class="section-inner">
-    <div class="reveal">
-      <div class="section-label" data-tr="Özellikler" data-en="Features">Özellikler</div>
-      <h2 class="section-title" data-tr="Tek Platformda<br>Her Şey" data-en="Everything in<br>One Platform">Tek Platformda<br>Her Şey</h2>
-      <p class="section-sub" data-tr="Sahadan ofise tüm ihtiyaçların bir arada. Başka uygulamaya gerek yok." data-en="All your needs from field to office in one place. No other apps needed.">
-        Sahadan ofise tüm ihtiyaçların bir arada. Başka uygulamaya gerek yok.
-      </p>
-    </div>
-
-    <div class="features-grid">
-      <div class="feature-card reveal" style="--c: var(--amber)">
-        <div class="feature-icon">🤖</div>
-        <div class="feature-title" data-tr="AI Asistan" data-en="AI Assistant">AI Asistan</div>
-        <div class="feature-desc" data-tr="Soru sor, hesap yaptır, saha fotoğrafı analiz et. Türkçe konuşan, inşaat bilen yapay zeka." data-en="Ask questions, calculate, analyze site photos. AI that speaks Turkish and knows construction.">
-          Soru sor, hesap yaptır, saha fotoğrafı analiz et. Türkçe konuşan, inşaat bilen yapay zeka.
-        </div>
-        <span class="feature-tag" style="--bg:rgba(249,115,22,0.1);--tc:#fb923c;--bc:rgba(249,115,22,0.2)" data-tr="Türkçe Destekli" data-en="Turkish Supported">Türkçe Destekli</span>
+<!-- SOCIAL PROOF / STATS -->
+<section class="social-section">
+  <div class="section-inner" style="padding-top:0;padding-bottom:0;">
+    <div class="social-strip">
+      <div class="social-stat reveal">
+        <div class="social-stat-val orange" data-count="500" data-suffix="+">500+</div>
+        <div class="social-stat-lbl" data-tr="Aktif Mühendis" data-en="Active Engineers">Aktif Mühendis</div>
       </div>
-
-      <div class="feature-card reveal" style="--c: #22d3ee">
-        <div class="feature-icon">📷</div>
-        <div class="feature-title" data-tr="Kamera Analizi" data-en="Camera Analysis">Kamera Analizi</div>
-        <div class="feature-desc" data-tr="Sahadan fotoğraf yükle, AI anlık analiz yapsın. Çatlak tespiti, donatı kontrolü, kalıp incelemesi." data-en="Upload site photos, let AI analyze instantly. Crack detection, rebar check, formwork inspection.">
-          Sahadan fotoğraf yükle, AI anlık analiz yapsın. Çatlak tespiti, donatı kontrolü, kalıp incelemesi.
-        </div>
-        <span class="feature-tag" style="--bg:rgba(34,211,238,0.1);--tc:#22d3ee;--bc:rgba(34,211,238,0.2)" data-tr="Anlık Analiz" data-en="Real-time Analysis">Anlık Analiz</span>
+      <div class="social-divider"></div>
+      <div class="social-stat reveal">
+        <div class="social-stat-val cyan" data-count="12000" data-suffix="+">12.000+</div>
+        <div class="social-stat-lbl" data-tr="Tamamlanan AI Analizi" data-en="AI Analyses Done">Tamamlanan AI Analizi</div>
       </div>
-
-      <div class="feature-card reveal" style="--c: #a78bfa">
-        <div class="feature-icon">🏗️</div>
-        <div class="feature-title" data-tr="Şantiye Yönetimi" data-en="Site Management">Şantiye Yönetimi</div>
-        <div class="feature-desc" data-tr="Günlük rapor, sesli rapor, ilerleme takibi. Müteahhitten mühendise tüm ekip tek platformda." data-en="Daily reports, voice reports, progress tracking. From contractor to engineer, all on one platform.">
-          Günlük rapor, sesli rapor, ilerleme takibi. Müteahhitten mühendise tüm ekip tek platformda.
-        </div>
-        <span class="feature-tag" style="--bg:rgba(167,139,250,0.1);--tc:#a78bfa;--bc:rgba(167,139,250,0.2)" data-tr="Çoklu Şantiye" data-en="Multi-Site">Çoklu Şantiye</span>
+      <div class="social-divider"></div>
+      <div class="social-stat reveal">
+        <div class="social-stat-val white" data-count="81" data-suffix="">81</div>
+        <div class="social-stat-lbl" data-tr="İl Genelinde Aktif" data-en="Provinces Active">İl Genelinde Aktif</div>
       </div>
-
-      <div class="feature-card reveal" style="--c: #34d399">
-        <div class="feature-icon">💹</div>
-        <div class="feature-title" data-tr="Fiyat & Stok Takibi" data-en="Price & Stock Tracking">Fiyat & Stok Takibi</div>
-        <div class="feature-desc" data-tr="Demir, çimento, beton fiyatlarını takip et. Stok düşünce bildirim al, maliyetleri kontrol et." data-en="Track iron, cement, concrete prices. Get alerts when stock is low, control costs.">
-          Demir, çimento, beton fiyatlarını takip et. Stok düşünce bildirim al, maliyetleri kontrol et.
-        </div>
-        <span class="feature-tag" style="--bg:rgba(52,211,153,0.1);--tc:#34d399;--bc:rgba(52,211,153,0.2)" data-tr="Anlık Fiyatlar" data-en="Live Prices">Anlık Fiyatlar</span>
-      </div>
-
-      <div class="feature-card reveal" style="--c: #f472b6">
-        <div class="feature-icon">🌍</div>
-        <div class="feature-title" data-tr="Deprem Analizi" data-en="Earthquake Analysis">Deprem Analizi</div>
-        <div class="feature-desc" data-tr="Şantiye konumuna göre deprem risk analizi. AFAD verileri ve TBDY 2018 parametreleri ile." data-en="Earthquake risk analysis based on site location. With AFAD data and TBDY 2018 parameters.">
-          Şantiye konumuna göre deprem risk analizi. AFAD verileri ve TBDY 2018 parametreleri ile.
-        </div>
-        <span class="feature-tag" style="--bg:rgba(244,114,182,0.1);--tc:#f472b6;--bc:rgba(244,114,182,0.2)" data-tr="AFAD Entegre" data-en="AFAD Integrated">AFAD Entegre</span>
-      </div>
-
-      <div class="feature-card reveal" style="--c: var(--amber)">
-        <div class="feature-icon">📱</div>
-        <div class="feature-title" data-tr="Mobil Uygulama" data-en="Mobile App">Mobil Uygulama</div>
-        <div class="feature-desc" data-tr="Sahada telefona yükle, internetsiz çalış. iOS ve Android destekli PWA uygulama." data-en="Install on phone at site, works offline. PWA app with iOS and Android support.">
-          Sahada telefona yükle, internetsiz çalış. iOS ve Android destekli PWA uygulama.
-        </div>
-        <span class="feature-tag" style="--bg:rgba(249,115,22,0.1);--tc:#fb923c;--bc:rgba(249,115,22,0.2)" data-tr="iOS & Android" data-en="iOS & Android">iOS & Android</span>
+      <div class="social-divider"></div>
+      <div class="social-stat reveal">
+        <div class="social-stat-val orange" data-count="98" data-suffix="" data-prefix="%">%98</div>
+        <div class="social-stat-lbl" data-tr="TBDY Uyumluluk Oranı" data-en="TBDY Compliance Rate">TBDY Uyumluluk Oranı</div>
       </div>
     </div>
   </div>
@@ -426,65 +1175,102 @@ footer {
   <div class="section-inner">
     <div class="reveal">
       <div class="section-label" data-tr="Nasıl Çalışır?" data-en="How it Works?">Nasıl Çalışır?</div>
-      <h2 class="section-title" data-tr="3 Adımda<br>Başla" data-en="Get Started<br>in 3 Steps">3 Adımda<br>Başla</h2>
+      <h2 class="section-title" data-tr="3 Adımda<br>Şantiyeyi Dijitalleştir" data-en="Digitize Your Site<br>in 3 Steps">3 Adımda<br>Şantiyeyi Dijitalleştir</h2>
     </div>
-
-    <div class="steps">
-      <div class="step reveal">
+    <div class="steps-grid">
+      <div class="glass-card step-card reveal" style="--c:#f97316;--c-alpha:rgba(249,115,22,0.1)">
         <div class="step-num">1</div>
-        <div class="step-content">
-          <div class="step-title" data-tr="Ücretsiz hesap oluştur" data-en="Create a free account">Ücretsiz hesap oluştur</div>
-          <div class="step-desc" data-tr="Email ile 30 saniyede kayıt ol. Kredi kartı gerekmez. Günde 20 AI sorgusu ücretsiz." data-en="Sign up with email in 30 seconds. No credit card required. 20 free AI queries per day.">
-            Email ile 30 saniyede kayıt ol. Kredi kartı gerekmez. Günde 20 AI sorgusu ücretsiz.
-          </div>
-        </div>
+        <div class="step-title" data-tr="Hesabını Oluştur" data-en="Create Account">Hesabını Oluştur</div>
+        <div class="step-desc" data-tr="Email ile 30 saniyede güvenli kayıt ol. Herhangi bir kurulum gerektirmez." data-en="Sign up securely in 30s with email. No installation required.">Email ile 30 saniyede güvenli kayıt ol. Herhangi bir kurulum gerektirmez.</div>
       </div>
-      <div class="step reveal">
+      <div class="glass-card step-card reveal" style="--c:#22d3ee;--c-alpha:rgba(34,211,238,0.1);transition-delay:0.1s;">
         <div class="step-num">2</div>
-        <div class="step-content">
-          <div class="step-title" data-tr="Şantiyeni ekle" data-en="Add your construction site">Şantiyeni ekle</div>
-          <div class="step-desc" data-tr="Şantiye adı, konum ve bilgileri gir. Harita üzerinden deprem riski analiz edilsin." data-en="Enter site name, location and details. Let earthquake risk be analyzed on the map.">
-            Şantiye adı, konum ve bilgileri gir. Harita üzerinden deprem riski analiz edilsin.
-          </div>
-        </div>
+        <div class="step-title" data-tr="Projeyi Tanıt" data-en="Add Project">Projeyi Tanıt</div>
+        <div class="step-desc" data-tr="Şantiye koordinatlarını ve yapı sınıfını gir. TBDY ve risk analizleri otomatik çekilsin." data-en="Enter site coordinates and building class. TBDY and risk data auto-fetched.">Şantiye koordinatlarını ve yapı sınıfını gir. TBDY ve risk analizleri otomatik çekilsin.</div>
       </div>
-      <div class="step reveal">
+      <div class="glass-card step-card reveal" style="--c:#a78bfa;--c-alpha:rgba(167,139,250,0.1);transition-delay:0.2s;">
         <div class="step-num">3</div>
-        <div class="step-content">
-          <div class="step-title" data-tr="AI'ı çalıştır" data-en="Run the AI">AI'ı çalıştır</div>
-          <div class="step-desc" data-tr="Soru sor, fotoğraf yükle, rapor oluştur. Tüm hesaplamalar Türkiye standartlarına göre." data-en="Ask questions, upload photos, generate reports. All calculations according to Turkish standards.">
-            Soru sor, fotoğraf yükle, rapor oluştur. Tüm hesaplamalar Türkiye standartlarına göre.
-          </div>
-        </div>
+        <div class="step-title" data-tr="AI ile Yönet" data-en="Manage with AI">AI ile Yönet</div>
+        <div class="step-desc" data-tr="Saha fotoğraflarını yükle, raporları otomatik al. Şantiyenin kontrolünü eline al." data-en="Upload site photos, get automated reports. Take full control of your site.">Saha fotoğraflarını yükle, raporları otomatik al. Şantiyenin kontrolünü eline al.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING SECTION -->
+<section id="pricing" class="pricing-section">
+  <div class="bg-grid"></div>
+  <div class="pricing-glow"></div>
+  <div class="section-inner">
+    <div class="reveal" style="text-align:center;">
+      <div class="section-label" data-tr="Fiyatlandırma" data-en="Pricing">Fiyatlandırma</div>
+      <h2 class="section-title" data-tr="Her Ölçek İçin<br>Esnek Planlar" data-en="Flexible Plans<br>for Every Scale">Her Ölçek İçin<br>Esnek Planlar</h2>
+    </div>
+    <div class="pricing-grid">
+      <!-- Starter -->
+      <div class="glass-card pricing-card reveal">
+        <div class="price-name" data-tr="Başlangıç" data-en="Starter">Başlangıç</div>
+        <div class="price-val">₺0 <span>/ay</span></div>
+        <div class="price-desc" data-tr="Tekil projesi olan bağımsız mühendisler için ideal başlangıç planı." data-en="Ideal starter plan for independent engineers with single projects.">Tekil projesi olan bağımsız mühendisler için ideal başlangıç planı.</div>
+        <a href="/app#register" class="price-btn" data-tr="Ücretsiz Başla" data-en="Start Free">Ücretsiz Başla</a>
+        <ul class="price-features">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> <span data-tr="Günde 10 AI Sorgusu" data-en="10 AI Queries/Day">Günde 10 AI Sorgusu</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> <span data-tr="50+ Mühendislik Hesabı" data-en="50+ Eng. Calculations">50+ Mühendislik Hesabı</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> <span data-tr="Rapor Arşivi (10 adet)" data-en="Report Archive (10)">Rapor Arşivi (10 adet)</span></li>
+        </ul>
+      </div>
+      <!-- Pro -->
+      <div class="glass-card pricing-card pro reveal" style="--c:#f97316;--c-alpha:rgba(249,115,22,0.1)">
+        <div class="price-name" data-tr="Profesyonel" data-en="Professional">Profesyonel</div>
+        <div class="price-val">₺650 <span>/ay</span></div>
+        <div class="price-desc" data-tr="Aynı anda birden fazla proje yürüten taşeron ve müteahhitler için." data-en="For contractors managing multiple projects simultaneously.">Aynı anda birden fazla proje yürüten taşeron ve müteahhitler için.</div>
+        <a href="/app#register" class="price-btn" data-tr="Pro'yu Dene" data-en="Try Pro">Pro'yu Dene</a>
+        <ul class="price-features">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> <span data-tr="Sınırsız AI Soru & Analiz" data-en="Unlimited AI Q&A">Sınırsız AI Soru & Analiz</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> <span data-tr="5 Aktif Şantiye Yönetimi" data-en="5 Active Sites">5 Aktif Şantiye Yönetimi</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> <span data-tr="Haftada 20 Kamera Analizi" data-en="20 Camera Analyses/Week">Haftada 20 Kamera Analizi</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> <span data-tr="Anlık Maliyet & Stok Takibi" data-en="Live Cost & Stock Tracking">Anlık Maliyet & Stok Takibi</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> <span data-tr="Deprem Risk Analizi" data-en="Earthquake Risk Analysis">Deprem Risk Analizi</span></li>
+        </ul>
+      </div>
+      <!-- Max -->
+      <div class="glass-card pricing-card reveal">
+        <div class="price-name" data-tr="Maksimum" data-en="Maximum">Maksimum</div>
+        <div class="price-val">₺1.990 <span>/ay</span></div>
+        <div class="price-desc" data-tr="Büyük şantiye ekipleri ve sınırsız kapasite gerektiren inşaat firmaları için." data-en="For large site teams and construction firms requiring unlimited capacity.">Büyük şantiye ekipleri ve sınırsız kapasite gerektiren inşaat firmaları için.</div>
+        <a href="/app#register" class="price-btn" data-tr="Max'ı Dene" data-en="Try Max">Max'ı Dene</a>
+        <ul class="price-features">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> <span data-tr="Sınırsız Kamera Analizi" data-en="Unlimited Camera Analysis">Sınırsız Kamera Analizi</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> <span data-tr="Sınırsız Şantiye" data-en="Unlimited Sites">Sınırsız Şantiye</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> <span data-tr="Haftalık AI Yönetim Raporu" data-en="Weekly AI Management Report">Haftalık AI Yönetim Raporu</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> <span data-tr="Filigrансız PDF Raporlar" data-en="Watermark-Free PDF Reports">Filigrансız PDF Raporlar</span></li>
+        </ul>
       </div>
     </div>
   </div>
 </section>
 
 <!-- MEVZUAT -->
-<section>
+<section class="mevzuat-section">
   <div class="section-inner">
     <div class="reveal">
-      <div class="section-label" data-tr="Türkiye Mevzuatı" data-en="Turkish Regulations">Türkiye Mevzuatı</div>
-      <h2 class="section-title" data-tr="Yerel Standartlara<br>Tam Uyum" data-en="Full Compliance with<br>Local Standards">Yerel Standartlara<br>Tam Uyum</h2>
-      <p class="section-sub" data-tr="Yabancı rakipler Türkiye mevzuatını bilmez. Biz burada doğduk, buranın kurallarını biliyoruz." data-en="Foreign competitors don't know Turkish regulations. We were born here, we know the rules.">
-        Yabancı rakipler Türkiye mevzuatını bilmez. Biz burada doğduk, buranın kurallarını biliyoruz.
-      </p>
+      <div class="section-label" data-tr="Yerel Uyumluluk" data-en="Local Compliance">Yerel Uyumluluk</div>
+      <h2 class="section-title" data-tr="Türkiye Şartlarına<br>Göre Tasarlandı" data-en="Designed for<br>Turkish Standards">Türkiye Şartlarına<br>Göre Tasarlandı</h2>
+      <p class="section-sub" data-tr="Yabancı rakipler yerel mevzuatı bilmez. Sistemimiz TBDY 2018 ve güncel TS 500 yönetmelikleriyle çalışır." data-en="Foreign competitors don't know local codes. Our system runs on TBDY 2018 and TS 500.">Yabancı rakipler yerel mevzuatı bilmez. Sistemimiz TBDY 2018 ve güncel TS 500 yönetmelikleriyle çalışır.</p>
     </div>
-
     <div class="mevzuat-grid">
       <div class="mevzuat-card reveal">
-        <div class="mevzuat-icon">📐</div>
+        <div class="mevzuat-icon">📏</div>
         <div>
           <div class="mevzuat-text">TBDY 2018</div>
           <div class="mevzuat-sub" data-tr="Türkiye Bina Deprem Yönetmeliği" data-en="Turkey Building Earthquake Code">Türkiye Bina Deprem Yönetmeliği</div>
         </div>
       </div>
       <div class="mevzuat-card reveal">
-        <div class="mevzuat-icon">🏛️</div>
+        <div class="mevzuat-icon">🏗️</div>
         <div>
           <div class="mevzuat-text">TS 500</div>
-          <div class="mevzuat-sub" data-tr="Betonarme Yapı Tasarım Kuralları" data-en="Reinforced Concrete Design Rules">Betonarme Yapı Tasarım Kuralları</div>
+          <div class="mevzuat-sub" data-tr="Betonarme Yapı Standartları" data-en="Reinforced Concrete Standards">Betonarme Yapı Standartları</div>
         </div>
       </div>
       <div class="mevzuat-card reveal">
@@ -497,22 +1283,8 @@ footer {
       <div class="mevzuat-card reveal">
         <div class="mevzuat-icon">🦺</div>
         <div>
-          <div class="mevzuat-text">İSG</div>
-          <div class="mevzuat-sub" data-tr="İş Sağlığı ve Güvenliği Standartları" data-en="Occupational Health & Safety Standards">İş Sağlığı ve Güvenliği Standartları</div>
-        </div>
-      </div>
-      <div class="mevzuat-card reveal">
-        <div class="mevzuat-icon">💰</div>
-        <div>
-          <div class="mevzuat-text">TL Fiyat</div>
-          <div class="mevzuat-sub" data-tr="Güncel Türk Lirası Malzeme Fiyatları" data-en="Current Turkish Lira Material Prices">Güncel Türk Lirası Malzeme Fiyatları</div>
-        </div>
-      </div>
-      <div class="mevzuat-card reveal">
-        <div class="mevzuat-icon">🗺️</div>
-        <div>
-          <div class="mevzuat-text">81 İl</div>
-          <div class="mevzuat-sub" data-tr="Tüm Türkiye'de Hava Durumu & Risk" data-en="Weather & Risk Across All Turkey">Tüm Türkiye'de Hava Durumu & Risk</div>
+          <div class="mevzuat-text">İSG 6331</div>
+          <div class="mevzuat-sub" data-tr="İş Sağlığı ve Güvenliği Şartları" data-en="Health & Safety Conditions">İş Sağlığı ve Güvenliği Şartları</div>
         </div>
       </div>
     </div>
@@ -521,57 +1293,250 @@ footer {
 
 <!-- CTA -->
 <section class="cta-section">
-  <div class="section-inner" style="text-align:center">
+  <div class="section-inner" style="padding-top:160px; padding-bottom:160px;">
     <div class="reveal">
       <div class="section-label" data-tr="Hemen Başla" data-en="Get Started">Hemen Başla</div>
-      <h2 class="section-title" data-tr="Şantiyeni<br><span style='color:var(--amber)'>Dönüştür</span>" data-en="Transform<br><span style='color:var(--amber)'>Your Site</span>">Şantiyeni<br><span style="color:var(--amber)">Dönüştür</span></h2>
-      <p class="section-sub" style="margin: 16px auto 40px; text-align:center" data-tr="Ücretsiz hesap aç, 5 dakikada şantiyeni ekle. Kredi kartı gerekmez." data-en="Create a free account, add your site in 5 minutes. No credit card required.">
-        Ücretsiz hesap aç, 5 dakikada şantiyeni ekle. Kredi kartı gerekmez.
-      </p>
-      <a href="/app#register" class="btn-primary" style="font-size:17px; padding:16px 40px" data-tr="🚀 Ücretsiz Başla" data-en="🚀 Start Free">🚀 Ücretsiz Başla</a>
+      <h2 class="section-title" data-tr="Geleceğin Şantiyesini<br><span style='color:var(--amber)'>Bugün Kur</span>" data-en="Build the Site of<br><span style='color:var(--amber)'>Future Today</span>">Geleceğin Şantiyesini<br><span style="color:var(--amber)">Bugün Kur</span></h2>
+      <p class="section-sub" style="margin:24px auto 48px; text-align:center;" data-tr="Kredi kartı gerekmez. Yapay zeka asistanın 30 saniye içinde seninle çalışmaya hazır." data-en="No credit card required. Your AI assistant is ready to work in 30 seconds.">Kredi kartı gerekmez. Yapay zeka asistanın 30 saniye içinde seninle çalışmaya hazır.</p>
+      <a href="/app#register" class="btn-fire" style="font-size:18px;padding:18px 56px; margin:0 auto;" data-tr="🚀 Ücretsiz Başla" data-en="🚀 Start Free">🚀 Ücretsiz Başla</a>
     </div>
   </div>
 </section>
 
-<!-- FOOTER -->
-<footer>
-  <div class="footer-logo">Building<span>AI</span></div>
-  <div class="footer-copy" data-tr="© 2026 BuildingAI · Türkiye'nin Şantiye AI Platformu" data-en="© 2026 BuildingAI · Turkey's Construction AI Platform">
-    © 2026 BuildingAI · Türkiye'nin Şantiye AI Platformu
+<!-- ABOUT US & CONTACT -->
+<section class="about-section" id="about">
+  <div class="section-inner">
+    <div class="about-grid">
+
+      <!-- Left: About -->
+      <div class="reveal">
+        <div class="about-label" data-tr="Hakkımızda" data-en="About Us">Hakkımızda</div>
+        <h2 class="about-title" data-tr="İnşaatın<br>Dijital Geleceğini<br>İnşa Ediyoruz" data-en="Building the<br>Digital Future<br>of Construction">İnşaatın<br>Dijital Geleceğini<br>İnşa Ediyoruz</h2>
+        <p class="about-body" data-tr="BuildingAI, Türkiye'nin köklü mühendislik pratiğini yapay zekanın sınırsız kapasitesiyle birleştirmek için kuruldu. Saha mühendisleri, müteahhitler ve tasarım ekipleri için gerçek hayat sorunlarına odaklanıyoruz." data-en="BuildingAI was founded to merge Turkey's deep engineering practice with the limitless capacity of AI. We focus on real-world problems for field engineers, contractors, and design teams.">
+          BuildingAI, Türkiye'nin köklü mühendislik pratiğini yapay zekanın sınırsız kapasitesiyle birleştirmek için kuruldu. Saha mühendisleri, müteahhitler ve tasarım ekipleri için gerçek hayat sorunlarına odaklanıyoruz.
+        </p>
+        <div class="about-mission" data-tr="&ldquo;Misyonumuz: Türkiye'deki her inşaat projesini dijital zekayla donatmak ve AEC sektörünü küresel standartlara taşımak.&rdquo;" data-en="&ldquo;Our mission: Equip every construction project in Turkey with digital intelligence and bring the AEC sector to global standards.&rdquo;">
+          &ldquo;Misyonumuz: Türkiye'deki her inşaat projesini dijital zekayla donatmak ve AEC sektörünü küresel standartlara taşımak.&rdquo;
+        </div>
+        <div class="about-team-row">
+          <div class="about-badge"><span class="about-badge-icon">📍</span> <span data-tr="İstanbul, Türkiye" data-en="Istanbul, Turkey">İstanbul, Türkiye</span></div>
+          <div class="about-badge"><span class="about-badge-icon">🏛️</span> <span data-tr="2024'ten Beri" data-en="Since 2024">2024'ten Beri</span></div>
+          <div class="about-badge"><span class="about-badge-icon">🔬</span> <span data-tr="AEC + AI Odaklı" data-en="AEC + AI Focused">AEC + AI Odaklı</span></div>
+        </div>
+      </div>
+
+      <!-- Right: Contact Form -->
+      <div class="contact-card reveal">
+        <div class="contact-title" data-tr="İletişime Geçin" data-en="Get in Touch">İletişime Geçin</div>
+        <div class="contact-sub" data-tr="Entegrasyon, kurumsal plan veya teknik sorular için bize yazın. 24 saat içinde yanıt veririz." data-en="Write to us for integration, enterprise plans, or technical questions. We respond within 24 hours.">Entegrasyon, kurumsal plan veya teknik sorular için bize yazın. 24 saat içinde yanıt veririz.</div>
+        <input type="text" id="cfName" class="contact-input" placeholder="Ad Soyad" data-placeholder-tr="Ad Soyad" data-placeholder-en="Full Name">
+        <input type="email" id="cfEmail" class="contact-input" placeholder="E-posta" data-placeholder-tr="E-posta" data-placeholder-en="Email">
+        <input type="text" id="cfSubject" class="contact-input" placeholder="Konu" data-placeholder-tr="Konu" data-placeholder-en="Subject">
+        <textarea id="cfMsg" class="contact-input" placeholder="Mesajınız..." data-placeholder-tr="Mesajınız..." data-placeholder-en="Your message..."></textarea>
+        <button class="contact-btn" onclick="contactSubmit()" data-tr="Gönder →" data-en="Send →">Gönder →</button>
+        <div class="contact-success" id="contactSuccess">✅ <span data-tr="Mesajınız alındı! En kısa sürede dönüş yapacağız." data-en="Message received! We'll get back to you shortly.">Mesajınız alındı! En kısa sürede dönüş yapacağız.</span></div>
+      </div>
+    </div>
   </div>
+</section>
+
+<!-- RICH FOOTER -->
+<footer style="display:block;padding:0;border:none;background:none;">
+<div class="rich-footer">
+  <div class="rich-footer-grid">
+
+    <!-- Brand Column -->
+    <div class="rf-brand">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:.08em;margin-bottom:4px;">🏗️ Building<span style="color:var(--amber)">AI</span></div>
+      <p data-tr="Türkiye'nin inşaat sektörüne özel yapay zeka platformu. Sahadan ofise tam kontrol." data-en="Turkey's AI platform for the construction sector. Full control from field to office.">Türkiye'nin inşaat sektörüne özel yapay zeka platformu. Sahadan ofise tam kontrol.</p>
+      <div class="rf-social">
+        <a href="mailto:contact@buildingai.tr" class="rf-social-btn" title="Email" aria-label="Email">✉</a>
+        <a href="https://linkedin.com" class="rf-social-btn" title="LinkedIn" target="_blank" rel="noopener" aria-label="LinkedIn">in</a>
+        <a href="https://twitter.com" class="rf-social-btn" title="Twitter/X" target="_blank" rel="noopener" aria-label="Twitter">𝕏</a>
+      </div>
+    </div>
+
+    <!-- Platform Column -->
+    <div>
+      <div class="rf-col-title" data-tr="Platform" data-en="Platform">Platform</div>
+      <ul class="rf-links">
+        <li><a href="#features" data-tr="Özellikler" data-en="Features">Özellikler</a></li>
+        <li><a href="#pricing" data-tr="Fiyatlandırma" data-en="Pricing">Fiyatlandırma</a></li>
+        <li><a href="/app" data-tr="Uygulamayı Aç" data-en="Open App">Uygulamayı Aç</a></li>
+        <li><a href="/app#register" data-tr="Ücretsiz Başla" data-en="Start Free">Ücretsiz Başla</a></li>
+      </ul>
+    </div>
+
+    <!-- Çözümler Column -->
+    <div>
+      <div class="rf-col-title" data-tr="Çözümler" data-en="Solutions">Çözümler</div>
+      <ul class="rf-links">
+        <li><a href="#features" data-tr="AI Kamera Analizi" data-en="AI Camera Analysis">AI Kamera Analizi</a></li>
+        <li><a href="#features" data-tr="Deprem Risk Analizi" data-en="Earthquake Risk">Deprem Risk Analizi</a></li>
+        <li><a href="#features" data-tr="Maliyet Takibi" data-en="Cost Tracking">Maliyet Takibi</a></li>
+        <li><a href="#features" data-tr="Şantiye Yönetimi" data-en="Site Management">Şantiye Yönetimi</a></li>
+      </ul>
+    </div>
+
+    <!-- Yasal Column -->
+    <div>
+      <div class="rf-col-title" data-tr="Yasal" data-en="Legal">Yasal</div>
+      <ul class="rf-links">
+        <li><a href="/kvkk" data-tr="Gizlilik Politikası" data-en="Privacy Policy">Gizlilik Politikası</a></li>
+        <li><a href="/kvkk" data-tr="KVKK Aydınlatma" data-en="KVKK Notice">KVKK Aydınlatma</a></li>
+        <li><a href="#about" data-tr="Hakkımızda" data-en="About Us">Hakkımızda</a></li>
+        <li><a href="mailto:contact@buildingai.tr" data-tr="İletişim" data-en="Contact">İletişim</a></li>
+      </ul>
+    </div>
+
+  </div>
+
+  <div class="rf-divider"></div>
+
+  <div class="rf-bottom">
+    <div class="rf-copy" data-tr="© 2026 BuildingAI. Tüm hakları saklıdır. Türkiye'nin Şantiye Yapay Zekası." data-en="© 2026 BuildingAI. All rights reserved. Turkey's Construction AI.">© 2026 BuildingAI. Tüm hakları saklıdır. Türkiye'nin Şantiye Yapay Zekası.</div>
+    <div class="rf-badges">
+      <span class="rf-badge">TBDY 2018</span>
+      <span class="rf-badge">TS 500</span>
+      <span class="rf-badge">AFAD</span>
+      <span class="rf-badge">ISO 9001</span>
+    </div>
+  </div>
+</div>
 </footer>
 
+<!-- ============================================================
+     SCRIPTS
+     ============================================================ -->
 <script>
-// Language switching
-const translations = {
-  tr: {}, en: {}
-};
-
+/* ── Language switcher ── */
 function setLang(lang) {
   document.querySelectorAll('[data-tr]').forEach(el => {
-    const text = el.getAttribute('data-' + lang);
-    if (text) el.innerHTML = text;
+    const t = el.getAttribute('data-' + lang);
+    if (t) el.innerHTML = t;
   });
   document.getElementById('btn-tr').classList.toggle('active', lang === 'tr');
   document.getElementById('btn-en').classList.toggle('active', lang === 'en');
   document.documentElement.lang = lang;
   localStorage.setItem('lang', lang);
 }
+if (localStorage.getItem('lang') === 'en') setLang('en');
 
-// Auto-detect
-const savedLang = localStorage.getItem('lang') || 'tr';
-if (savedLang === 'en') setLang('en');
+/* ── GSAP ScrollTrigger animations ── */
+gsap.registerPlugin(ScrollTrigger, TextPlugin);
 
-// Scroll reveal
-const observer = new IntersectionObserver(entries => {
-  entries.forEach((e, i) => {
-    if (e.isIntersecting) {
-      setTimeout(() => e.target.classList.add('visible'), i * 80);
+// Scroll reveal for .reveal elements
+document.querySelectorAll('.reveal').forEach((el, i) => {
+  gsap.fromTo(el,
+    { opacity: 0, y: 44, scale: 0.97 },
+    {
+      opacity: 1, y: 0, scale: 1,
+      duration: 0.9, ease: 'power3.out',
+      scrollTrigger: {
+        trigger: el,
+        start: 'top 88%',
+        toggleActions: 'play none none none'
+      },
+      delay: (i % 3) * 0.08
+    }
+  );
+});
+
+// Scroll progress bar
+const prog = document.getElementById('scroll-prog');
+ScrollTrigger.create({
+  onUpdate: self => {
+    prog.style.transform = `scaleX(${self.progress})`;
+  }
+});
+
+// Animated counters for social-proof stats
+document.querySelectorAll('[data-count]').forEach(el => {
+  const target = parseInt(el.dataset.count);
+  const suffix = el.dataset.suffix || '';
+  const prefix = el.dataset.prefix || '';
+  const formatNum = n => n >= 1000 ? (n/1000).toFixed(0)+'.000' : n.toString();
+  ScrollTrigger.create({
+    trigger: el,
+    start: 'top 85%',
+    once: true,
+    onEnter: () => {
+      gsap.fromTo({ val: 0 }, { val: target }, {
+        duration: 1.8, ease: 'power2.out',
+        onUpdate: function() {
+          const rounded = Math.round(this.targets()[0].val);
+          el.textContent = prefix + (rounded >= 1000 ? formatNum(rounded) : rounded) + suffix;
+        }
+      });
     }
   });
-}, { threshold: 0.1 });
+});
 
-document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+/* ── Toast 429 ── */
+const tc = document.createElement('div');
+tc.className = 'toast-container';
+document.body.appendChild(tc);
+function showRateLimitToast() {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  const lang = document.documentElement.lang || 'tr';
+  t.innerHTML = `<div class="toast-icon">⏳</div><div><div class="toast-title">${lang==='en'?'Too Many Requests (429)':'Çok Fazla İstek (429)'}</div><div class="toast-desc">${lang==='en'?'Please wait. System is protected.':'Lütfen bekleyin. Sistem korunuyor.'}</div></div>`;
+  tc.appendChild(t);
+  setTimeout(() => t.classList.add('show'), 10);
+  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 500); }, 5000);
+}
+const _f = window.fetch;
+window.fetch = async (...a) => { const r = await _f(...a); if (r.status === 429) showRateLimitToast(); return r; };
+window.XMLHttpRequest = (function(O) {
+  return function() { const x = new O(); x.addEventListener('load', () => { if (x.status===429) showRateLimitToast(); }); return x; };
+})(window.XMLHttpRequest);
+
+/* ── Contact Form ── */
+function contactSubmit() {
+  const name = document.getElementById('cfName').value.trim();
+  const email = document.getElementById('cfEmail').value.trim();
+  const msg = document.getElementById('cfMsg').value.trim();
+  if (!name || !email || !msg) return;
+  // Simulate submission (replace with real endpoint if needed)
+  const btn = document.querySelector('.contact-btn');
+  btn.textContent = '⏳';
+  btn.disabled = true;
+  setTimeout(() => {
+    document.getElementById('contactSuccess').style.display = 'block';
+    ['cfName','cfEmail','cfSubject','cfMsg'].forEach(id => document.getElementById(id).value = '');
+    btn.textContent = document.documentElement.lang === 'en' ? 'Send →' : 'Gönder →';
+    btn.disabled = false;
+    setTimeout(() => document.getElementById('contactSuccess').style.display = 'none', 5000);
+  }, 800);
+}
+
+/* ── Hero Aurora Mouse Parallax ── */
+(function() {
+  const wrap = document.getElementById('heroWrap');
+  if (!wrap) return;
+  const b1 = document.getElementById('blob1');
+  const b2 = document.getElementById('blob2');
+  const b3 = document.getElementById('blob3');
+  let tX = 0, tY = 0, cX = 0, cY = 0;
+
+  wrap.addEventListener('mousemove', e => {
+    const r = wrap.getBoundingClientRect();
+    tX = (e.clientX - r.left) / r.width  - 0.5; // -0.5 to 0.5
+    tY = (e.clientY - r.top)  / r.height - 0.5;
+  });
+  wrap.addEventListener('mouseleave', () => { tX = 0; tY = 0; });
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  (function drift() {
+    cX = lerp(cX, tX, 0.04);
+    cY = lerp(cY, tY, 0.04);
+    if (b1) b1.style.transform = `translate(${cX * 38}px, ${cY * 28}px)`;
+    if (b2) b2.style.transform = `translate(${cX * -26}px, ${cY * -18}px)`;
+    if (b3) b3.style.transform = `translate(${cX * 20}px, ${cY * 32}px)`;
+    requestAnimationFrame(drift);
+  })();
+})();
 </script>
 </body>
 </html>

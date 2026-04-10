@@ -4,8 +4,9 @@ from langchain_qdrant import QdrantVectorStore
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage # 📸 FOTOĞRAF İÇİN EKLENDİ
 
-# API Key (Şefim, ileride bunu .env dosyasına saklamanı öneririm)
-os.environ["GOOGLE_API_KEY"] = "AIzaSyDSfjWCKfW3nJ7Asy7mT4RlXuAgvw6eOwk"
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+if not GOOGLE_API_KEY:
+    print("[UYARI] GOOGLE_API_KEY env variable tanımlı değil")
 
 try:
     # Hafıza Modelini Kuruyoruz
@@ -33,7 +34,7 @@ except Exception:
     fizik_store = None
 
 # Zeka Modeli (Gemini 3.1 Pro)
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.1)
+llm = ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite-preview", temperature=0.1)
 
 # 🚨 DÜZELTME: resim_base64 parametresi eklendi
 def cevap_uret(soru, hava_durumu="Bilinmiyor", resim_base64=None):

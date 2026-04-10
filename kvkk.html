@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KVKK & Gizlilik Politikası — BuildingAI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=DM+Mono&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy: #060d1a;
+  --navy2: #0a1628;
+  --amber: #f97316;
+  --text1: #f0f4ff;
+  --text2: #94a3b8;
+  --border: rgba(255,255,255,0.08);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Instrument Sans', sans-serif; background: var(--navy); color: var(--text1); line-height: 1.7; }
+
+nav {
+  position: sticky; top: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 5%; height: 60px;
+  background: rgba(6,13,26,0.95);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  z-index: 100;
+}
+.nav-logo { font-size: 18px; font-weight: 600; color: var(--text1); text-decoration: none; }
+.nav-logo span { color: var(--amber); }
+.nav-back { font-size: 13px; color: var(--text2); text-decoration: none; padding: 6px 14px; border: 1px solid var(--border); border-radius: 8px; transition: all .15s; }
+.nav-back:hover { color: var(--text1); border-color: rgba(255,255,255,0.2); }
+
+.container { max-width: 800px; margin: 0 auto; padding: 60px 5% 100px; }
+
+.page-header { margin-bottom: 48px; padding-bottom: 32px; border-bottom: 1px solid var(--border); }
+.page-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(249,115,22,0.12); border: 1px solid rgba(249,115,22,0.25); border-radius: 20px; padding: 4px 14px; font-size: 11px; font-family: 'DM Mono', monospace; letter-spacing: .1em; color: var(--amber); text-transform: uppercase; margin-bottom: 16px; }
+.page-title { font-size: 36px; font-weight: 600; margin-bottom: 12px; }
+.page-meta { font-size: 13px; color: var(--text2); font-family: 'DM Mono', monospace; }
+
+.toc { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 14px; padding: 20px 24px; margin-bottom: 48px; }
+.toc-title { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 12px; text-transform: uppercase; letter-spacing: .08em; }
+.toc-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.toc-list a { font-size: 14px; color: var(--text2); text-decoration: none; transition: color .15s; }
+.toc-list a:hover { color: var(--amber); }
+.toc-list span { color: var(--amber); margin-right: 8px; font-family: 'DM Mono', monospace; font-size: 12px; }
+
+h2 { font-size: 20px; font-weight: 600; margin: 48px 0 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border); color: var(--text1); }
+h3 { font-size: 16px; font-weight: 600; margin: 28px 0 10px; color: var(--amber); }
+p { font-size: 15px; color: var(--text2); margin-bottom: 14px; }
+ul, ol { padding-left: 20px; margin-bottom: 14px; }
+li { font-size: 15px; color: var(--text2); margin-bottom: 6px; }
+strong { color: var(--text1); font-weight: 600; }
+
+.highlight-box { background: rgba(249,115,22,0.08); border: 1px solid rgba(249,115,22,0.2); border-radius: 12px; padding: 16px 20px; margin: 20px 0; }
+.highlight-box p { color: var(--text1); margin: 0; font-size: 14px; }
+
+.info-box { background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); border-radius: 12px; padding: 16px 20px; margin: 20px 0; }
+.info-box p { color: #93c5fd; margin: 0; font-size: 14px; }
+
+.contact-box { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 14px; padding: 24px; margin-top: 40px; }
+.contact-box h3 { margin-top: 0; }
+.contact-row { display: flex; gap: 8px; margin-bottom: 8px; font-size: 14px; }
+.contact-label { color: var(--text2); min-width: 140px; }
+.contact-val { color: var(--text1); }
+
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+th { background: rgba(255,255,255,0.06); color: var(--text1); font-weight: 600; padding: 10px 14px; text-align: left; border: 1px solid var(--border); }
+td { padding: 10px 14px; border: 1px solid var(--border); color: var(--text2); }
+
+.footer { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text2); font-family: 'DM Mono', monospace; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-logo">Building<span>AI</span></a>
+  <a href="/" class="nav-back">← Ana Sayfa</a>
+</nav>
+
+<div class="container">
+
+  <div class="page-header">
+    <div class="page-badge">📋 Yasal Belgeler</div>
+    <h1 class="page-title">KVKK Aydınlatma Metni &amp; Gizlilik Politikası</h1>
+    <div class="page-meta">Son güncelleme: Mart 2026 &nbsp;·&nbsp; Versiyon 1.0</div>
+  </div>
+
+  <div class="toc">
+    <div class="toc-title">İçindekiler</div>
+    <ul class="toc-list">
+      <li><a href="#veri-sorumlusu"><span>01</span>Veri Sorumlusu</a></li>
+      <li><a href="#toplanan-veriler"><span>02</span>Toplanan Kişisel Veriler</a></li>
+      <li><a href="#isleme-amaci"><span>03</span>Veri İşleme Amacı ve Hukuki Sebep</a></li>
+      <li><a href="#aktarim"><span>04</span>Veri Aktarımı</a></li>
+      <li><a href="#saklama"><span>05</span>Saklama Süresi</a></li>
+      <li><a href="#haklariniz"><span>06</span>Haklarınız</a></li>
+      <li><a href="#cerezler"><span>07</span>Çerezler</a></li>
+      <li><a href="#guvenlik"><span>08</span>Veri Güvenliği</a></li>
+      <li><a href="#iletisim"><span>09</span>İletişim</a></li>
+    </ul>
+  </div>
+
+  <div class="highlight-box">
+    <p>Bu belge, 6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) kapsamında BuildingAI platformu kullanıcılarını kişisel verilerinin işlenmesine ilişkin bilgilendirmek amacıyla hazırlanmıştır.</p>
+  </div>
+
+  <!-- 1 -->
+  <h2 id="veri-sorumlusu">1. Veri Sorumlusu</h2>
+  <p>BuildingAI platformunun veri sorumlusu aşağıda belirtilen kişi/kuruluştur:</p>
+  <div class="contact-box">
+    <div class="contact-row"><span class="contact-label">Ad Soyad / Unvan:</span><span class="contact-val">Mehmet Akif Erdemir</span></div>
+    <div class="contact-row"><span class="contact-label">Adres:</span><span class="contact-val">Sivas, Türkiye</span></div>
+    <div class="contact-row"><span class="contact-label">E-posta:</span><span class="contact-val">buildingartificialintelligence@gmail.com</span></div>
+    <div class="contact-row"><span class="contact-label">Web Sitesi:</span><span class="contact-val">buildingai.co</span></div>
+  </div>
+
+  <!-- 2 -->
+  <h2 id="toplanan-veriler">2. Toplanan Kişisel Veriler</h2>
+  <p>BuildingAI platformu aşağıdaki kişisel verileri toplamaktadır:</p>
+
+  <h3>2.1 Kimlik ve İletişim Bilgileri</h3>
+  <ul>
+    <li>Ad ve soyad</li>
+    <li>E-posta adresi</li>
+    <li>Şirket / proje adı (opsiyonel)</li>
+  </ul>
+
+  <h3>2.2 Şantiye ve Konum Bilgileri</h3>
+  <ul>
+    <li>Şantiye adı ve adresi</li>
+    <li>Coğrafi konum bilgisi (enlem/boylam)</li>
+    <li>Şantiye fotoğrafları ve görselleri</li>
+  </ul>
+
+  <h3>2.3 Kullanım Verileri</h3>
+  <ul>
+    <li>Platform kullanım istatistikleri</li>
+    <li>AI sorgularının içerikleri</li>
+    <li>Oluşturulan raporlar</li>
+    <li>Oturum açma tarihleri ve saatleri</li>
+  </ul>
+
+  <h3>2.4 Ödeme Bilgileri</h3>
+  <ul>
+    <li>Ödeme bildirimi için ad soyad</li>
+    <li>Ödeme tarihi ve tutarı</li>
+    <li><strong>Not:</strong> Kredi kartı bilgileri BuildingAI sistemlerinde saklanmamaktadır. Ödeme işlemleri üçüncü taraf ödeme sistemleri aracılığıyla gerçekleştirilmektedir.</li>
+  </ul>
+
+  <!-- 3 -->
+  <h2 id="isleme-amaci">3. Veri İşleme Amacı ve Hukuki Sebep</h2>
+  <table>
+    <tr><th>Veri Kategorisi</th><th>İşleme Amacı</th><th>Hukuki Dayanak</th></tr>
+    <tr><td>Kimlik & İletişim</td><td>Hesap oluşturma, giriş yapma, iletişim</td><td>Sözleşmenin ifası</td></tr>
+    <tr><td>Şantiye Bilgileri</td><td>AI analizi, deprem riski, raporlama</td><td>Sözleşmenin ifası</td></tr>
+    <tr><td>Fotoğraflar</td><td>AI görsel analizi, rapor oluşturma</td><td>Açık rıza</td></tr>
+    <tr><td>Kullanım Verileri</td><td>Hizmet iyileştirme, güvenlik</td><td>Meşru menfaat</td></tr>
+    <tr><td>Ödeme Bilgileri</td><td>Plan aktivasyonu, muhasebe</td><td>Yasal yükümlülük</td></tr>
+  </table>
+
+  <!-- 4 -->
+  <h2 id="aktarim">4. Veri Aktarımı</h2>
+  <p>Kişisel verileriniz aşağıdaki durumlarda üçüncü taraflarla paylaşılabilir:</p>
+  <ul>
+    <li><strong>Google Gemini API:</strong> AI analiz hizmetleri için sorgularınız işlenmektedir</li>
+    <li><strong>OpenWeather API:</strong> Hava durumu verileri için şehir bilginiz paylaşılmaktadır</li>
+    <li><strong>Yasal zorunluluk:</strong> Yetkili kamu kurumlarının talepleri halinde</li>
+  </ul>
+  <div class="info-box">
+    <p>Kişisel verileriniz reklam, pazarlama veya üçüncü taraf ticari amaçlarla kesinlikle satılmamakta veya paylaşılmamaktadır.</p>
+  </div>
+
+  <!-- 5 -->
+  <h2 id="saklama">5. Saklama Süresi</h2>
+  <ul>
+    <li><strong>Hesap bilgileri:</strong> Hesap silinene kadar</li>
+    <li><strong>Raporlar ve analizler:</strong> Hesap silinene kadar veya kullanıcı talebi ile</li>
+    <li><strong>Ödeme kayıtları:</strong> Yasal yükümlülük gereği 10 yıl</li>
+    <li><strong>Log kayıtları:</strong> 90 gün</li>
+    <li><strong>Şantiye fotoğrafları:</strong> Kullanıcı silene kadar</li>
+  </ul>
+
+  <!-- 6 -->
+  <h2 id="haklariniz">6. Haklarınız</h2>
+  <p>KVKK'nın 11. maddesi kapsamında aşağıdaki haklara sahipsiniz:</p>
+  <ul>
+    <li>Kişisel verilerinizin işlenip işlenmediğini <strong>öğrenme</strong></li>
+    <li>İşlenmişse buna ilişkin <strong>bilgi talep etme</strong></li>
+    <li>İşlenme amacını ve amaca uygun kullanılıp kullanılmadığını <strong>öğrenme</strong></li>
+    <li>Yurt içinde veya yurt dışında aktarıldığı üçüncü kişileri <strong>bilme</strong></li>
+    <li>Eksik veya yanlış işlenmişse <strong>düzeltilmesini isteme</strong></li>
+    <li>Silinmesini veya yok edilmesini <strong>isteme</strong></li>
+    <li>İşlemenin otomatik sistemler ile gerçekleştirilmesi durumunda aleyhe bir sonucun ortaya çıkmasına <strong>itiraz etme</strong></li>
+    <li>Zararın giderilmesini <strong>talep etme</strong></li>
+  </ul>
+  <div class="highlight-box">
+    <p>Bu haklarınızı kullanmak için <strong>buildingartificialintelligence@gmail.com</strong> adresine e-posta gönderebilirsiniz. Talepler 30 gün içinde yanıtlanacaktır.</p>
+  </div>
+
+  <!-- 7 -->
+  <h2 id="cerezler">7. Çerezler (Cookies)</h2>
+  <p>BuildingAI aşağıdaki çerezleri kullanmaktadır:</p>
+  <table>
+    <tr><th>Çerez Türü</th><th>Amaç</th><th>Süre</th></tr>
+    <tr><td>Zorunlu Çerezler</td><td>Oturum yönetimi, güvenlik</td><td>Oturum süresi</td></tr>
+    <tr><td>Tercih Çerezleri</td><td>Dil seçimi, şehir tercihi</td><td>1 yıl</td></tr>
+    <tr><td>localStorage</td><td>Token, uygulama ayarları</td><td>Kullanıcı silene kadar</td></tr>
+  </table>
+  <p>Reklam veya izleme amaçlı çerez kullanılmamaktadır.</p>
+
+  <!-- 8 -->
+  <h2 id="guvenlik">8. Veri Güvenliği</h2>
+  <p>Verilerinizin güvenliği için aşağıdaki önlemler alınmaktadır:</p>
+  <ul>
+    <li>HTTPS şifreli bağlantı</li>
+    <li>JWT tabanlı kimlik doğrulama</li>
+    <li>Şifreler bcrypt ile hashlenerek saklanmaktadır</li>
+    <li>API anahtarları environment variable olarak tutulmaktadır</li>
+    <li>Düzenli güvenlik güncellemeleri</li>
+  </ul>
+
+  <!-- 9 -->
+  <h2 id="iletisim">9. İletişim</h2>
+  <p>KVKK kapsamındaki talepleriniz ve sorularınız için:</p>
+  <div class="contact-box">
+    <h3 style="margin-top:0">Veri Sorumlusu İletişim Bilgileri</h3>
+    <div class="contact-row"><span class="contact-label">E-posta:</span><span class="contact-val">buildingartificialintelligence@gmail.com</span></div>
+    <div class="contact-row"><span class="contact-label">Web:</span><span class="contact-val">buildingai.co/kvkk</span></div>
+    <div class="contact-row"><span class="contact-label">Yanıt süresi:</span><span class="contact-val">En geç 30 gün</span></div>
+  </div>
+
+  <div class="footer">
+    © 2026 BuildingAI · Bu belge son olarak Mart 2026 tarihinde güncellenmiştir.
+  </div>
+
+</div>
+</body>
+</html>
