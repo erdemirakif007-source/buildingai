@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 from google import genai
 from dotenv import load_dotenv
@@ -68,6 +69,46 @@ logging.basicConfig(
 logger = logging.getLogger("buildingai")
 
 models.Base.metadata.create_all(bind=database.engine)
+
+AUTH_SCHEMA_COLUMNS = {
+    "auth_provider": "TEXT NOT NULL DEFAULT 'local'",
+    "google_sub": "TEXT",
+    "email_verified": "BOOLEAN NOT NULL DEFAULT 0",
+}
+
+
+def _ensure_auth_schema() -> None:
+    try:
+        with database.engine.begin() as conn:
+            inspector = inspect(conn)
+            if "users" not in inspector.get_table_names():
+                return
+            existing_columns = {col["name"] for col in inspector.get_columns("users")}
+            for column_name, column_sql in AUTH_SCHEMA_COLUMNS.items():
+                if column_name not in existing_columns:
+                    conn.exec_driver_sql(f"ALTER TABLE users ADD COLUMN {column_name} {column_sql}")
+                    logger.warning("Auth schema sync added missing column users.%s", column_name)
+    except Exception:
+        logger.exception("Auth schema sync failed")
+        raise
+
+
+_ensure_auth_schema()
+
+
+def _user_profile_payload(user: models.User) -> dict:
+    return {
+        "status": "success",
+        "id": user.id,
+        "user_id": user.id,
+        "full_name": user.full_name,
+        "email": user.email,
+        "plan": getattr(user, "plan", "free"),
+        "is_admin": bool(getattr(user, "is_admin", False)),
+        "auth_provider": getattr(user, "auth_provider", "local") or "local",
+        "email_verified": bool(getattr(user, "email_verified", False)),
+        "has_password": bool(getattr(user, "hashed_password", None)),
+    }
 
 class InMemoryRateLimiter:
     def __init__(self, requests: int, window: int):
@@ -473,7 +514,9 @@ def register_user(request: Request, user: schemas.UserCreate, db: Session = Depe
         email=user.email,
         hashed_password=auth.get_password_hash(user.password),
         full_name=user.full_name,
-        plan=user.plan if user.plan in ('free', 'pro', 'max') else 'free'
+        plan=user.plan if user.plan in ('free', 'pro', 'max') else 'free',
+        auth_provider="local",
+        email_verified=False,
     )
     db.add(new_user)
     db.commit()
@@ -502,7 +545,13 @@ def login(request: Request, body: dict = Body(...), db: Session = Depends(databa
             db.commit()
 
     user = db.query(models.User).filter(models.User.email == email).first()
-    if not user or not auth.verify_password(password[:72], user.hashed_password):
+    if user and not user.hashed_password:
+        raise HTTPException(
+            status_code=400,
+            detail="Bu hesap Google ile oluşturulmuş. Google ile giriş yapabilir veya hesabınıza giriş yaptıktan sonra Ayarlar > Güvenlik bölümünden BuildingAI şifresi belirleyebilirsiniz."
+        )
+
+    if not user or not auth.verify_password((password or "")[:72], user.hashed_password):
         # Başarısız denemeyi DB'ye kaydet
         if not attempt:
             attempt = LoginAttempt(email=email, attempt_count=0)
@@ -527,13 +576,9 @@ def login(request: Request, body: dict = Body(...), db: Session = Depends(databa
     logger.info(f"LOGIN SUCCESS: {email}")
 
     token = auth.create_access_token({"email": user.email})
-    return {
-        "status": "success",
-        "full_name": user.full_name,
-        "email": user.email,
-        "plan": getattr(user, 'plan', 'free'),
-        "token": token
-    }
+    payload = _user_profile_payload(user)
+    payload["token"] = token
+    return payload
 
 # ════════════════════════════════════════════════════════════════
 #  GOOGLE OAUTH2
@@ -604,29 +649,37 @@ async def google_callback(request: Request, code: Optional[str] = None, error: O
     g_info    = info_resp.json()
     g_email   = g_info.get("email", "").lower().strip()
     g_name    = g_info.get("name", g_email.split("@")[0])
-    g_sub     = g_info.get("id", "")          # Google kullanıcı ID'si
+    g_sub     = g_info.get("sub") or g_info.get("id", "")
+    g_email_verified = bool(g_info.get("email_verified") or g_info.get("verified_email"))
 
     if not g_email:
         return RedirectResponse(url="/app?oauth_error=no_email")
+    if not g_email_verified:
+        return RedirectResponse(url="/app?oauth_error=email_not_verified")
 
     # ── Adım 3: Bul veya Oluştur ─────────────────────────────
     user = db.query(models.User).filter(models.User.email == g_email).first()
 
     if not user:
         # Yeni kullanıcı → otomatik kayıt (ücretsiz plan)
-        # Şifre: Google sub ile türetilmiş rastgele hash (girilemez)
-        dummy_pw = auth.get_password_hash(f"GOOGLE_OAUTH_{g_sub}_NOLOGIN")
         user = models.User(
             email=g_email,
-            hashed_password=dummy_pw,
+            hashed_password=None,
             full_name=g_name,
             plan="free",
+            auth_provider="google",
+            google_sub=g_sub or None,
+            email_verified=True,
         )
         db.add(user)
         db.commit()
         db.refresh(user)
         logger.info(f"GOOGLE AUTO-REGISTER: {g_email}")
     else:
+        user.auth_provider = "google"
+        user.google_sub = user.google_sub or g_sub or None
+        user.email_verified = True
+        db.commit()
         logger.info(f"GOOGLE LOGIN: {g_email}")
 
     # ── Adım 4: JWT üret ve uygulamaya yönlendir ─────────────
@@ -643,12 +696,7 @@ def beni_tani(request: Request, token: str, db: Session = Depends(database.get_d
         user = db.query(models.User).filter(models.User.email == email).first()
         if not user:
             raise HTTPException(status_code=401, detail="Kullanıcı bulunamadı.")
-        return {
-            "status": "success",
-            "full_name": user.full_name,
-            "email": user.email,
-            "plan": getattr(user, 'plan', 'free')
-        }
+        return _user_profile_payload(user)
     except Exception:
         raise HTTPException(status_code=401, detail="Token geçersiz veya süresi dolmuş.")
 
@@ -710,10 +758,34 @@ def update_password(request: Request, payload: dict = Body(...), db: Session = D
 
     user = db.query(models.User).filter(models.User.email == db_token.email).first()
     user.hashed_password = auth.get_password_hash(yeni_sifre[:72])
+    if not user.auth_provider:
+        user.auth_provider = "local"
     db_token.used = True
     db.commit()
     logger.info(f"PASSWORD RESET SUCCESS: {db_token.email}")
     return {"mesaj": "Şifreniz güncellendi!"}
+
+@app.post("/hesap/sifre")
+@limiter.limit("10/minute")
+def account_password_update(request: Request, payload: dict = Body(...), db: Session = Depends(database.get_db)):
+    user = kullanici_dogrula(payload.get("token", ""), db)
+    yeni_sifre = (payload.get("yeni_sifre") or payload.get("new_password") or "")
+    mevcut_sifre = payload.get("mevcut_sifre") or payload.get("current_password") or ""
+
+    if len(yeni_sifre) < 8:
+        raise HTTPException(status_code=400, detail="Şifre en az 8 karakter olmalıdır.")
+
+    if user.hashed_password:
+        if not mevcut_sifre:
+            raise HTTPException(status_code=400, detail="Mevcut şifre zorunludur.")
+        if not auth.verify_password(str(mevcut_sifre)[:72], user.hashed_password):
+            raise HTTPException(status_code=400, detail="Mevcut şifre hatalı.")
+
+    user.hashed_password = auth.get_password_hash(str(yeni_sifre)[:72])
+    db.commit()
+    db.refresh(user)
+    logger.info(f"ACCOUNT PASSWORD UPDATED: {user.email}")
+    return _user_profile_payload(user)
 
 @app.get("/", response_class=HTMLResponse)
 @limiter.limit("60/minute")

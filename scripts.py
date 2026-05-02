@@ -6076,6 +6076,7 @@ function ayarlarKategoriGoster(id) {
   // 6. GÜVENLİK & GİZLİLİK
   // ──────────────────────────────────────
   } else if (id === 'guvenlik') {
+    const hasPassword = kUser.has_password !== undefined ? Boolean(kUser.has_password) : Boolean(user.has_password);
     icerik.innerHTML = `
       <div style="margin-bottom:24px;">
         <div style="font-size:22px;font-weight:700;color:#0F172A;margin-bottom:4px;">Güvenlik &amp; Gizlilik</div>
@@ -6150,6 +6151,25 @@ function ayarlarKategoriGoster(id) {
           onmouseover="this.style.background='#FEF2F2'" onmouseout="this.style.background='transparent'">🗑️ Hesabımı Sil</button>
         <div style="font-size:12px;color:#94A3B8;margin-top:8px;">Bu işlem geri alınamaz. Tüm verileriniz kalıcı olarak silinir.</div>
       </div>`;
+    if (!hasPassword) {
+      const currentPassword = document.getElementById('mevcutSifre');
+      if (currentPassword && currentPassword.parentElement) currentPassword.parentElement.style.display = 'none';
+      const passwordCard = currentPassword ? currentPassword.closest('div[style*="padding:24px"]') : null;
+      if (passwordCard) {
+        const title = passwordCard.querySelector('div[style*="font-size:15px"]');
+        if (title) title.textContent = 'Şifre Belirle';
+        const fields = passwordCard.querySelector('div[style*="flex-direction:column"]');
+        if (fields) {
+          fields.insertAdjacentHTML('beforebegin', '<div style="font-size:13px;color:#64748B;line-height:1.6;margin-bottom:16px;"><div>Bu hesap Google ile oluşturuldu.</div><div>Email ve şifre ile de giriş yapmak isterseniz BuildingAI şifresi belirleyebilirsiniz.</div></div>');
+        }
+        const newPassword = document.getElementById('yeniSifre');
+        if (newPassword) newPassword.placeholder = 'Yeni Şifre';
+        const confirmPassword = document.getElementById('yeniSifreTekrar');
+        if (confirmPassword) confirmPassword.placeholder = 'Yeni Şifre (Tekrar)';
+        const button = passwordCard.querySelector('button[onclick="sifreGuncelle()"]');
+        if (button) button.textContent = 'Şifre Belirle';
+      }
+    }
   }
 }
 
@@ -6457,25 +6477,32 @@ async function sifreGuncelle() {
   const mevcut = document.getElementById('mevcutSifre')?.value;
   const yeni   = document.getElementById('yeniSifre')?.value;
   const tekrar = document.getElementById('yeniSifreTekrar')?.value;
-  if (!mevcut || !yeni || !tekrar)      { showToast('Tüm alanları doldurun', 'error'); return; }
+  const user = JSON.parse(localStorage.getItem('bai_user') || '{}');
+  const hasPassword = user.has_password !== false;
+  if (hasPassword && !mevcut)           { showToast('Mevcut şifre alanını doldurun', 'error'); return; }
+  if (!yeni || !tekrar)                 { showToast('Tüm alanları doldurun', 'error'); return; }
   if (yeni !== tekrar)                  { showToast('Yeni şifreler eşleşmiyor', 'error'); return; }
-  if (yeni.length < 6)                  { showToast('Şifre en az 6 karakter olmalı', 'error'); return; }
+  if (yeni.length < 8)                  { showToast('Şifre en az 8 karakter olmalı', 'error'); return; }
   const token = localStorage.getItem('bai_token');
   try {
-    const res  = await fetch('/sifre-guncelle', {
+    const res  = await fetch('/hesap/sifre', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({token, mevcut_sifre: mevcut, yeni_sifre: yeni})
     });
     const data = await res.json();
     if (res.ok) {
-      showToast('Şifre başarıyla güncellendi', 'success');
+      const nextUser = { ...user, ...data };
+      localStorage.setItem('bai_user', JSON.stringify(nextUser));
+      if (aktifKullanici) Object.assign(aktifKullanici, nextUser);
+      showToast(hasPassword ? 'Şifre başarıyla güncellendi' : 'Şifre başarıyla belirlendi', 'success');
       ['mevcutSifre','yeniSifre','yeniSifreTekrar'].forEach(id => {
         const el = document.getElementById(id); if (el) el.value = '';
       });
       const bar = document.getElementById('sifreGucBar');
       if (bar) bar.style.display = 'none';
-    } else { showToast(data.hata || 'Şifre güncellenemedi', 'error'); }
+      if (!hasPassword) ayarlarKategoriGoster('guvenlik');
+    } else { showToast(data.detail || data.hata || 'Şifre güncellenemedi', 'error'); }
   } catch(e) { showToast('Bağlantı hatası', 'error'); }
 }
 
