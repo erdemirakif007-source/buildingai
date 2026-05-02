@@ -265,12 +265,43 @@ CREATE TABLE IF NOT EXISTS malzeme_uyari (
     onceki     TEXT NOT NULL,
     yeni       TEXT NOT NULL,
     degisim    TEXT NOT NULL,
+    status     TEXT DEFAULT 'pending',
+    decided_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )
 """, "malzeme_uyari")
 
 if tablo_var_mi("malzeme_uyari"):
     kolon_ekle("malzeme_uyari", "organization_id", "INTEGER")
+    kolon_ekle("malzeme_uyari", "status",     "TEXT",     "'pending'")
+    kolon_ekle("malzeme_uyari", "decided_at", "DATETIME")
+
+# 6b. review_decisions
+tablo_olustur("""
+CREATE TABLE IF NOT EXISTS review_decisions (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id            INTEGER NOT NULL REFERENCES users(id),
+    source_type        TEXT NOT NULL,
+    source_id          INTEGER NOT NULL,
+    status             TEXT DEFAULT 'pending',
+    decision_note      TEXT DEFAULT '',
+    decided_by_user_id INTEGER,
+    decided_at         DATETIME,
+    created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (user_id, source_type, source_id)
+)
+""", "review_decisions")
+
+if tablo_var_mi("review_decisions"):
+    degisiklik = False
+    degisiklik |= kolon_ekle("review_decisions", "decision_note",      "TEXT",     "''")
+    degisiklik |= kolon_ekle("review_decisions", "decided_by_user_id", "INTEGER")
+    degisiklik |= kolon_ekle("review_decisions", "decided_at",         "DATETIME")
+    degisiklik |= kolon_ekle("review_decisions", "created_at",         "DATETIME", "CURRENT_TIMESTAMP")
+    degisiklik |= kolon_ekle("review_decisions", "updated_at",         "DATETIME", "CURRENT_TIMESTAMP")
+    if not degisiklik:
+        print("✅ Tablo review_decisions: tüm kolonlar mevcut")
 
 # 7. stok
 tablo_olustur("""
@@ -339,7 +370,135 @@ if tablo_var_mi("santiyeler"):
     if not degisiklik:
         print("✅ Tablo santiyeler: tüm kolonlar mevcut")
 
-# 9. reset_tokens
+
+tablo_olustur("""
+CREATE TABLE IF NOT EXISTS archive_records (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id          INTEGER NOT NULL REFERENCES users(id),
+    santiye_id       INTEGER REFERENCES santiyeler(id),
+    camera_id        INTEGER,
+    source_type      TEXT DEFAULT 'manual',
+    source_ref_type  TEXT DEFAULT '',
+    source_ref_id    INTEGER,
+    media_type       TEXT DEFAULT 'photo',
+    file_url         TEXT DEFAULT '',
+    thumbnail_url    TEXT DEFAULT '',
+    file_name        TEXT DEFAULT '',
+    mime_type        TEXT DEFAULT '',
+    file_size        INTEGER DEFAULT 0,
+    title            TEXT DEFAULT '',
+    description      TEXT DEFAULT '',
+    event_type       TEXT DEFAULT '',
+    tags             TEXT DEFAULT '[]',
+    zone_label       TEXT DEFAULT '',
+    captured_at      DATETIME,
+    duration_seconds TEXT DEFAULT '',
+    gps_lat          TEXT DEFAULT '',
+    gps_lon          TEXT DEFAULT '',
+    exif_payload     TEXT DEFAULT '',
+    ai_suggestions   TEXT DEFAULT '',
+    status           TEXT DEFAULT 'active',
+    verification_status TEXT DEFAULT 'DRAFT',
+    workflow_status  TEXT DEFAULT 'NEW',
+    deleted_at       DATETIME,
+    uploaded_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP
+)
+""", "archive_records")
+
+if tablo_var_mi("archive_records"):
+    degisiklik = False
+    degisiklik |= kolon_ekle("archive_records", "camera_id",          "INTEGER")
+    degisiklik |= kolon_ekle("archive_records", "source_type",        "TEXT",     "'manual'")
+    degisiklik |= kolon_ekle("archive_records", "source_ref_type",    "TEXT",     "''")
+    degisiklik |= kolon_ekle("archive_records", "source_ref_id",      "INTEGER")
+    degisiklik |= kolon_ekle("archive_records", "media_type",         "TEXT",     "'photo'")
+    degisiklik |= kolon_ekle("archive_records", "file_url",           "TEXT",     "''")
+    degisiklik |= kolon_ekle("archive_records", "thumbnail_url",      "TEXT",     "''")
+    degisiklik |= kolon_ekle("archive_records", "file_name",          "TEXT",     "''")
+    degisiklik |= kolon_ekle("archive_records", "mime_type",          "TEXT",     "''")
+    degisiklik |= kolon_ekle("archive_records", "file_size",          "INTEGER",  "0")
+    degisiklik |= kolon_ekle("archive_records", "title",              "TEXT",     "''")
+    degisiklik |= kolon_ekle("archive_records", "description",        "TEXT",     "''")
+    degisiklik |= kolon_ekle("archive_records", "event_type",         "TEXT",     "''")
+    degisiklik |= kolon_ekle("archive_records", "tags",               "TEXT",     "'[]'")
+    degisiklik |= kolon_ekle("archive_records", "zone_label",         "TEXT",     "''")
+    degisiklik |= kolon_ekle("archive_records", "captured_at",        "DATETIME")
+    degisiklik |= kolon_ekle("archive_records", "duration_seconds",   "TEXT",     "''")
+    degisiklik |= kolon_ekle("archive_records", "gps_lat",            "TEXT",     "''")
+    degisiklik |= kolon_ekle("archive_records", "gps_lon",            "TEXT",     "''")
+    degisiklik |= kolon_ekle("archive_records", "exif_payload",       "TEXT",     "''")
+    degisiklik |= kolon_ekle("archive_records", "ai_suggestions",     "TEXT",     "''")
+    degisiklik |= kolon_ekle("archive_records", "status",             "TEXT",     "'active'")
+    degisiklik |= kolon_ekle("archive_records", "verification_status","TEXT",     "'DRAFT'")
+    degisiklik |= kolon_ekle("archive_records", "workflow_status",    "TEXT",     "'NEW'")
+    degisiklik |= kolon_ekle("archive_records", "deleted_at",         "DATETIME")
+    degisiklik |= kolon_ekle("archive_records", "uploaded_at",        "DATETIME", "CURRENT_TIMESTAMP")
+    degisiklik |= kolon_ekle("archive_records", "created_at",         "DATETIME", "CURRENT_TIMESTAMP")
+    degisiklik |= kolon_ekle("archive_records", "updated_at",         "DATETIME", "CURRENT_TIMESTAMP")
+    if not degisiklik:
+        print("✅ Tablo archive_records: tüm kolonlar mevcut")
+
+tablo_olustur("""
+CREATE TABLE IF NOT EXISTS daily_reports (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users(id),
+    santiye_id  INTEGER REFERENCES santiyeler(id),
+    report_date TEXT NOT NULL,
+    status      TEXT DEFAULT 'draft',
+    verification_status TEXT DEFAULT 'DRAFT',
+    workflow_status TEXT DEFAULT 'NEW',
+    summary     TEXT DEFAULT '',
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+)
+""", "daily_reports")
+
+if tablo_var_mi("daily_reports"):
+    degisiklik = False
+    degisiklik |= kolon_ekle("daily_reports", "santiye_id",           "INTEGER")
+    degisiklik |= kolon_ekle("daily_reports", "report_date",          "TEXT",     "''")
+    degisiklik |= kolon_ekle("daily_reports", "status",               "TEXT",     "'draft'")
+    degisiklik |= kolon_ekle("daily_reports", "verification_status",  "TEXT",     "'DRAFT'")
+    degisiklik |= kolon_ekle("daily_reports", "workflow_status",      "TEXT",     "'NEW'")
+    degisiklik |= kolon_ekle("daily_reports", "summary",              "TEXT",     "''")
+    degisiklik |= kolon_ekle("daily_reports", "created_at",           "DATETIME", "CURRENT_TIMESTAMP")
+    degisiklik |= kolon_ekle("daily_reports", "updated_at",           "DATETIME", "CURRENT_TIMESTAMP")
+    if not degisiklik:
+        print("✅ Tablo daily_reports: tüm kolonlar mevcut")
+
+tablo_olustur("""
+CREATE TABLE IF NOT EXISTS daily_report_items (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    daily_report_id  INTEGER NOT NULL REFERENCES daily_reports(id),
+    archive_record_id INTEGER REFERENCES archive_records(id),
+    source_type      TEXT DEFAULT 'manual',
+    source_ref_id    INTEGER,
+    section_key      TEXT NOT NULL,
+    section_label    TEXT DEFAULT '',
+    note             TEXT DEFAULT '',
+    sort_order       INTEGER DEFAULT 0,
+    created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP
+)
+""", "daily_report_items")
+
+if tablo_var_mi("daily_report_items"):
+    degisiklik = False
+    degisiklik |= kolon_ekle("daily_report_items", "archive_record_id",  "INTEGER")
+    degisiklik |= kolon_ekle("daily_report_items", "source_type",        "TEXT",     "'manual'")
+    degisiklik |= kolon_ekle("daily_report_items", "source_ref_id",      "INTEGER")
+    degisiklik |= kolon_ekle("daily_report_items", "section_key",        "TEXT",     "''")
+    degisiklik |= kolon_ekle("daily_report_items", "section_label",      "TEXT",     "''")
+    degisiklik |= kolon_ekle("daily_report_items", "note",               "TEXT",     "''")
+    degisiklik |= kolon_ekle("daily_report_items", "sort_order",         "INTEGER",  "0")
+    degisiklik |= kolon_ekle("daily_report_items", "created_at",         "DATETIME", "CURRENT_TIMESTAMP")
+    degisiklik |= kolon_ekle("daily_report_items", "updated_at",         "DATETIME", "CURRENT_TIMESTAMP")
+    if not degisiklik:
+        print("✅ Tablo daily_report_items: tüm kolonlar mevcut")
+
+# 12. reset_tokens
 tablo_olustur("""
 CREATE TABLE IF NOT EXISTS reset_tokens (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -351,7 +510,7 @@ CREATE TABLE IF NOT EXISTS reset_tokens (
 )
 """, "reset_tokens")
 
-# 10. login_attempts
+# 13. login_attempts
 tablo_olustur("""
 CREATE TABLE IF NOT EXISTS login_attempts (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,

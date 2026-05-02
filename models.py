@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship
 from database import Base
 import datetime
@@ -56,6 +56,8 @@ class User(Base):
     reports          = relationship("Report", back_populates="owner")
     kamera_analizler = relationship("KameraAnaliz", back_populates="owner")
     cameras          = relationship("Camera", back_populates="owner")
+    archive_records  = relationship("ArchiveRecord", back_populates="owner")
+    daily_reports    = relationship("DailyReport", back_populates="owner")
 
 class Report(Base):
     __tablename__ = "reports"
@@ -111,7 +113,29 @@ class MalzemeUyari(Base):
     onceki     = Column(String, nullable=False)  # TODO(PostgreSQL): Numeric olarak güncellenmeli
     yeni       = Column(String, nullable=False)  # TODO(PostgreSQL): Numeric olarak güncellenmeli
     degisim    = Column(String, nullable=False)  # TODO(PostgreSQL): Numeric veya Float (Yüzdelik değişim için) olmalı
+    status     = Column(String, default="pending", index=True)  # pending | in_review | approved | rejected | correction_requested
+    decided_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class ReviewDecision(Base):
+    __tablename__ = "review_decisions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "source_type", "source_id", name="uq_review_decisions_user_source"),
+    )
+
+    id                = Column(Integer, primary_key=True, index=True)
+    organization_id   = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+    user_id           = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    source_type       = Column(String, nullable=False, index=True)   # evidence | alert | report
+    source_id         = Column(Integer, nullable=False, index=True)
+    status            = Column(String, default="pending", index=True)  # pending | in_review | approved | rejected | correction_requested
+    decision_note     = Column(Text, default="")
+    decided_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    decided_at        = Column(DateTime, nullable=True, index=True)
+    created_at        = Column(DateTime, default=dt.utcnow, index=True)
+    updated_at        = Column(DateTime, default=dt.utcnow, index=True)
+    archived_at       = Column(DateTime, nullable=True)
+    archived_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
 class Stok(Base):
     __tablename__ = "stok"
@@ -162,6 +186,75 @@ class Camera(Base):
 
     owner      = relationship("User", back_populates="cameras")
 
+class ArchiveRecord(Base):
+    __tablename__ = "archive_records"
+    id              = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+    user_id         = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    santiye_id      = Column(Integer, ForeignKey("santiyeler.id"), nullable=True, index=True)
+    camera_id       = Column(Integer, nullable=True, index=True)
+    source_type     = Column(String, default="manual", index=True)   # manual | ai | camera | report
+    source_ref_type = Column(String, default="")
+    source_ref_id   = Column(Integer, nullable=True, index=True)
+    media_type      = Column(String, default="photo", index=True)    # photo | video | report
+    file_url        = Column(Text, default="")
+    thumbnail_url   = Column(Text, default="")
+    file_name       = Column(String, default="")
+    mime_type       = Column(String, default="")
+    file_size       = Column(Integer, default=0)
+    title           = Column(String, default="")
+    description     = Column(Text, default="")
+    event_type      = Column(String, default="", index=True)
+    tags            = Column(Text, default="[]")
+    zone_label      = Column(String, default="")
+    captured_at     = Column(DateTime, nullable=True, index=True)
+    duration_seconds = Column(String, default="")
+    gps_lat         = Column(String, default="")
+    gps_lon         = Column(String, default="")
+    exif_payload    = Column(Text, default="")
+    ai_suggestions  = Column(Text, default="")
+    status          = Column(String, default="active", index=True)   # active | archived | deleted
+    verification_status = Column(String, default="DRAFT", index=True)
+    workflow_status = Column(String, default="NEW", index=True)
+    deleted_at      = Column(DateTime, nullable=True, index=True)
+    uploaded_at     = Column(DateTime, default=dt.utcnow, index=True)
+    created_at      = Column(DateTime, default=dt.utcnow, index=True)
+    updated_at      = Column(DateTime, default=dt.utcnow)
+
+    owner           = relationship("User", back_populates="archive_records")
+
+
+class DailyReport(Base):
+    __tablename__ = "daily_reports"
+    id           = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+    user_id      = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    santiye_id   = Column(Integer, ForeignKey("santiyeler.id"), nullable=True, index=True)
+    report_date  = Column(String, nullable=False, index=True)  # YYYY-MM-DD
+    status       = Column(String, default="draft", index=True)
+    verification_status = Column(String, default="DRAFT", index=True)
+    workflow_status = Column(String, default="NEW", index=True)
+    summary      = Column(Text, default="")
+    created_at   = Column(DateTime, default=dt.utcnow, index=True)
+    updated_at   = Column(DateTime, default=dt.utcnow)
+
+    owner        = relationship("User", back_populates="daily_reports")
+
+
+class DailyReportItem(Base):
+    __tablename__ = "daily_report_items"
+    id              = Column(Integer, primary_key=True, index=True)
+    daily_report_id = Column(Integer, ForeignKey("daily_reports.id"), nullable=False, index=True)
+    archive_record_id = Column(Integer, ForeignKey("archive_records.id"), nullable=True, index=True)
+    source_type     = Column(String, default="manual", index=True)   # manual | kamera | rapor
+    source_ref_id   = Column(Integer, nullable=True, index=True)
+    section_key     = Column(String, nullable=False, index=True)
+    section_label   = Column(String, default="")
+    note            = Column(Text, default="")
+    sort_order      = Column(Integer, default=0)
+    created_at      = Column(DateTime, default=dt.utcnow, index=True)
+    updated_at      = Column(DateTime, default=dt.utcnow)
+
 class ResetToken(Base):
     __tablename__ = "reset_tokens"
     id         = Column(Integer, primary_key=True)
@@ -202,3 +295,12 @@ class VideoAnaliz(Base):
     thumbnail       = Column(Text, default="")           # base64 JPEG, max 640px
     tespitler       = Column(Text, default="[]")         # JSON raw YOLO detections (tek kare için)
     created_at      = Column(DateTime, default=dt.utcnow, index=True)
+
+class DecisionMessage(Base):
+    __tablename__ = "decision_messages"
+    id          = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+    decision_id = Column(Integer, ForeignKey("review_decisions.id"), nullable=False, index=True)
+    user_id     = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    message     = Column(Text, nullable=False)
+    created_at  = Column(DateTime, default=dt.utcnow, nullable=False, index=True)
