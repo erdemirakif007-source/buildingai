@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Body, Request, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, status, Body, Request, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, Response, JSONResponse, FileResponse, RedirectResponse
 from typing import Optional, List
 from pathlib import Path
@@ -16,6 +16,8 @@ import datetime
 import random
 import smtplib
 import os
+import json
+import uuid
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import base64
@@ -211,22 +213,22 @@ class InMemoryRateLimiter:
         self.requests = requests
         self.window = window
         self.cache: dict[str, list[float]] = {}
-        
+
     def __call__(self, request: Request):
         token = request.headers.get("Authorization") or request.cookies.get("access_token")
         identifier = token if token else (request.client.host if request.client else "127.0.0.1")
-        
+
         import time
         now = time.time()
         if identifier not in self.cache:
             self.cache[identifier] = []
-            
+
         current_window = now - self.window
         self.cache[identifier] = [t for t in self.cache[identifier] if t > current_window]
-        
+
         if len(self.cache[identifier]) >= self.requests:
             raise HTTPException(status_code=429, detail="Çok fazla istek yaptınız. Lütfen bekleyin.")
-            
+
         self.cache[identifier].append(now)
 
 global_rate_limiter = InMemoryRateLimiter(requests=120, window=60)
@@ -595,7 +597,7 @@ async def pdf_indir(request: Request, payload: dict = Body(...)):
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        
+
         headers={"Content-Disposition": f"attachment; filename={dosya_adi}"}
     )
 
@@ -1341,41 +1343,1098 @@ Sadece gerçekten gördüğün riskleri ekle, uydurma."""
         traceback.print_exc()
         raise _gemini_hata_yakala(e)
 
+# --- KISISEL ARSIV / MANUEL KANIT ---
+MANUAL_UPLOAD_ROOT = Path("static/uploads/manual_evidence")
+MANUAL_UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+MANUAL_THUMB_ROOT = MANUAL_UPLOAD_ROOT / "thumbs"
+MANUAL_THUMB_ROOT.mkdir(parents=True, exist_ok=True)
+
+ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
+MAX_MANUAL_IMAGE_SIZE = 25 * 1024 * 1024
+MAX_MANUAL_VIDEO_SIZE = 150 * 1024 * 1024
+
+DAILY_REPORT_SECTIONS = {
+    "ilerleme": "İlerleme",
+    "isg_ihlaller": "İSG / İhlaller",
+    "kalite_kusurlar": "Kalite / Kusurlar",
+    "malzeme_ekipman": "Malzeme / Ekipman",
+    "gecikmeler_engeller": "Gecikmeler / Engeller",
+    "yarin_yapilacaklar": "Yarın Yapılacaklar",
+}
+
+
+def _dt_to_str(value: Optional[datetime.datetime]) -> Optional[str]:
+    if not value:
+        return None
+    return value.replace(microsecond=0).isoformat()
+
+
+def _parse_datetime_input(value: Optional[str]) -> Optional[datetime.datetime]:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    normalized = raw.replace("Z", "+00:00")
+    try:
+        parsed = datetime.datetime.fromisoformat(normalized)
+    except ValueError:
+        for pattern in ("%Y-%m-%d %H:%M", "%Y-%m-%d", "%d.%m.%Y %H:%M", "%d.%m.%Y"):
+            try:
+                parsed = datetime.datetime.strptime(raw, pattern)
+                break
+            except ValueError:
+                parsed = None
+        if parsed is None:
+            raise HTTPException(status_code=400, detail="Çekim zamanı formatı geçersiz.")
+    if parsed.tzinfo:
+        parsed = parsed.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    return parsed
+
+
+def _parse_exif_datetime(value: Optional[str]) -> Optional[datetime.datetime]:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.datetime.strptime(raw, "%Y:%m:%d %H:%M:%S")
+    except ValueError:
+        return None
+
+
+def _split_tags(tags_text: Optional[str]) -> list[str]:
+    raw = (tags_text or "").replace(";", ",").replace("\n", ",")
+    parts = [part.strip() for part in raw.split(",")]
+    return [part for part in parts if part]
+
+
+def _json_or_default(raw: Optional[str], fallback):
+    if not raw:
+        return fallback
+    try:
+        return json.loads(raw)
+    except Exception:
+        return fallback
+
+
+def _normalize_text(value: Optional[str]) -> str:
+    return (value or "").strip()
+
+
+def _media_type_from_filename(filename: Optional[str]) -> str:
+    ext = Path(filename or "").suffix.lower()
+    if ext in ALLOWED_IMAGE_EXTENSIONS:
+        return "photo"
+    if ext in ALLOWED_VIDEO_EXTENSIONS:
+        return "video"
+    raise HTTPException(status_code=415, detail="Desteklenmeyen dosya türü.")
+
+
+def _gps_to_decimal(values, ref) -> Optional[str]:
+    try:
+        degrees = float(values[0][0]) / float(values[0][1])
+        minutes = float(values[1][0]) / float(values[1][1])
+        seconds = float(values[2][0]) / float(values[2][1])
+        result = degrees + (minutes / 60.0) + (seconds / 3600.0)
+        if ref in ("S", "W"):
+            result *= -1
+        return f"{result:.6f}"
+    except Exception:
+        return None
+
+
+def _extract_image_metadata(file_bytes: bytes) -> dict:
+    metadata = {
+        "captured_at": None,
+        "thumbnail_bytes": b"",
+        "gps_lat": "",
+        "gps_lon": "",
+        "exif_payload": {},
+    }
+    try:
+        from PIL import Image, ExifTags
+
+        image = Image.open(io.BytesIO(file_bytes))
+        exif_map = {}
+        gps_map = {}
+        exif = image.getexif() or {}
+        for tag_id, raw_value in exif.items():
+            tag_name = ExifTags.TAGS.get(tag_id, str(tag_id))
+            exif_map[tag_name] = raw_value
+            if tag_name == "GPSInfo" and isinstance(raw_value, dict):
+                gps_map = {
+                    ExifTags.GPSTAGS.get(gps_tag_id, str(gps_tag_id)): gps_val
+                    for gps_tag_id, gps_val in raw_value.items()
+                }
+
+        metadata["captured_at"] = _parse_exif_datetime(
+            exif_map.get("DateTimeOriginal") or exif_map.get("DateTime")
+        )
+        if gps_map:
+            lat = _gps_to_decimal(gps_map.get("GPSLatitude"), gps_map.get("GPSLatitudeRef"))
+            lon = _gps_to_decimal(gps_map.get("GPSLongitude"), gps_map.get("GPSLongitudeRef"))
+            metadata["gps_lat"] = lat or ""
+            metadata["gps_lon"] = lon or ""
+        metadata["exif_payload"] = {
+            "width": image.width,
+            "height": image.height,
+            "captured_at": _dt_to_str(metadata["captured_at"]),
+            "gps_lat": metadata["gps_lat"],
+            "gps_lon": metadata["gps_lon"],
+        }
+
+        thumb = image.copy()
+        if thumb.mode not in ("RGB", "L"):
+            thumb = thumb.convert("RGB")
+        elif thumb.mode == "L":
+            thumb = thumb.convert("RGB")
+        thumb.thumbnail((640, 360))
+        thumb_buffer = io.BytesIO()
+        thumb.save(thumb_buffer, format="JPEG", quality=82)
+        metadata["thumbnail_bytes"] = thumb_buffer.getvalue()
+    except Exception:
+        return metadata
+    return metadata
+
+
+def _extract_video_metadata(file_path: Path) -> dict:
+    metadata = {"duration_seconds": "", "thumbnail_bytes": b""}
+    cap = None
+    try:
+        import cv2
+
+        cap = cv2.VideoCapture(str(file_path))
+        if not cap.isOpened():
+            return metadata
+
+        fps = cap.get(cv2.CAP_PROP_FPS) or 0
+        frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0
+        if fps > 0 and frame_count > 0:
+            metadata["duration_seconds"] = str(round(frame_count / fps, 1))
+
+        target_frame = int(frame_count / 3) if frame_count and frame_count > 3 else 0
+        if target_frame:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
+        ok, frame = cap.read()
+        if ok:
+            success, encoded = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+            if success:
+                metadata["thumbnail_bytes"] = encoded.tobytes()
+    except Exception:
+        return metadata
+    finally:
+        if cap is not None:
+            cap.release()
+    return metadata
+
+
+def _santiye_kontrol(organization_id: Optional[int], santiye_id: Optional[int], db: Session) -> Optional[models.Santiye]:
+    if not santiye_id:
+        return None
+    santiye = db.query(models.Santiye).filter(
+        models.Santiye.id == santiye_id,
+        models.Santiye.organization_id == organization_id,
+        models.Santiye.aktif == True,
+    ).first()
+    if not santiye:
+        raise HTTPException(status_code=404, detail="Şantiye bulunamadı.")
+    return santiye
+
+
+def _manual_record_to_dict(
+    record: models.ArchiveRecord,
+    santiye_map: dict[int, str],
+    camera_map: dict[int, str],
+    uploaded_by: str,
+) -> dict:
+    legacy_site_binding = not record.santiye_id
+    return {
+        "id": record.id,
+        "record_type": "manual",
+        "source_type": record.source_type or "manual",
+        "media_type": record.media_type or "photo",
+        "title": record.title or record.file_name or "Manuel kanıt",
+        "description": record.description or "",
+        "event_type": record.event_type or "",
+        "tags": _json_or_default(record.tags, []),
+        "zone_label": record.zone_label or "",
+        "camera_id": record.camera_id,
+        "camera_name": camera_map.get(record.camera_id) if record.camera_id else "",
+        "captured_at": _dt_to_str(record.captured_at) or _dt_to_str(record.uploaded_at),
+        "uploaded_at": _dt_to_str(record.uploaded_at),
+        "created_at": _dt_to_str(record.created_at),
+        "updated_at": _dt_to_str(record.updated_at),
+        "uploaded_by": uploaded_by,
+        "status": record.status or "active",
+        "verification_status": _normalize_verification_status(getattr(record, "verification_status", ""), default="DRAFT"),
+        "workflow_status": _normalize_workflow_status(getattr(record, "workflow_status", ""), default="NEW"),
+        "file_url": record.file_url or "",
+        "thumbnail_url": record.thumbnail_url or record.file_url or "",
+        "file_name": record.file_name or "",
+        "mime_type": record.mime_type or "",
+        "file_size": record.file_size or 0,
+        "duration_seconds": record.duration_seconds or "",
+        "santiye_id": record.santiye_id,
+        "santiye_adi": santiye_map.get(record.santiye_id) if record.santiye_id else "Legacy kayıt (şantiye bağsız)",
+        "legacy_site_binding": legacy_site_binding,
+        "gps_lat": record.gps_lat or "",
+        "gps_lon": record.gps_lon or "",
+        "ai_suggestions": _json_or_default(record.ai_suggestions, {}),
+        "detail_type": "manual",
+    }
+
+
+def _kamera_record_to_dict(
+    record: models.KameraAnaliz,
+    santiye_map: dict[int, str],
+    uploaded_by: str,
+) -> dict:
+    record_santiye_id = getattr(record, "santiye_id", None)
+    legacy_site_binding = not record_santiye_id
+    thumb = f"data:image/jpeg;base64,{record.resim_base64}" if record.resim_base64 else ""
+    summary = (record.sonuc or "").replace("\n", " ").strip()
+    if len(summary) > 180:
+        summary = summary[:177] + "..."
+    return {
+        "id": record.id,
+        "record_type": "kamera",
+        "source_type": "ai",
+        "media_type": "photo",
+        "title": summary.split(".")[0][:90] if summary else "Kamera analizi",
+        "description": summary,
+        "event_type": record.analiz_tipi or "",
+        "tags": [],
+        "zone_label": record.sehir or "",
+        "camera_id": None,
+        "camera_name": "",
+        "captured_at": _dt_to_str(record.created_at),
+        "uploaded_at": _dt_to_str(record.created_at),
+        "created_at": _dt_to_str(record.created_at),
+        "updated_at": _dt_to_str(record.created_at),
+        "uploaded_by": uploaded_by,
+        "status": "active",
+        "file_url": thumb,
+        "thumbnail_url": thumb,
+        "file_name": "",
+        "mime_type": "image/jpeg",
+        "file_size": 0,
+        "duration_seconds": "",
+        "santiye_id": record_santiye_id,
+        "santiye_adi": santiye_map.get(record_santiye_id) if record_santiye_id else "Legacy kayıt (şantiye bağsız)",
+        "legacy_site_binding": legacy_site_binding,
+        "gps_lat": "",
+        "gps_lon": "",
+        "ai_suggestions": {},
+        "detail_type": "kamera",
+        "ozet": summary,
+        "tip": record.analiz_tipi or "genel",
+        "sehir": record.sehir or "",
+    }
+
+
+def _report_record_to_dict(record: models.Report, uploaded_by: str) -> dict:
+    summary = (record.content or "").replace("\n", " ").strip()
+    if len(summary) > 180:
+        summary = summary[:177] + "..."
+    return {
+        "id": record.id,
+        "record_type": "rapor",
+        "source_type": "report",
+        "media_type": "report",
+        "title": record.tarih or "Günlük rapor",
+        "description": summary,
+        "event_type": "",
+        "tags": [],
+        "zone_label": "",
+        "camera_id": None,
+        "camera_name": "",
+        "captured_at": _dt_to_str(record.created_at),
+        "uploaded_at": _dt_to_str(record.created_at),
+        "created_at": _dt_to_str(record.created_at),
+        "updated_at": _dt_to_str(record.created_at),
+        "uploaded_by": uploaded_by,
+        "status": "active",
+        "file_url": "",
+        "thumbnail_url": "",
+        "file_name": "",
+        "mime_type": "text/markdown",
+        "file_size": 0,
+        "duration_seconds": "",
+        "santiye_id": None,
+        "santiye_adi": "",
+        "gps_lat": "",
+        "gps_lon": "",
+        "ai_suggestions": {},
+        "detail_type": "rapor",
+        "ozet": summary,
+        "tarih": record.tarih,
+    }
+
+
+def _archive_sort_key(item: dict):
+    return item.get("captured_at") or item.get("uploaded_at") or item.get("created_at") or ""
+
+
+def _site_filter_matches(item: dict, santiye_id: Optional[int]) -> bool:
+    if not santiye_id:
+        return True
+    item_santiye_id = item.get("santiye_id")
+    if item_santiye_id == santiye_id:
+        return True
+    return item_santiye_id in (None, "", 0, "0")
+
+
+def _collect_archive_records(user, db: Session, arsiv_limit: int) -> tuple[list[dict], dict]:
+    _allowed_sites = get_allowed_santiye_ids(user, db)
+    _sant_q = db.query(models.Santiye).filter(
+        models.Santiye.organization_id == user.organization_id,
+        models.Santiye.aktif == True,
+    )
+    if _allowed_sites is not None:
+        _sant_q = _sant_q.filter(models.Santiye.id.in_(_allowed_sites))
+    santiyeler = _sant_q.all()
+    santiye_map = {s.id: s.ad for s in santiyeler}
+    camera_map = {
+        c.id: c.name
+        for c in db.query(models.Camera).filter(models.Camera.organization_id == user.organization_id).all()
+    }
+    uploaded_by = user.full_name or user.email
+
+    _manual_q = db.query(models.ArchiveRecord).filter(
+        models.ArchiveRecord.organization_id == user.organization_id,
+        models.ArchiveRecord.source_type == "manual",
+        models.ArchiveRecord.deleted_at.is_(None),
+        models.ArchiveRecord.status != "deleted",
+    )
+    if _allowed_sites is not None:
+        _manual_q = _manual_q.filter(models.ArchiveRecord.santiye_id.in_(_allowed_sites))
+    manual_records = _manual_q.order_by(models.ArchiveRecord.uploaded_at.desc()).all()
+
+    _kamera_q = db.query(models.KameraAnaliz).filter(
+        models.KameraAnaliz.organization_id == user.organization_id,
+    )
+    if _allowed_sites is not None:
+        _kamera_q = _kamera_q.filter(models.KameraAnaliz.santiye_id.in_(_allowed_sites))
+    kamera_records = _kamera_q.order_by(models.KameraAnaliz.created_at.desc()).all()
+
+    rapor_records = db.query(models.Report).filter(
+        models.Report.organization_id == user.organization_id,
+    ).order_by(models.Report.created_at.desc()).all()
+
+    records = (
+        [_manual_record_to_dict(item, santiye_map, camera_map, uploaded_by) for item in manual_records]
+        + [_kamera_record_to_dict(item, santiye_map, uploaded_by) for item in kamera_records]
+        + [_report_record_to_dict(item, uploaded_by) for item in rapor_records]
+
+    )
+    records.sort(key=_archive_sort_key, reverse=True)
+    if arsiv_limit > 0:
+        records = records[:arsiv_limit]
+
+    filter_options = {
+        "santiyeler": [{"id": s.id, "ad": s.ad} for s in santiyeler],
+        "medya_turleri": sorted({item["media_type"] for item in records if item.get("media_type")}),
+        "kaynak_turleri": sorted({item["source_type"] for item in records if item.get("source_type")}),
+        "olay_tipleri": sorted({item["event_type"] for item in records if item.get("event_type")}),
+        "alanlar": sorted({item["zone_label"] for item in records if item.get("zone_label")}),
+        "yukleyenler": sorted({item["uploaded_by"] for item in records if item.get("uploaded_by")}),
+        "durumlar": sorted({item["status"] for item in records if item.get("status")}),
+    }
+    return records, filter_options
+
+
+def _filter_archive_records(
+    records: list[dict],
+    *,
+    arama: str = "",
+    santiye_id: Optional[int] = None,
+    medya_turu: str = "",
+    kaynak_turu: str = "",
+    olay_tipi: str = "",
+    tarih_baslangic: str = "",
+    tarih_bitis: str = "",
+    alan_kamera: str = "",
+    yukleyen: str = "",
+    durum: str = "",
+) -> list[dict]:
+    q = (arama or "").strip().lower()
+    date_from = _parse_datetime_input(tarih_baslangic) if (tarih_baslangic or "").strip() else None
+    date_to = _parse_datetime_input(tarih_bitis) if (tarih_bitis or "").strip() else None
+    if date_to:
+        date_to = date_to.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+    filtered = []
+    for item in records:
+        item_dt = None
+        raw_dt = item.get("captured_at") or item.get("uploaded_at") or item.get("created_at")
+        if raw_dt:
+            try:
+                item_dt = _parse_datetime_input(raw_dt)
+            except HTTPException:
+                item_dt = None
+
+        if not _site_filter_matches(item, santiye_id):
+            continue
+        if medya_turu and item.get("media_type") != medya_turu:
+            continue
+        if kaynak_turu and item.get("source_type") != kaynak_turu:
+            continue
+        if olay_tipi and item.get("event_type") != olay_tipi:
+            continue
+        if alan_kamera:
+            area_text = " ".join(
+                [
+                    item.get("zone_label") or "",
+                    item.get("camera_name") or "",
+                    item.get("santiye_adi") or "",
+                ]
+            ).lower()
+            if alan_kamera.lower() not in area_text:
+                continue
+        if yukleyen and item.get("uploaded_by") != yukleyen:
+            continue
+        if durum and item.get("status") != durum:
+            continue
+        if date_from and (not item_dt or item_dt < date_from):
+            continue
+        if date_to and (not item_dt or item_dt > date_to):
+            continue
+        if q:
+            haystack = " ".join(
+                [
+                    item.get("title") or "",
+                    item.get("description") or "",
+                    item.get("event_type") or "",
+                    item.get("zone_label") or "",
+                    item.get("santiye_adi") or "",
+                    item.get("uploaded_by") or "",
+                    " ".join(item.get("tags") or []),
+                ]
+            ).lower()
+            if q not in haystack:
+                continue
+        filtered.append(item)
+    return filtered
+
+
+def _daily_report_get_or_create(
+    db: Session,
+    *,
+    user_id: int,
+    organization_id: Optional[int],
+    santiye_id: Optional[int],
+    report_date: str,
+) -> models.DailyReport:
+    report = db.query(models.DailyReport).filter(
+        models.DailyReport.organization_id == organization_id,
+        models.DailyReport.santiye_id == santiye_id,
+        models.DailyReport.report_date == report_date,
+    ).first()
+    if report:
+        return report
+    report = models.DailyReport(
+        user_id=user_id,
+        organization_id=organization_id,
+        santiye_id=santiye_id,
+        report_date=report_date,
+        status="draft",
+        verification_status="DRAFT",
+        workflow_status="NEW",
+        summary="",
+    )
+    db.add(report)
+    db.commit()
+    db.refresh(report)
+    return report
+
+
+def _manual_record_or_404(record_id: int, organization_id: Optional[int], db: Session) -> models.ArchiveRecord:
+    record = db.query(models.ArchiveRecord).filter(
+        models.ArchiveRecord.id == record_id,
+        models.ArchiveRecord.organization_id == organization_id,
+        models.ArchiveRecord.source_type == "manual",
+    ).first()
+    if not record or record.deleted_at is not None or record.status == "deleted":
+        raise HTTPException(status_code=404, detail="Manuel kanıt bulunamadı.")
+    return record
+
 # --- 📁 KİŞİSEL ARŞİV ---
 @app.get("/arsiv")
 @limiter.limit("60/minute")
-def arsiv_getir(request: Request, token: str, db: Session = Depends(database.get_db)):
-    user = kullanici_dogrula(token, db)
+def arsiv_getir(
+    request: Request,
+    arama: str = "",
+    santiye_id: Optional[int] = None,
+    medya_turu: str = "",
+    kaynak_turu: str = "",
+    olay_tipi: str = "",
+    tarih_baslangic: str = "",
+    tarih_bitis: str = "",
+    alan_kamera: str = "",
+    yukleyen: str = "",
+    durum: str = "",
+    db: Session = Depends(database.get_db),
+):
+    user = kullanici_dogrula(_request_token(request), db)
+    _santiye_kontrol(user.organization_id, santiye_id, db) if santiye_id else None
     plan = get_user_plan(user)
     arsiv_max = get_plan_limit(plan, "arsiv_max")
     arsiv_limit = 9999 if arsiv_max == -1 else arsiv_max
 
-    raporlar = db.query(models.Report).filter(
-        models.Report.user_id == user.id
-    ).order_by(models.Report.created_at.desc()).limit(arsiv_limit).all()
-
-    kamera = db.query(models.KameraAnaliz).filter(
-        models.KameraAnaliz.user_id == user.id
-    ).order_by(models.KameraAnaliz.created_at.desc()).limit(arsiv_limit).all()
+    records, filter_options = _collect_archive_records(user, db, arsiv_limit)
+    records = _filter_archive_records(
+        records,
+        arama=arama,
+        santiye_id=santiye_id,
+        medya_turu=medya_turu,
+        kaynak_turu=kaynak_turu,
+        olay_tipi=olay_tipi,
+        tarih_baslangic=tarih_baslangic,
+        tarih_bitis=tarih_bitis,
+        alan_kamera=alan_kamera,
+        yukleyen=yukleyen,
+        durum=durum,
+    )
 
     return {
-        "raporlar": [{"id": r.id, "tarih": r.tarih, "ozet": r.content[:150] + "...", "created_at": str(r.created_at)} for r in raporlar],
-        "kamera_analizler": [{"id": k.id, "tip": k.analiz_tipi, "ozet": k.sonuc[:150] + "...", "sehir": k.sehir, "created_at": str(k.created_at)} for k in kamera]
+        "raporlar": [
+            {
+                "id": item["id"],
+                "tarih": item.get("tarih") or item.get("title") or "",
+                "ozet": item.get("ozet") or item.get("description") or "",
+                "created_at": item.get("created_at"),
+            }
+            for item in records
+            if item.get("record_type") == "rapor"
+        ],
+        "kamera_analizler": [
+            {
+                "id": item["id"],
+                "tip": item.get("tip") or item.get("event_type") or "genel",
+                "ozet": item.get("ozet") or item.get("description") or "",
+                "sehir": item.get("sehir") or item.get("zone_label") or "",
+                "created_at": item.get("created_at"),
+                "santiye_id": item.get("santiye_id"),
+                "santiye_adi": item.get("santiye_adi"),
+            }
+            for item in records
+            if item.get("record_type") == "kamera"
+        ],
+        "manual_evidence": [item for item in records if item.get("record_type") == "manual"],
+        "arsiv_kayitlari": records,
+        "filtre_secenekleri": filter_options,
+    }
+
+
+@app.get("/manual-evidence")
+@limiter.limit("60/minute")
+def manual_evidence_list(
+    request: Request,
+    santiye_id: Optional[int] = None,
+    db: Session = Depends(database.get_db),
+):
+    user = kullanici_dogrula(_request_token(request), db)
+    allowed_me = get_allowed_santiye_ids(user, db)
+    _santiye_kontrol(user.organization_id, santiye_id, db) if santiye_id else None
+    if santiye_id and allowed_me is not None and santiye_id not in allowed_me:
+        raise HTTPException(status_code=403, detail="Bu şantiyeye erişim yetkiniz yok.")
+    _sant_me_q = db.query(models.Santiye).filter(models.Santiye.organization_id == user.organization_id, models.Santiye.aktif == True)
+    if allowed_me is not None:
+        _sant_me_q = _sant_me_q.filter(models.Santiye.id.in_(allowed_me))
+    santiyeler = {s.id: s.ad for s in _sant_me_q.all()}
+    camera_map = {
+        c.id: c.name
+        for c in db.query(models.Camera).filter(models.Camera.organization_id == user.organization_id).all()
+    }
+    q = db.query(models.ArchiveRecord).filter(
+        models.ArchiveRecord.organization_id == user.organization_id,
+        models.ArchiveRecord.source_type == "manual",
+        models.ArchiveRecord.deleted_at.is_(None),
+        models.ArchiveRecord.status != "deleted",
+    )
+    if santiye_id:
+        q = q.filter(
+            or_(
+                models.ArchiveRecord.santiye_id == santiye_id,
+                models.ArchiveRecord.santiye_id.is_(None),
+            )
+        )
+    elif allowed_me is not None:
+        q = q.filter(models.ArchiveRecord.santiye_id.in_(allowed_me))
+    records = q.order_by(models.ArchiveRecord.uploaded_at.desc()).all()
+    return {
+        "kayitlar": [
+            _manual_record_to_dict(item, santiyeler, camera_map, user.full_name or user.email)
+            for item in records
+        ]
+    }
+
+
+@app.post("/manual-evidence")
+@limiter.limit("20/minute")
+async def manual_evidence_upload(
+    request: Request,
+    token: str = Form(...),
+    santiye_id: Optional[int] = Form(None),
+    title: str = Form(""),
+    description: str = Form(""),
+    event_type: str = Form(""),
+    zone_label: str = Form(""),
+    camera_id: Optional[int] = Form(None),
+    captured_at: str = Form(""),
+    tags: str = Form(""),
+    files: List[UploadFile] = File(...),
+    db: Session = Depends(database.get_db),
+):
+    user = kullanici_dogrula(token, db)
+    if not user.organization_id:
+        raise HTTPException(status_code=400, detail="Bir organizasyona dahil olmalısınız.")
+    santiye = _santiye_kontrol(user.organization_id, santiye_id, db) if santiye_id else None
+    if not files:
+        raise HTTPException(status_code=400, detail="En az bir dosya seçmelisiniz.")
+
+    if camera_id:
+        camera = db.query(models.Camera).filter(
+            models.Camera.id == camera_id,
+            models.Camera.organization_id == user.organization_id,
+        ).first()
+        if not camera:
+            raise HTTPException(status_code=404, detail="İlgili kamera bulunamadı.")
+
+    requested_captured_at = _parse_datetime_input(captured_at) if _normalize_text(captured_at) else None
+    tag_list = _split_tags(tags)
+    created_records: list[models.ArchiveRecord] = []
+
+    for upload in files:
+        file_name = upload.filename or "kanit"
+        media_type = _media_type_from_filename(file_name)
+        file_bytes = await upload.read()
+        if not file_bytes:
+            raise HTTPException(status_code=400, detail=f"{file_name} boş görünüyor.")
+
+        size_limit = MAX_MANUAL_IMAGE_SIZE if media_type == "photo" else MAX_MANUAL_VIDEO_SIZE
+        if len(file_bytes) > size_limit:
+            limit_mb = int(size_limit / (1024 * 1024))
+            raise HTTPException(status_code=413, detail=f"{file_name} için dosya limiti {limit_mb} MB.")
+
+        suffix = Path(file_name).suffix.lower()
+        unique_name = f"{dt_module.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex}{suffix}"
+        target_path = MANUAL_UPLOAD_ROOT / unique_name
+        target_path.write_bytes(file_bytes)
+
+        thumb_url = ""
+        gps_lat = ""
+        gps_lon = ""
+        exif_payload = {}
+        duration_seconds = ""
+        captured_value = requested_captured_at
+
+        if media_type == "photo":
+            image_meta = _extract_image_metadata(file_bytes)
+            captured_value = requested_captured_at or image_meta.get("captured_at") or dt_module.datetime.utcnow()
+            gps_lat = image_meta.get("gps_lat") or ""
+            gps_lon = image_meta.get("gps_lon") or ""
+            exif_payload = image_meta.get("exif_payload") or {}
+            thumb_bytes = image_meta.get("thumbnail_bytes") or b""
+            if thumb_bytes:
+                thumb_name = f"{Path(unique_name).stem}.jpg"
+                thumb_path = MANUAL_THUMB_ROOT / thumb_name
+                thumb_path.write_bytes(thumb_bytes)
+                thumb_url = "/" + thumb_path.as_posix()
+        else:
+            captured_value = requested_captured_at or dt_module.datetime.utcnow()
+            video_meta = _extract_video_metadata(target_path)
+            duration_seconds = video_meta.get("duration_seconds") or ""
+            thumb_bytes = video_meta.get("thumbnail_bytes") or b""
+            if thumb_bytes:
+                thumb_name = f"{Path(unique_name).stem}.jpg"
+                thumb_path = MANUAL_THUMB_ROOT / thumb_name
+                thumb_path.write_bytes(thumb_bytes)
+                thumb_url = "/" + thumb_path.as_posix()
+
+        record = models.ArchiveRecord(
+            user_id=user.id,
+            organization_id=user.organization_id,
+            santiye_id=santiye.id if santiye else None,
+            camera_id=camera_id,
+            source_type="manual",
+            media_type=media_type,
+            file_url="/" + target_path.as_posix(),
+            thumbnail_url=thumb_url or ("/" + target_path.as_posix() if media_type == "photo" else ""),
+            file_name=file_name,
+            mime_type=upload.content_type or "",
+            file_size=len(file_bytes),
+            title=_normalize_text(title) or Path(file_name).stem,
+            description=_normalize_text(description),
+            event_type=_normalize_text(event_type),
+            tags=json.dumps(tag_list, ensure_ascii=False),
+            zone_label=_normalize_text(zone_label),
+            captured_at=captured_value,
+            duration_seconds=duration_seconds,
+            gps_lat=gps_lat,
+            gps_lon=gps_lon,
+            exif_payload=json.dumps(exif_payload, ensure_ascii=False),
+            ai_suggestions=json.dumps({}, ensure_ascii=False),
+            status="active",
+            verification_status="DRAFT",
+            workflow_status="NEW",
+            uploaded_at=dt_module.datetime.utcnow(),
+            created_at=dt_module.datetime.utcnow(),
+            updated_at=dt_module.datetime.utcnow(),
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        created_records.append(record)
+
+    santiyeler = {
+        s.id: s.ad
+        for s in db.query(models.Santiye).filter(models.Santiye.organization_id == user.organization_id).all()
+    }
+    camera_map = {
+        c.id: c.name
+        for c in db.query(models.Camera).filter(models.Camera.organization_id == user.organization_id).all()
+    }
+    return {
+        "mesaj": f"{len(created_records)} manuel kanıt kaydedildi.",
+        "kayitlar": [
+            _manual_record_to_dict(item, santiyeler, camera_map, user.full_name or user.email)
+            for item in created_records
+        ],
+    }
+
+
+@app.patch("/manual-evidence/{record_id}")
+@limiter.limit("30/minute")
+def manual_evidence_update(
+    request: Request,
+    record_id: int,
+    payload: dict = Body(...),
+    db: Session = Depends(database.get_db),
+):
+    user = kullanici_dogrula(payload.get("token", ""), db)
+    record = _manual_record_or_404(record_id, user.organization_id, db)
+
+    if "title" in payload:
+        record.title = _normalize_text(payload.get("title"))
+    if "description" in payload:
+        record.description = _normalize_text(payload.get("description"))
+    if "event_type" in payload:
+        record.event_type = _normalize_text(payload.get("event_type"))
+    if "zone_label" in payload:
+        record.zone_label = _normalize_text(payload.get("zone_label"))
+    if "tags" in payload:
+        record.tags = json.dumps(_split_tags(payload.get("tags")), ensure_ascii=False)
+    if "captured_at" in payload and _normalize_text(payload.get("captured_at")):
+        record.captured_at = _parse_datetime_input(payload.get("captured_at"))
+    if "verification_status" in payload:
+        record.verification_status = _normalize_verification_status(payload.get("verification_status"))
+        if record.verification_status == "VERIFIED" and "workflow_status" not in payload and (
+            _normalize_workflow_status(getattr(record, "workflow_status", ""), default="NEW") == "NEW"
+        ):
+            record.workflow_status = "ACKNOWLEDGED"
+    if "workflow_status" in payload:
+        record.workflow_status = _normalize_workflow_status(payload.get("workflow_status"))
+    record.updated_at = dt_module.datetime.utcnow()
+    db.commit()
+    db.refresh(record)
+
+    santiyeler = {
+        s.id: s.ad
+        for s in db.query(models.Santiye).filter(models.Santiye.organization_id == user.organization_id).all()
+    }
+    camera_map = {
+        c.id: c.name
+        for c in db.query(models.Camera).filter(models.Camera.organization_id == user.organization_id).all()
+    }
+    return _manual_record_to_dict(record, santiyeler, camera_map, user.full_name or user.email)
+
+
+@app.post("/manual-evidence/{record_id}/ai-suggestions")
+@limiter.limit("20/minute")
+def manual_evidence_ai_suggestions(
+    request: Request,
+    record_id: int,
+    payload: dict = Body(...),
+    db: Session = Depends(database.get_db),
+):
+    user = kullanici_dogrula(payload.get("token", ""), db)
+    record = _manual_record_or_404(record_id, user.organization_id, db)
+
+    file_path = Path((record.file_url or "").lstrip("/"))
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Kanıt dosyası bulunamadı.")
+
+    media_bytes = file_path.read_bytes()
+    mime_type = record.mime_type or "image/jpeg"
+    if record.media_type == "video":
+        video_meta = _extract_video_metadata(file_path)
+        media_bytes = video_meta.get("thumbnail_bytes") or b""
+        mime_type = "image/jpeg"
+        if not media_bytes:
+            raise HTTPException(status_code=422, detail="Video önizleme karesi üretilemedi.")
+
+    from google.genai import types as _types
+
+    prompt = f"""Sen BuildingAI için çalışan saha kayıt asistanısın.
+Manuel olarak yüklenmiş bir şantiye kanıtı için SADECE JSON dön.
+Yanıt formatı:
+{{
+  "title": "kısa başlık",
+  "description": "2-3 cümlelik kısa açıklama",
+  "event_type": "olay tipi",
+  "tags": ["etiket1", "etiket2", "etiket3"]
+}}
+Kurallar:
+- Uydurma bilgi ekleme.
+- Görmediğin hiçbir şeyi yazma.
+- Başlık kısa ve sahaya uygun olsun.
+- Tags en fazla 6 adet olsun.
+- Bu çıktı sadece öneri taslağıdır, kullanıcı onayı olmadan nihai veri yerine geçmez.
+
+Mevcut kullanıcı girdileri:
+- title: {record.title or "-"}
+- description: {record.description or "-"}
+- event_type: {record.event_type or "-"}
+- tags: {record.tags or "[]"}
+"""
+
+    try:
+        response = ai_client.models.generate_content(
+            model="gemini-3.1-flash-lite-preview",
+            contents=[
+                _types.Part.from_bytes(data=media_bytes, mime_type=mime_type),
+                prompt,
+            ],
+        )
+        suggestions = json.loads(response.text)
+    except Exception as exc:
+        logger.error(f"MANUAL AI SUGGESTION ERROR: {exc}")
+        raise HTTPException(status_code=500, detail="AI önerileri alınamadı.")
+
+    suggestion_payload = {
+        "draft": {
+            "title": _normalize_text(suggestions.get("title")),
+            "description": _normalize_text(suggestions.get("description")),
+            "event_type": _normalize_text(suggestions.get("event_type")),
+            "tags": [tag for tag in suggestions.get("tags", []) if isinstance(tag, str) and tag.strip()][:6],
+        },
+        "status": "draft",
+        "generated_at": _dt_to_str(dt_module.datetime.utcnow()),
+    }
+    record.ai_suggestions = json.dumps(suggestion_payload, ensure_ascii=False)
+    record.updated_at = dt_module.datetime.utcnow()
+    db.commit()
+    return suggestion_payload
+
+
+@app.delete("/manual-evidence/{record_id}")
+@limiter.limit("30/minute")
+def manual_evidence_delete(
+    request: Request,
+    record_id: int,
+    db: Session = Depends(database.get_db),
+):
+    user = kullanici_dogrula(_request_token(request), db)
+    record = _manual_record_or_404(record_id, user.organization_id, db)
+    record.status = "deleted"
+    record.deleted_at = dt_module.datetime.utcnow()
+    record.updated_at = dt_module.datetime.utcnow()
+    db.commit()
+    return {"ok": True}
+
+
+@app.get("/manual-evidence/{record_id}")
+@limiter.limit("60/minute")
+def manual_evidence_detail(
+    request: Request,
+    record_id: int,
+    db: Session = Depends(database.get_db),
+):
+    user = kullanici_dogrula(_request_token(request), db)
+    record = _manual_record_or_404(record_id, user.organization_id, db)
+    santiyeler = {
+        s.id: s.ad
+        for s in db.query(models.Santiye).filter(models.Santiye.organization_id == user.organization_id).all()
+    }
+    camera_map = {
+        c.id: c.name
+        for c in db.query(models.Camera).filter(models.Camera.organization_id == user.organization_id).all()
+    }
+    data = _manual_record_to_dict(record, santiyeler, camera_map, user.full_name or user.email)
+    data["content"] = record.description or record.title or ""
+    data["exif_payload"] = _json_or_default(record.exif_payload, {})
+    return data
+
+
+@app.post("/daily-reports/items")
+@limiter.limit("40/minute")
+def daily_report_item_add(
+    request: Request,
+    payload: dict = Body(...),
+    db: Session = Depends(database.get_db),
+):
+    user = kullanici_dogrula(payload.get("token", ""), db)
+    section_key = payload.get("section_key", "")
+    if section_key not in DAILY_REPORT_SECTIONS:
+        raise HTTPException(status_code=400, detail="Geçersiz günlük rapor bölümü.")
+
+    source_type = payload.get("source_type", "manual")
+    source_id = int(payload.get("source_id"))
+    report_date = (payload.get("report_date") or dt_module.datetime.utcnow().strftime("%Y-%m-%d")).strip()
+    note = _normalize_text(payload.get("note"))
+    santiye_id = payload.get("santiye_id") or None
+    archive_record_id = None
+
+    if source_type == "manual":
+        source_record = _manual_record_or_404(source_id, user.organization_id, db)
+        santiye_id = source_record.santiye_id
+        archive_record_id = source_record.id
+    elif source_type == "kamera":
+        source_record = db.query(models.KameraAnaliz).filter(
+            models.KameraAnaliz.id == source_id,
+            models.KameraAnaliz.organization_id == user.organization_id,
+        ).first()
+        if not source_record:
+            raise HTTPException(status_code=404, detail="Kamera kaydı bulunamadı.")
+        santiye_id = getattr(source_record, "santiye_id", None)
+    elif source_type == "rapor":
+        source_record = db.query(models.Report).filter(
+            models.Report.id == source_id,
+            models.Report.organization_id == user.organization_id,
+        ).first()
+        if not source_record:
+            raise HTTPException(status_code=404, detail="Rapor bulunamadı.")
+    else:
+        raise HTTPException(status_code=400, detail="Desteklenmeyen kaynak türü.")
+
+    _santiye_kontrol(user.organization_id, santiye_id, db) if santiye_id else None
+    report = _daily_report_get_or_create(
+        db,
+        user_id=user.id,
+        organization_id=user.organization_id,
+        santiye_id=santiye_id,
+        report_date=report_date,
+    )
+    existing_item = db.query(models.DailyReportItem).filter(
+        models.DailyReportItem.daily_report_id == report.id,
+        models.DailyReportItem.source_type == source_type,
+        models.DailyReportItem.source_ref_id == source_id,
+        models.DailyReportItem.section_key == section_key,
+    ).first()
+    if existing_item:
+        return {
+            "ok": True,
+            "mesaj": "Bu kayıt zaten ilgili günlük rapor bölümüne eklenmiş.",
+            "report_id": report.id,
+        }
+
+    item = models.DailyReportItem(
+        daily_report_id=report.id,
+        archive_record_id=archive_record_id,
+        source_type=source_type,
+        source_ref_id=source_id,
+        section_key=section_key,
+        section_label=DAILY_REPORT_SECTIONS[section_key],
+        note=note,
+        sort_order=0,
+        created_at=dt_module.datetime.utcnow(),
+        updated_at=dt_module.datetime.utcnow(),
+    )
+    db.add(item)
+    report.updated_at = dt_module.datetime.utcnow()
+    db.commit()
+    return {
+        "ok": True,
+        "mesaj": "Kanıt günlük rapora eklendi.",
+        "report_id": report.id,
+        "section_key": section_key,
+        "section_label": DAILY_REPORT_SECTIONS[section_key],
+    }
+
+
+@app.get("/daily-reports")
+@limiter.limit("60/minute")
+def daily_reports_list(
+    request: Request,
+    token: str,
+    santiye_id: Optional[int] = None,
+    report_date: str = "",
+    db: Session = Depends(database.get_db),
+):
+    user = kullanici_dogrula(token, db)
+    _santiye_kontrol(user.organization_id, santiye_id, db) if santiye_id else None
+    q = db.query(models.DailyReport).filter(models.DailyReport.organization_id == user.organization_id)
+    if santiye_id:
+        q = q.filter(models.DailyReport.santiye_id == santiye_id)
+    if report_date:
+        q = q.filter(models.DailyReport.report_date == report_date)
+    reports = q.order_by(models.DailyReport.report_date.desc(), models.DailyReport.updated_at.desc()).all()
+    report_ids = [report.id for report in reports]
+    items = db.query(models.DailyReportItem).filter(
+        models.DailyReportItem.daily_report_id.in_(report_ids or [0])
+    ).order_by(models.DailyReportItem.created_at.asc()).all()
+    grouped_items: dict[int, list[dict]] = {}
+    for item in items:
+        grouped_items.setdefault(item.daily_report_id, []).append(
+            {
+                "id": item.id,
+                "source_type": item.source_type,
+                "source_ref_id": item.source_ref_id,
+                "section_key": item.section_key,
+                "section_label": item.section_label,
+                "note": item.note or "",
+                "archive_record_id": item.archive_record_id,
+            }
+        )
+    return {
+        "sections": DAILY_REPORT_SECTIONS,
+        "raporlar": [
+            {
+                "id": report.id,
+                "santiye_id": report.santiye_id,
+                "report_date": report.report_date,
+                "status": report.status,
+                "verification_status": _report_verification_status(report),
+                "workflow_status": _report_workflow_status(report),
+                "summary": report.summary or "",
+                "created_at": _dt_to_str(report.created_at),
+                "updated_at": _dt_to_str(report.updated_at),
+                "items": grouped_items.get(report.id, []),
+            }
+            for report in reports
+        ],
     }
 
 @app.get("/arsiv/{tip}/{id}")
 @limiter.limit("60/minute")
-def arsiv_detay(request: Request, tip: str, id: int, token: str, db: Session = Depends(database.get_db)):
-    user = kullanici_dogrula(token, db)
+def arsiv_detay(request: Request, tip: str, id: int, db: Session = Depends(database.get_db)):
+    user = kullanici_dogrula(_request_token(request), db)
+    if tip == "manual":
+        record = _manual_record_or_404(id, user.organization_id, db)
+        santiyeler = {
+            s.id: s.ad
+            for s in db.query(models.Santiye).filter(models.Santiye.organization_id == user.organization_id).all()
+        }
+        camera_map = {
+            c.id: c.name
+            for c in db.query(models.Camera).filter(models.Camera.organization_id == user.organization_id).all()
+        }
+        data = _manual_record_to_dict(record, santiyeler, camera_map, user.full_name or user.email)
+        data["content"] = record.description or record.title or ""
+        data["exif_payload"] = _json_or_default(record.exif_payload, {})
+        return data
     if tip == "rapor":
-        item = db.query(models.Report).filter(models.Report.id == id, models.Report.user_id == user.id).first()
+        item = db.query(models.Report).filter(models.Report.id == id, models.Report.organization_id == user.organization_id).first()
+    elif tip == "kamera":
+        item = db.query(models.KameraAnaliz).filter(models.KameraAnaliz.id == id, models.KameraAnaliz.organization_id == user.organization_id).first()
     else:
-        item = db.query(models.KameraAnaliz).filter(models.KameraAnaliz.id == id, models.KameraAnaliz.user_id == user.id).first()
+        raise HTTPException(status_code=400, detail="Desteklenmeyen arşiv tipi.")
     if not item:
         raise HTTPException(status_code=404, detail="Kayıt bulunamadı.")
     return item
 
 # --- 🗑️ KANIT SİL ---
+
 @app.delete("/kanit-sil/{id}")
 @limiter.limit("60/minute")
 def kanit_sil(request: Request, id: int, token: str, db: Session = Depends(database.get_db)):
