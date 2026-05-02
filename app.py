@@ -54,6 +54,510 @@ def _get_redirect_uri(request: Request) -> str:
     return LOCALHOST_CALLBACK
 import models, schemas, auth, database
 from models import Santiye, ResetToken, LoginAttempt
+VERIFICATION_STATUSES = {"DRAFT", "VERIFIED", "REJECTED"}
+WORKFLOW_STATUSES = {"NEW", "ACKNOWLEDGED", "CLOSED"}
+REVIEW_SOURCE_TYPES = {"evidence", "alert", "report"}
+REVIEW_STATUSES = {"pending", "in_review", "approved", "rejected", "correction_requested"}
+LEGACY_VERIFIED_REPORT_STATUSES = {"tamamlandi", "completed", "closed"}
+
+
+def _normalize_verification_status(value: Optional[str], default: str = "DRAFT") -> str:
+    normalized = (value or "").strip().upper()
+    return normalized if normalized in VERIFICATION_STATUSES else default
+
+
+def _normalize_workflow_status(value: Optional[str], default: str = "NEW") -> str:
+    normalized = (value or "").strip().upper()
+    return normalized if normalized in WORKFLOW_STATUSES else default
+
+
+def _legacy_report_is_verified(report) -> bool:
+    return (getattr(report, "status", "") or "").strip().lower() in LEGACY_VERIFIED_REPORT_STATUSES
+
+
+def _report_verification_status(report) -> str:
+    explicit = _normalize_verification_status(getattr(report, "verification_status", ""), default="")
+    if explicit:
+        return explicit
+    return "VERIFIED" if _legacy_report_is_verified(report) else "DRAFT"
+
+
+def _report_workflow_status(report) -> str:
+    explicit = _normalize_workflow_status(getattr(report, "workflow_status", ""), default="")
+    if explicit:
+        return explicit
+    return "CLOSED" if _legacy_report_is_verified(report) else "NEW"
+
+
+def _normalize_review_status(value: Optional[str], default: str = "pending") -> str:
+    normalized = (value or "").strip().lower()
+    return normalized if normalized in REVIEW_STATUSES else default
+
+
+def _review_status_label(value: Optional[str]) -> str:
+    return {
+        "pending": "Bekliyor",
+        "in_review": "İnceleniyor",
+        "approved": "Onaylandı",
+        "rejected": "Reddedildi",
+        "correction_requested": "Düzeltme İstendi",
+    }.get(_normalize_review_status(value), "Bekliyor")
+
+
+def _review_status_tone(value: Optional[str]) -> str:
+    return {
+        "pending": "warning",
+        "in_review": "info",
+        "approved": "success",
+        "rejected": "danger",
+        "correction_requested": "warning",
+    }.get(_normalize_review_status(value), "neutral")
+
+
+def _review_seed_status(source_type: str, row) -> str:
+    source_type = (source_type or "").strip().lower()
+    if source_type == "evidence":
+        verification = _normalize_verification_status(getattr(row, "verification_status", ""), default="")
+        if verification == "VERIFIED":
+            return "approved"
+        if verification == "REJECTED":
+            return "rejected"
+        return "pending"
+    if source_type == "report":
+        verification = _report_verification_status(row)
+        if verification == "VERIFIED":
+            return "approved"
+        if verification == "REJECTED":
+            return "rejected"
+        return "pending"
+    return _normalize_review_status(getattr(row, "status", ""), default="pending")
+
+
+def _review_seed_decided_at(source_type: str, row):
+    if source_type == "alert":
+        return getattr(row, "decided_at", None) or getattr(row, "created_at", None)
+    if source_type == "evidence":
+        status = _review_seed_status(source_type, row)
+        if status in {"approved", "rejected"}:
+            return getattr(row, "updated_at", None) or getattr(row, "created_at", None)
+        return None
+    if source_type == "report":
+        status = _review_seed_status(source_type, row)
+        if status in {"approved", "rejected"}:
+            return getattr(row, "updated_at", None) or getattr(row, "created_at", None)
+        return None
+    return None
+
+
+def _review_get_or_create_decision(
+    db: Session,
+    *,
+    user_id: int,
+    organization_id: Optional[int],
+    source_type: str,
+    source_id: int,
+    existing_map: Optional[dict] = None,
+    seed_status: str = "pending",
+    seed_decided_at=None,
+    seed_note: str = "",
+):
+    key = (source_type, source_id)
+    if existing_map is not None and key in existing_map:
+        return existing_map[key], False
+    decision = db.query(models.ReviewDecision).filter(
+        models.ReviewDecision.organization_id == organization_id,
+        models.ReviewDecision.source_type == source_type,
+        models.ReviewDecision.source_id == source_id,
+    ).first()
+    if decision:
+        if existing_map is not None:
+            existing_map[key] = decision
+        return decision, False
+
+    normalized_status = _normalize_review_status(seed_status)
+    now = datetime.datetime.utcnow()
+    decision = models.ReviewDecision(
+        user_id=user_id,
+        organization_id=organization_id,
+        source_type=source_type,
+        source_id=source_id,
+        status=normalized_status,
+        decision_note=seed_note or "",
+        decided_by_user_id=user_id if normalized_status in {"approved", "rejected", "correction_requested"} else None,
+        decided_at=seed_decided_at if normalized_status in {"approved", "rejected", "correction_requested"} else None,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(decision)
+    db.flush()
+    if existing_map is not None:
+        existing_map[key] = decision
+    return decision, True
+
+
+def _review_category_from_text(source_type: str, text: str) -> str:
+    normalized = (text or "").casefold()
+    if source_type == "alert":
+        if any(keyword in normalized for keyword in ("isg", "güvenlik", "guvenlik", "baret", "kask", "risk", "ihlal")):
+            return "ISG"
+        return "Stok"
+    if source_type == "report":
+        return "Rapor"
+    if any(keyword in normalized for keyword in ("isg", "güvenlik", "guvenlik", "baret", "kask", "risk", "ihlal", "ppe", "helmet", "safety")):
+        return "ISG"
+    if any(keyword in normalized for keyword in ("beton", "demir", "stok", "malzeme", "irsaliye", "mikser", "çimento", "cimento", "teslimat", "sevkiyat")):
+        return "Stok"
+    return "Rapor"
+
+
+def _review_priority(category: str, delta_text: str, status_value: str) -> str:
+    if _normalize_review_status(status_value) == "correction_requested":
+        return "Yüksek"
+    if category == "ISG":
+        return "Yüksek"
+    if category == "Stok" and str(delta_text or "").strip().startswith("-"):
+        return "Yüksek"
+    if category == "Rapor":
+        return "Orta"
+    return "Normal"
+
+
+def _review_delta_label(source_type: str, row) -> str:
+    if source_type == "alert":
+        delta = str(getattr(row, "degisim", "") or "").strip()
+        if not delta:
+            return ""
+        # Sanitize extreme values (likely data entry errors, e.g. wrong unit scale)
+        try:
+            val = float(delta.replace(",", "."))
+            if abs(val) > 999.9:
+                # Flag as anomaly rather than displaying a misleading 92923% figure
+                return "Anormal veri"
+            formatted = f"%{val:+.1f}"
+        except ValueError:
+            formatted = delta if delta.startswith("%") else f"%{delta}"
+        return formatted
+    return ""
+
+
+def _review_record_type_label(source_type: str, category: str) -> str:
+    if source_type == "evidence":
+        return "Saha Kaydı"
+    if source_type == "alert":
+        return "Stok Uyarısı" if category == "Stok" else "İSG Uyarısı"
+    return "Rapor Kaydı"
+
+
+def _review_item_created_at(source_type: str, row):
+    if source_type == "evidence":
+        return getattr(row, "captured_at", None) or getattr(row, "uploaded_at", None) or getattr(row, "created_at", None)
+    if source_type == "report":
+        return getattr(row, "updated_at", None) or getattr(row, "created_at", None)
+    return getattr(row, "created_at", None)
+
+
+def _review_item_image_url(source_type: str, row) -> str:
+    if source_type == "evidence":
+        return getattr(row, "thumbnail_url", "") or getattr(row, "file_url", "") or ""
+    return ""
+
+
+def _review_item_site_name(source_type: str, row, site_map: dict[int, models.Santiye]) -> str:
+    site_id = getattr(row, "santiye_id", None)
+    if site_id and site_id in site_map:
+        return site_map[site_id].ad
+    if source_type == "alert":
+        return "Stok / Tedarik Hattı"
+    return "Şantiye etiketi yok"
+
+
+def _review_item_created_by(user: models.User, source_type: str) -> str:
+    if source_type == "alert":
+        return "Sistem"
+    return user.full_name or user.email
+
+
+def _review_item_summary(source_type: str, row, item_count: int = 0) -> str:
+    if source_type == "alert":
+        material = getattr(row, "malzeme", "") or "Malzeme"
+        delta = _review_delta_label(source_type, row)
+        previous = getattr(row, "onceki", "") or ""
+        new_value = getattr(row, "yeni", "") or ""
+        if delta:
+            return f"{material} için değişim tespit edildi. Son fark {delta} seviyesinde."
+        if previous or new_value:
+            return f"{material} için {previous} → {new_value} değişimi izleniyor."
+        return f"{material} için stok/tedarik uyarısı üretildi."
+    if source_type == "report":
+        base = (getattr(row, "summary", "") or "").strip()
+        if base:
+            return base
+        if item_count:
+            return f"Günlük raporda {item_count} kayıt derlendi. Yönetici ve saha akışı için gözden geçirme bekliyor."
+        return "Günlük rapor taslağı doğrulama bekliyor."
+    description = (getattr(row, "description", "") or "").strip()
+    if description:
+        return description
+    title = (getattr(row, "title", "") or getattr(row, "file_name", "") or "Saha kaydı").strip()
+    return f"{title} için saha doğrulaması bekleniyor."
+
+
+def _review_item_title(source_type: str, row) -> str:
+    if source_type == "alert":
+        material = getattr(row, "malzeme", "") or "Malzeme"
+        normalized = material.strip()
+        if normalized.lower().endswith("uyarısı"):
+            return normalized
+        return f"{normalized} Uyarısı"
+    if source_type == "report":
+        report_date = getattr(row, "report_date", "") or ""
+        return f"Günlük Rapor {report_date}".strip()
+    return getattr(row, "title", "") or getattr(row, "file_name", "") or "Saha kaydı"
+
+
+def _review_item_note(decision) -> str:
+    return (getattr(decision, "decision_note", "") or "").strip()
+
+
+def _serialize_review_item(
+    *,
+    user: models.User,
+    source_type: str,
+    row,
+    decision,
+    site_map: dict[int, models.Santiye],
+    report_item_count: int = 0,
+) -> dict:
+    title = _review_item_title(source_type, row)
+    summary = _review_item_summary(source_type, row, item_count=report_item_count)
+    combined_text = " ".join(
+        part for part in [
+            title,
+            summary,
+            getattr(row, "event_type", "") or "",
+            getattr(row, "zone_label", "") or "",
+            getattr(row, "malzeme", "") or "",
+        ]
+        if part
+    )
+    category = _review_category_from_text(source_type, combined_text)
+    delta_label = _review_delta_label(source_type, row)
+    created_at = _review_item_created_at(source_type, row)
+    site_name = _review_item_site_name(source_type, row, site_map)
+    note = _review_item_note(decision)
+    status_value = _normalize_review_status(getattr(decision, "status", "pending"))
+    return {
+        "id": f"{source_type}-{getattr(row, 'id', 0)}",
+        "decision_id": getattr(decision, "id", None),
+        "source_type": source_type,
+        "source_id": getattr(row, "id", None),
+        "category": category,
+        "title": title,
+        "summary": summary,
+        "priority": _review_priority(category, delta_label, status_value),
+        "delta": delta_label,
+        "image_url": _review_item_image_url(source_type, row),
+        "created_at": _dt_to_str(created_at),
+        "status": status_value,
+        "status_label": _review_status_label(status_value),
+        "status_tone": _review_status_tone(status_value),
+        "site_name": site_name,
+        "site_id": getattr(row, "santiye_id", None),
+        "created_by": _review_item_created_by(user, source_type),
+        "note": note,
+        "decided_at": _dt_to_str(getattr(decision, "decided_at", None)),
+        "archived_at": _dt_to_str(getattr(decision, "archived_at", None)),
+        "record_type_label": _review_record_type_label(source_type, category),
+        "zone_label": getattr(row, "zone_label", "") or "",
+        "record_summary": getattr(row, "summary", "") or getattr(row, "description", "") or "",
+        "detail_meta": {
+            "event_type": getattr(row, "event_type", "") or "",
+            "material": getattr(row, "malzeme", "") or "",
+            "report_item_count": report_item_count,
+            "workflow_status": getattr(row, "workflow_status", "") or "",
+            "verification_status": getattr(row, "verification_status", "") or "",
+        },
+    }
+
+
+def _sync_review_source_state(source_type: str, row, review_status: str, note: str) -> None:
+    normalized = _normalize_review_status(review_status)
+    now = datetime.datetime.utcnow()
+    if source_type == "evidence":
+        if normalized == "approved":
+            row.verification_status = "VERIFIED"
+            row.workflow_status = "ACKNOWLEDGED"
+        elif normalized == "rejected":
+            row.verification_status = "REJECTED"
+            row.workflow_status = "NEW"
+        else:
+            row.verification_status = "DRAFT"
+            row.workflow_status = "NEW"
+        row.updated_at = now
+        return
+    if source_type == "report":
+        if normalized == "approved":
+            row.verification_status = "VERIFIED"
+            row.workflow_status = "ACKNOWLEDGED"
+            row.status = "tamamlandi"
+        elif normalized == "rejected":
+            row.verification_status = "REJECTED"
+            row.workflow_status = "NEW"
+            row.status = "taslak"
+        else:
+            row.verification_status = "DRAFT"
+            row.workflow_status = "NEW"
+            row.status = "taslak"
+        row.updated_at = now
+        if note and not (row.summary or "").strip():
+            row.summary = note[:400]
+        return
+    row.status = normalized
+    row.decided_at = now if normalized in {"approved", "rejected", "correction_requested"} else None
+
+
+def _review_source_row_or_404(user: models.User, source_type: str, source_id: int, db: Session):
+    if source_type == "evidence":
+        return _manual_record_or_404(source_id, user.organization_id, db)
+    if source_type == "alert":
+        row = db.query(models.MalzemeUyari).filter(models.MalzemeUyari.id == source_id).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Uyarı kaydı bulunamadı.")
+        return row
+    if source_type == "report":
+        row = db.query(models.DailyReport).filter(
+            models.DailyReport.id == source_id,
+            models.DailyReport.organization_id == user.organization_id,
+        ).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Rapor kaydı bulunamadı.")
+        return row
+    raise HTTPException(status_code=400, detail="Desteklenmeyen review kaynağı.")
+
+
+def _build_review_datasets(user: models.User, db: Session) -> dict:
+    _allowed_sites = get_allowed_santiye_ids(user, db)
+    _site_q = db.query(models.Santiye).filter(
+        models.Santiye.organization_id == user.organization_id,
+        models.Santiye.aktif == True,
+    )
+    if _allowed_sites is not None:
+        _site_q = _site_q.filter(models.Santiye.id.in_(_allowed_sites))
+    site_rows = _site_q.all()
+    site_map = {row.id: row for row in site_rows}
+    decision_rows = db.query(models.ReviewDecision).filter(
+        models.ReviewDecision.organization_id == user.organization_id
+    ).all()
+    decision_map = {
+        (row.source_type, row.source_id): row
+        for row in decision_rows
+    }
+    created_any = False
+
+    _evidence_q = db.query(models.ArchiveRecord).filter(
+        models.ArchiveRecord.organization_id == user.organization_id,
+        models.ArchiveRecord.source_type == "manual",
+        models.ArchiveRecord.deleted_at.is_(None),
+        models.ArchiveRecord.status != "deleted",
+    )
+    if _allowed_sites is not None:
+        _evidence_q = _evidence_q.filter(models.ArchiveRecord.santiye_id.in_(_allowed_sites))
+    evidence_rows = _evidence_q.order_by(models.ArchiveRecord.captured_at.desc(), models.ArchiveRecord.uploaded_at.desc()).limit(60).all()
+
+    alert_rows = db.query(models.MalzemeUyari).filter(
+        (models.MalzemeUyari.organization_id == user.organization_id) | (models.MalzemeUyari.organization_id.is_(None))
+    ).order_by(models.MalzemeUyari.created_at.desc()).limit(40).all()
+
+    _report_q = db.query(models.DailyReport).filter(
+        models.DailyReport.organization_id == user.organization_id,
+    )
+    if _allowed_sites is not None:
+        _report_q = _report_q.filter(models.DailyReport.santiye_id.in_(_allowed_sites))
+    raw_report_rows = _report_q.order_by(models.DailyReport.updated_at.desc(), models.DailyReport.created_at.desc()).limit(40).all()
+    report_ids = [row.id for row in raw_report_rows]
+    report_item_rows = db.query(models.DailyReportItem).filter(
+        models.DailyReportItem.daily_report_id.in_(report_ids or [0])
+    ).all()
+    report_item_counts: dict[int, int] = {}
+    for item in report_item_rows:
+        report_item_counts[item.daily_report_id] = report_item_counts.get(item.daily_report_id, 0) + 1
+
+    report_rows = [
+        row for row in raw_report_rows
+        if report_item_counts.get(row.id, 0) > 0
+        or bool((row.summary or "").strip())
+        or _report_verification_status(row) != "DRAFT"
+        or (row.status or "").strip().lower() not in {"", "draft", "taslak"}
+    ]
+
+    all_items: list[dict] = []
+
+    for source_type, rows in (
+        ("evidence", evidence_rows),
+        ("alert", alert_rows),
+        ("report", report_rows),
+    ):
+        for row in rows:
+            seed_status = _review_seed_status(source_type, row)
+            seed_decided_at = _review_seed_decided_at(source_type, row)
+            decision, was_created = _review_get_or_create_decision(
+                db,
+                user_id=user.id,
+                organization_id=user.organization_id,
+                source_type=source_type,
+                source_id=row.id,
+                existing_map=decision_map,
+                seed_status=seed_status,
+                seed_decided_at=seed_decided_at,
+            )
+            # Reseed stale decision if the source row was decided externally
+            # (e.g., via direct PATCH to evidence/report, bypassing the unified endpoint)
+            if not was_created and decision.status == "pending" and seed_status in {"approved", "rejected"}:
+                decision.status = seed_status
+                if seed_decided_at:
+                    decision.decided_at = seed_decided_at if isinstance(seed_decided_at, datetime.datetime) else None
+                decision.updated_at = datetime.datetime.utcnow()
+                created_any = True
+            created_any = created_any or was_created
+            all_items.append(
+                _serialize_review_item(
+                    user=user,
+                    source_type=source_type,
+                    row=row,
+                    decision=decision,
+                    site_map=site_map,
+                    report_item_count=report_item_counts.get(row.id, 0),
+                )
+            )
+
+    if created_any:
+        db.commit()
+
+    def sort_key(item: dict) -> str:
+        return item.get("decided_at") or item.get("created_at") or ""
+
+    pending_items = [
+        item for item in all_items
+        if item["status"] in {"pending", "in_review"}
+    ]
+    history_items = [
+        item for item in all_items
+        if item["status"] in {"approved", "rejected", "correction_requested"}
+    ]
+
+    pending_items.sort(key=sort_key, reverse=True)
+    history_items.sort(key=sort_key, reverse=True)
+
+    return {
+        "site_rows": site_rows,
+        "site_map": site_map,
+        "all_items": all_items,
+        "pending_items": pending_items,
+        "history_items": history_items,
+        "report_item_counts": report_item_counts,
+    }
+
+
 from interface import NEW_HTML_TEMPLATE
 from admin_panel import ADMIN_HTML
 from weather import hava_getir
@@ -2536,6 +3040,91 @@ def kullanim_durumu(request: Request, token: str, db: Session = Depends(database
     }
 
 # --- 💰 MALZEME FİYATLARI ---
+@app.patch("/api/review-items/{source_type}/{source_id}/decision")
+@limiter.limit("40/minute")
+def review_item_decide(
+    request: Request,
+    source_type: str,
+    source_id: int,
+    payload: dict = Body(...),
+    db: Session = Depends(database.get_db),
+):
+    user = kullanici_dogrula(payload.get("token", ""), db)
+    normalized_source = (source_type or "").strip().lower()
+    if normalized_source not in REVIEW_SOURCE_TYPES:
+        raise HTTPException(status_code=400, detail="Desteklenmeyen review kaynağı.")
+
+    new_status = _normalize_review_status(payload.get("status"), default="")
+    if new_status not in {"approved", "rejected", "correction_requested", "in_review", "pending"}:
+        raise HTTPException(status_code=422, detail="Geçersiz review durumu.")
+
+    note = (payload.get("note", "") or "").strip()
+    source_row = _review_source_row_or_404(user, normalized_source, source_id, db)
+    decision, _ = _review_get_or_create_decision(
+        db,
+        user_id=user.id,
+        organization_id=user.organization_id,
+        source_type=normalized_source,
+        source_id=source_id,
+        seed_status=_review_seed_status(normalized_source, source_row),
+        seed_decided_at=_review_seed_decided_at(normalized_source, source_row),
+    )
+
+    decision.status = new_status
+    decision.decision_note = note
+    decision.updated_at = dt_module.datetime.utcnow()
+    if new_status in {"approved", "rejected", "correction_requested"}:
+        decision.decided_at = dt_module.datetime.utcnow()
+        decision.decided_by_user_id = user.id
+    else:
+        decision.decided_at = None
+        decision.decided_by_user_id = None
+
+    _sync_review_source_state(normalized_source, source_row, new_status, note)
+    db.commit()
+    db.refresh(decision)
+
+    site_rows = db.query(models.Santiye).filter(
+        models.Santiye.organization_id == user.organization_id,
+        models.Santiye.aktif == True,
+    ).all()
+    site_map = {row.id: row for row in site_rows}
+    report_item_count = 0
+    if normalized_source == "report":
+        report_item_count = db.query(models.DailyReportItem).filter(
+            models.DailyReportItem.daily_report_id == source_row.id
+        ).count()
+
+    return {
+        "ok": True,
+        "item": _serialize_review_item(
+            user=user,
+            source_type=normalized_source,
+            row=source_row,
+            decision=decision,
+            site_map=site_map,
+            report_item_count=report_item_count,
+        ),
+    }
+
+
+@app.patch("/malzeme-uyari/{uyari_id}/karar")
+@limiter.limit("30/minute")
+def malzeme_uyari_karar(
+    request: Request,
+    uyari_id: int,
+    payload: dict = Body(...),
+    db: Session = Depends(database.get_db),
+):
+    raw = str((payload or {}).get("status", "")).strip().lower()
+    # correction_requested is a real workflow state — map it through; default bad values to rejected
+    allowed = {"approved", "rejected", "correction_requested"}
+    resolved = raw if raw in allowed else "rejected"
+    payload = {**(payload or {}), "status": resolved}
+    return review_item_decide(request, "alert", uyari_id, payload, db)
+
+
+
 @app.get("/fiyatlar")
 def fiyatlar_getir(sehir: str = "genel", db: Session = Depends(database.get_db)):
     malzemeler = ['demir', 'cimento', 'beton', 'tugla', 'kum']
@@ -3420,6 +4009,114 @@ async def health_check(db: Session = Depends(database.get_db)):
 # Tamamen local — harici AI API kullanılmaz.
 # Desteklenen: video upload (FFmpeg keyframe), IP kamera frame (base64).
 # ════════════════════════════════════════════════════════════════════════════
+
+@app.get("/karar/{decision_id}/mesajlar")
+@limiter.limit("60/minute")
+def karar_mesajlari(
+    request: Request,
+    decision_id: int,
+    db: Session = Depends(database.get_db),
+):
+    user = kullanici_dogrula(_request_token(request), db)
+    decision = db.query(models.ReviewDecision).filter(
+        models.ReviewDecision.id == decision_id,
+        models.ReviewDecision.organization_id == user.organization_id,
+    ).first()
+    if not decision:
+        raise HTTPException(status_code=404, detail="Karar bulunamadı")
+
+    rows = (
+        db.query(models.DecisionMessage, models.User)
+        .join(models.User, models.DecisionMessage.user_id == models.User.id)
+        .filter(models.DecisionMessage.decision_id == decision_id)
+        .order_by(models.DecisionMessage.created_at.asc())
+        .all()
+    )
+    return {
+        "mesajlar": [
+            {
+                "id": m.id,
+                "mesaj": m.message,
+                "created_at": m.created_at.isoformat() if m.created_at else None,
+                "kullanici_id": u.id,
+                "kullanici_adi": u.full_name or u.email,
+                "kullanici_rolu": u.role,
+            }
+            for m, u in rows
+        ]
+    }
+
+
+@app.post("/karar/{decision_id}/mesaj")
+@limiter.limit("30/minute")
+def karar_mesaj_ekle(
+    request: Request,
+    decision_id: int,
+    payload: dict = Body(...),
+    db: Session = Depends(database.get_db),
+):
+    user = kullanici_dogrula(_request_token(request), db)
+    mesaj_text = ((payload or {}).get("mesaj") or "").strip()
+    if not mesaj_text:
+        raise HTTPException(status_code=400, detail="Mesaj boş olamaz")
+    if len(mesaj_text) > 2000:
+        raise HTTPException(status_code=400, detail="Mesaj çok uzun (max 2000 karakter)")
+
+    decision = db.query(models.ReviewDecision).filter(
+        models.ReviewDecision.id == decision_id,
+        models.ReviewDecision.organization_id == user.organization_id,
+    ).first()
+    if not decision:
+        raise HTTPException(status_code=404, detail="Karar bulunamadı")
+
+    yeni = models.DecisionMessage(
+        decision_id=decision_id,
+        user_id=user.id,
+        organization_id=user.organization_id,
+        message=mesaj_text,
+    )
+    db.add(yeni)
+    db.commit()
+    db.refresh(yeni)
+    return {
+        "id": yeni.id,
+        "mesaj": yeni.message,
+        "created_at": yeni.created_at.isoformat() if yeni.created_at else None,
+        "kullanici_id": user.id,
+        "kullanici_adi": user.full_name or user.email,
+        "kullanici_rolu": user.role,
+    }
+
+
+@app.post("/karar/{decision_id}/arsivle")
+@limiter.limit("30/minute")
+def karar_arsivle(
+    request: Request,
+    decision_id: int,
+    db: Session = Depends(database.get_db),
+):
+    user = kullanici_dogrula(_request_token(request), db)
+    decision = db.query(models.ReviewDecision).filter(
+        models.ReviewDecision.id == decision_id,
+        models.ReviewDecision.organization_id == user.organization_id,
+    ).first()
+    if not decision:
+        raise HTTPException(status_code=404, detail="Karar bulunamadı")
+    if decision.archived_at is not None:
+        raise HTTPException(status_code=400, detail="Bu karar zaten arşivlenmiş")
+
+    user_role = (getattr(user, "role", "") or "").strip().lower()
+    if user_role == "muhendis" and decision.decided_by_user_id != user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Sadece kendi verdiğiniz kararları arşivleyebilirsiniz",
+        )
+
+    decision.archived_at = datetime.datetime.utcnow()
+    decision.archived_by_user_id = user.id
+    db.commit()
+    return {"status": "ok", "decision_id": decision_id}
+
 
 import json
 import tempfile
