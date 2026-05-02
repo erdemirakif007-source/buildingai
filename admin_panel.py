@@ -3,7 +3,7 @@ ADMIN_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BuildingAI Pro — Admin</title>
+<title>BuildingAI — Admin</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#0d1117;color:#f0f0f0;font-family:Arial,sans-serif;min-height:100vh}
@@ -33,8 +33,8 @@ body{background:#0d1117;color:#f0f0f0;font-family:Arial,sans-serif;min-height:10
 .table td{padding:12px;border-bottom:1px solid #1a1d21;font-size:0.9rem;vertical-align:middle}
 .table tr:hover td{background:rgba(255,255,255,0.02)}
 .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:0.78rem;font-weight:bold}
-.badge-pro{background:rgba(46,204,113,0.15);color:#2ecc71;border:1px solid #2ecc71}
-.badge-free{background:rgba(230,126,34,0.1);color:#e67e22;border:1px solid #e67e22}
+.badge-profesyonel{background:rgba(46,204,113,0.15);color:#2ecc71;border:1px solid #2ecc71}
+.badge-baslangic{background:rgba(230,126,34,0.1);color:#e67e22;border:1px solid #e67e22}
 .badge-admin{background:rgba(52,152,219,0.15);color:#3498db;border:1px solid #3498db}
 .msg{padding:10px 16px;border-radius:8px;margin-top:10px;font-size:0.9rem}
 .msg-success{background:rgba(46,204,113,0.1);color:#2ecc71;border:1px solid #2ecc71}
@@ -52,7 +52,7 @@ body{background:#0d1117;color:#f0f0f0;font-family:Arial,sans-serif;min-height:10
   <div class="login-box">
     <div style="font-size:2.5rem;margin-bottom:10px">🏗️</div>
     <h2>Admin Panel</h2>
-    <p style="color:#aaa;margin-bottom:25px;font-size:0.9rem">BuildingAI Pro</p>
+    <p style="color:#aaa;margin-bottom:25px;font-size:0.9rem">BuildingAI</p>
     <input type="email" id="adminEmail" class="input" placeholder="Admin email">
     <input type="password" id="adminPass" class="input" placeholder="Şifre">
     <button class="btn" onclick="adminGiris()">Giriş Yap</button>
@@ -62,7 +62,7 @@ body{background:#0d1117;color:#f0f0f0;font-family:Arial,sans-serif;min-height:10
 
 <div id="mainPanel">
   <div class="header">
-    <h1>🏗️ BuildingAI Pro — Admin</h1>
+    <h1>🏗️ BuildingAI — Admin</h1>
     <div style="display:flex;align-items:center;gap:15px">
       <span id="adminWelcome" style="color:#aaa;font-size:0.9rem"></span>
       <button onclick="adminCikis()" style="background:none;border:1px solid #555;color:#aaa;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:0.85rem">Çıkış</button>
@@ -143,10 +143,12 @@ async function istatistikleriYukle() {
     const res = await fetch('/admin/istatistikler?token='+adminToken);
     if(res.status===401||res.status===403){adminCikis();return;}
     const d = await res.json();
+    const profesyonelKullanici = d.profesyonel_kullanici ?? d.pro_kullanici ?? 0;
+    const baslangicKullanici = d.baslangic_kullanici ?? d.free_kullanici ?? 0;
     document.getElementById('statsGrid').innerHTML = `
       <div class="stat-card"><div class="num">${d.toplam_kullanici}</div><div class="label">Toplam Kullanici</div></div>
-      <div class="stat-card green"><div class="num">${d.pro_kullanici}</div><div class="label">Pro Kullanici</div></div>
-      <div class="stat-card"><div class="num">${d.free_kullanici}</div><div class="label">Free Kullanici</div></div>
+      <div class="stat-card green"><div class="num">${profesyonelKullanici}</div><div class="label">Profesyonel Kullanici</div></div>
+      <div class="stat-card"><div class="num">${baslangicKullanici}</div><div class="label">Baslangic Kullanici</div></div>
       <div class="stat-card blue"><div class="num">${d.yeni_kayit_7gun}</div><div class="label">Yeni (7 gun)</div></div>
       <div class="stat-card green"><div class="num">$${d.tahmini_aylik_gelir}</div><div class="label">Tahmini Gelir/Ay</div></div>
       <div class="stat-card"><div class="num">${d.toplam_rapor}</div><div class="label">Toplam Rapor</div></div>
@@ -162,8 +164,8 @@ async function istatistikleriYukle() {
           <div style="color:#aaa;font-size:0.85rem;margin-top:5px">Tahmini Yillik Gelir</div>
         </div>
         <div style="background:rgba(230,126,34,0.08);border:1px solid rgba(230,126,34,0.2);border-radius:12px;padding:16px">
-          <div style="color:#e67e22;font-size:1.5rem;font-weight:800">${d.pro_kullanici}/${d.toplam_kullanici}</div>
-          <div style="color:#aaa;font-size:0.85rem;margin-top:5px">Pro/Toplam Oran</div>
+          <div style="color:#e67e22;font-size:1.5rem;font-weight:800">${profesyonelKullanici}/${d.toplam_kullanici}</div>
+          <div style="color:#aaa;font-size:0.85rem;margin-top:5px">Profesyonel/Toplam Oran</div>
         </div>
       </div>
     `;
@@ -185,9 +187,8 @@ function kullanicilariRender(liste) {
   tbody.innerHTML = liste.map(u => {
     const isAdmin = u.email === 'erdemirakif007@gmail.com';
     const badge = isAdmin ? '<span class="badge badge-admin">ADMIN</span>' :
-                  u.plan==='max' ? '<span class="badge badge-pro" style="background:rgba(241,196,15,0.15);border-color:#f1c40f;color:#f1c40f;">👑 MAX</span>' :
-                  u.plan==='pro' ? '<span class="badge badge-pro">⚡ PRO</span>' :
-                  '<span class="badge badge-free">FREE</span>';
+                  (u.plan==='profesyonel') ? '<span class="badge badge-profesyonel" style="background:rgba(241,196,15,0.15);border-color:#f1c40f;color:#f1c40f;">Profesyonel</span>' :
+                  '<span class="badge badge-baslangic">Başlangıç</span>';
     const tarih = u.created_at ? u.created_at.substring(0,10) : '-';
     const islemler = isAdmin ? '<span style="color:#555;font-size:0.8rem">—</span>' :
       (u.plan==='free'
