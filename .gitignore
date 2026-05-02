@@ -1,17 +1,37 @@
+# Environment / secrets
 .env
 *.env
 .env.*
+
+# Database / local state
 *.db
-__pycache__/
-*.pyc
+*.sqlite
+*.sqlite3
+*.bak
 .qdrant/
-# local / temp
-.claude/settings.local.json
-buildingai.log
-hata.txt
+
+# Python cache
 __pycache__/
 *.pyc
 
-# optional
+# Logs / temp
 *.log
+buildingai.log
+hata.txt
+.claude/settings.local.json
+
+# Media / large local files
 *.mp4
+
+# React local deps/build
+react-dashboard/node_modules/
+react-dashboard/dist/
+
+# Runtime uploads
+static/uploads/
+
+# Temp files
+_tmp_*.js
+*_tmp/
+tmp*/
+*.db.*
