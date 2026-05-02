@@ -95,6 +95,102 @@ def _ensure_auth_schema() -> None:
 
 _ensure_auth_schema()
 
+ORG_SCHEMA_TABLES = {
+    "organizations": """
+        CREATE TABLE IF NOT EXISTS organizations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            owner_user_id INTEGER NOT NULL REFERENCES users(id),
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """,
+    "project_members": """
+        CREATE TABLE IF NOT EXISTS project_members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id),
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            santiye_id INTEGER REFERENCES santiyeler(id),
+            role TEXT NOT NULL DEFAULT 'muhendis',
+            status TEXT NOT NULL DEFAULT 'active',
+            invited_by INTEGER REFERENCES users(id),
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """,
+    "invitations": """
+        CREATE TABLE IF NOT EXISTS invitations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL REFERENCES organizations(id),
+            email TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'muhendis',
+            invited_by INTEGER NOT NULL REFERENCES users(id),
+            token TEXT UNIQUE NOT NULL,
+            expires_at DATETIME NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """,
+}
+
+ORG_SCHEMA_COLUMNS = {
+    "users": {
+        "organization_id": "INTEGER",
+        "telefon": "TEXT DEFAULT ''",
+        "role": "TEXT DEFAULT 'santi_sefi'",
+    },
+    "reports": {
+        "organization_id": "INTEGER",
+    },
+    "kamera_analizler": {
+        "organization_id": "INTEGER",
+        "santiye_id": "INTEGER",
+    },
+    "malzeme_uyari": {
+        "organization_id": "INTEGER",
+    },
+    "stok": {
+        "organization_id": "INTEGER",
+    },
+    "santiyeler": {
+        "organization_id": "INTEGER",
+    },
+    "cameras": {
+        "organization_id": "INTEGER",
+    },
+    "video_analizler": {
+        "organization_id": "INTEGER",
+    },
+}
+
+
+def _ensure_org_schema() -> None:
+    try:
+        with database.engine.begin() as conn:
+            inspector = inspect(conn)
+            table_names = set(inspector.get_table_names())
+            for table_name, create_sql in ORG_SCHEMA_TABLES.items():
+                if table_name not in table_names:
+                    conn.exec_driver_sql(create_sql)
+                    logger.warning("Org schema sync created missing table %s", table_name)
+
+            inspector = inspect(conn)
+            table_names = set(inspector.get_table_names())
+            for table_name, columns in ORG_SCHEMA_COLUMNS.items():
+                if table_name not in table_names:
+                    continue
+                existing_columns = {col["name"] for col in inspector.get_columns(table_name)}
+                for column_name, column_sql in columns.items():
+                    if column_name not in existing_columns:
+                        conn.exec_driver_sql(
+                            f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_sql}"
+                        )
+                        logger.warning("Org schema sync added missing column %s.%s", table_name, column_name)
+    except Exception:
+        logger.exception("Org schema sync failed")
+        raise
+
+
+_ensure_org_schema()
+
 
 def _user_profile_payload(user: models.User) -> dict:
     return {

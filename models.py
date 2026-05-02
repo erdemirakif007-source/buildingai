@@ -4,12 +4,48 @@ from database import Base
 import datetime
 from datetime import datetime as dt
 
+class Organization(Base):
+    __tablename__ = "organizations"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class ProjectMember(Base):
+    __tablename__ = "project_members"
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    santiye_id = Column(Integer, ForeignKey("santiyeler.id"), nullable=True)
+    role = Column(String, nullable=False, default="muhendis")
+    status = Column(String, nullable=False, default="active")
+    invited_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class Invitation(Base):
+    __tablename__ = "invitations"
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
+    email = Column(String, nullable=False)
+    role = Column(String, nullable=False, default="muhendis")
+    invited_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    token = Column(String, unique=True, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    status = Column(String, nullable=False, default="pending")
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
 class User(Base):
     __tablename__ = "users"
     id               = Column(Integer, primary_key=True, index=True)
+    organization_id  = Column(Integer, ForeignKey("organizations.id"), nullable=True)
     email            = Column(String, unique=True, index=True, nullable=False)
     hashed_password  = Column(String, nullable=True)
     full_name        = Column(String, default="")
+    telefon          = Column(String, default="")
+    role             = Column(String, default="santi_sefi", index=True)
     plan             = Column(String, default="free")   # "free" | "pro" | "max" | "admin"
     is_admin         = Column(Boolean, default=False, nullable=False)
     auth_provider    = Column(String, default="local", nullable=False)
@@ -24,6 +60,7 @@ class User(Base):
 class Report(Base):
     __tablename__ = "reports"
     id         = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
     user_id    = Column(Integer, ForeignKey("users.id"), nullable=False)
     tarih      = Column(String)
     content    = Column(Text)
@@ -34,7 +71,9 @@ class Report(Base):
 class KameraAnaliz(Base):
     __tablename__ = "kamera_analizler"
     id           = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
     user_id      = Column(Integer, ForeignKey("users.id"), nullable=False)
+    santiye_id   = Column(Integer, ForeignKey("santiyeler.id"), nullable=True, index=True)
     analiz_tipi  = Column(String)   # "guvenlik" | "ilerleme" | "genel"
     sonuc        = Column(Text)
     ihlaller     = Column(Text, default="")   # TODO(PostgreSQL): Text yerine JSONB olarak güncellenmeli
@@ -67,6 +106,7 @@ class MalzemeFiyat(Base):
 class MalzemeUyari(Base):
     __tablename__ = "malzeme_uyari"
     id         = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
     malzeme    = Column(String, nullable=False)
     onceki     = Column(String, nullable=False)  # TODO(PostgreSQL): Numeric olarak güncellenmeli
     yeni       = Column(String, nullable=False)  # TODO(PostgreSQL): Numeric olarak güncellenmeli
@@ -76,6 +116,7 @@ class MalzemeUyari(Base):
 class Stok(Base):
     __tablename__ = "stok"
     id         = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
     user_id    = Column(Integer, ForeignKey("users.id"), nullable=False)
     santiye_id = Column(Integer, ForeignKey("santiyeler.id"), nullable=True)
     malzeme    = Column(String, nullable=False)  # 'demir', 'cimento', 'beton', 'tugla', 'kum', 'diger'
@@ -91,6 +132,7 @@ class Stok(Base):
 class Santiye(Base):
     __tablename__ = "santiyeler"
     id           = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
     user_id      = Column(Integer, ForeignKey("users.id"), nullable=False)
     ad           = Column(String, nullable=False)
     konum        = Column(String, default="")
@@ -109,6 +151,7 @@ class Santiye(Base):
 class Camera(Base):
     __tablename__ = "cameras"
     id         = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
     user_id    = Column(Integer, ForeignKey("users.id"), nullable=False)
     name       = Column(String, nullable=False)        # e.g. "CAM-01 Ana Giriş"
     url        = Column(String, default="")            # RTSP / HTTP / MJPEG URL
@@ -144,6 +187,7 @@ class VideoAnaliz(Base):
     """
     __tablename__ = "video_analizler"
     id              = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
     user_id         = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     santiye_id      = Column(Integer, ForeignKey("santiyeler.id"), nullable=True, index=True)
     kaynak_tipi     = Column(String, default="video")   # "video" | "stream" | "foto"

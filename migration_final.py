@@ -112,6 +112,9 @@ CREATE TABLE IF NOT EXISTS users (
     email            TEXT UNIQUE NOT NULL,
     hashed_password  TEXT NOT NULL,
     full_name        TEXT DEFAULT '',
+    organization_id  INTEGER,
+    telefon          TEXT DEFAULT '',
+    role             TEXT DEFAULT 'santi_sefi',
     plan             TEXT DEFAULT 'free',
     is_admin         BOOLEAN NOT NULL DEFAULT 0,
     created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -131,6 +134,9 @@ if tablo_var_mi("users"):
     degisiklik |= kolon_ekle("users", "plan",                   "TEXT",     "'free'")
     degisiklik |= kolon_ekle("users", "created_at",             "DATETIME", "CURRENT_TIMESTAMP")
     degisiklik |= kolon_ekle("users", "is_admin",               "BOOLEAN",  "0")
+    degisiklik |= kolon_ekle("users", "organization_id",        "INTEGER")
+    degisiklik |= kolon_ekle("users", "telefon",                "TEXT",     "''")
+    degisiklik |= kolon_ekle("users", "role",                   "TEXT",     "'santi_sefi'")
     degisiklik |= kolon_ekle("users", "google_id",              "TEXT")
     degisiklik |= kolon_ekle("users", "sifre_sifirla_token",    "TEXT")
     degisiklik |= kolon_ekle("users", "sifre_sifirla_expires",  "DATETIME")
@@ -142,6 +148,44 @@ if tablo_var_mi("users"):
         print("✅ Tablo users: tüm kolonlar mevcut")
 
 # Admin kullanıcıyı güncelle
+# 1b. organizations / project_members / invitations
+if tablo_var_mi("users"):
+    tablo_olustur("""
+CREATE TABLE IF NOT EXISTS organizations (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    name          TEXT NOT NULL,
+    owner_user_id INTEGER NOT NULL REFERENCES users(id),
+    created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+)
+""", "organizations")
+
+    tablo_olustur("""
+CREATE TABLE IF NOT EXISTS project_members (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    organization_id INTEGER NOT NULL REFERENCES organizations(id),
+    user_id         INTEGER NOT NULL REFERENCES users(id),
+    santiye_id      INTEGER REFERENCES santiyeler(id),
+    role            TEXT NOT NULL DEFAULT 'muhendis',
+    status          TEXT NOT NULL DEFAULT 'active',
+    invited_by      INTEGER REFERENCES users(id),
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+)
+""", "project_members")
+
+    tablo_olustur("""
+CREATE TABLE IF NOT EXISTS invitations (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    organization_id INTEGER NOT NULL REFERENCES organizations(id),
+    email           TEXT NOT NULL,
+    role            TEXT NOT NULL DEFAULT 'muhendis',
+    invited_by      INTEGER NOT NULL REFERENCES users(id),
+    token           TEXT UNIQUE NOT NULL,
+    expires_at      DATETIME NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending',
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+)
+""", "invitations")
+
 if USE_POSTGRES:
     cur.execute("UPDATE users SET is_admin = TRUE WHERE email = %s", (ADMIN_EMAIL,))
 else:
@@ -154,6 +198,7 @@ if etkilenen > 0:
 tablo_olustur("""
 CREATE TABLE IF NOT EXISTS reports (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    organization_id INTEGER,
     user_id    INTEGER NOT NULL REFERENCES users(id),
     tarih      TEXT,
     content    TEXT,
@@ -161,11 +206,16 @@ CREATE TABLE IF NOT EXISTS reports (
 )
 """, "reports")
 
+if tablo_var_mi("reports"):
+    kolon_ekle("reports", "organization_id", "INTEGER")
+
 # 3. kamera_analizler
 tablo_olustur("""
 CREATE TABLE IF NOT EXISTS kamera_analizler (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    organization_id INTEGER,
     user_id      INTEGER NOT NULL REFERENCES users(id),
+    santiye_id   INTEGER REFERENCES santiyeler(id),
     analiz_tipi  TEXT,
     sonuc        TEXT,
     ihlaller     TEXT DEFAULT '',
@@ -176,6 +226,11 @@ CREATE TABLE IF NOT EXISTS kamera_analizler (
     created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
 )
 """, "kamera_analizler")
+
+if tablo_var_mi("kamera_analizler"):
+    degisiklik = False
+    degisiklik |= kolon_ekle("kamera_analizler", "organization_id", "INTEGER")
+    degisiklik |= kolon_ekle("kamera_analizler", "santiye_id", "INTEGER")
 
 # 4. usage
 tablo_olustur("""
@@ -205,6 +260,7 @@ CREATE TABLE IF NOT EXISTS malzeme_fiyat (
 tablo_olustur("""
 CREATE TABLE IF NOT EXISTS malzeme_uyari (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    organization_id INTEGER,
     malzeme    TEXT NOT NULL,
     onceki     TEXT NOT NULL,
     yeni       TEXT NOT NULL,
@@ -213,10 +269,14 @@ CREATE TABLE IF NOT EXISTS malzeme_uyari (
 )
 """, "malzeme_uyari")
 
+if tablo_var_mi("malzeme_uyari"):
+    kolon_ekle("malzeme_uyari", "organization_id", "INTEGER")
+
 # 7. stok
 tablo_olustur("""
 CREATE TABLE IF NOT EXISTS stok (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    organization_id INTEGER,
     user_id    INTEGER NOT NULL REFERENCES users(id),
     santiye_id INTEGER REFERENCES santiyeler(id),
     malzeme    TEXT NOT NULL,
@@ -233,7 +293,9 @@ CREATE TABLE IF NOT EXISTS stok (
 
 # stok eksik kolonlar
 if tablo_var_mi("stok"):
-    degisiklik = kolon_ekle("stok", "santiye_id", "INTEGER")
+    degisiklik = False
+    degisiklik |= kolon_ekle("stok", "organization_id", "INTEGER")
+    degisiklik |= kolon_ekle("stok", "santiye_id", "INTEGER")
     if not degisiklik:
         print("✅ Tablo stok: tüm kolonlar mevcut")
 
@@ -241,6 +303,7 @@ if tablo_var_mi("stok"):
 tablo_olustur("""
 CREATE TABLE IF NOT EXISTS santiyeler (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    organization_id INTEGER,
     user_id     INTEGER NOT NULL REFERENCES users(id),
     ad          TEXT NOT NULL,
     konum       TEXT DEFAULT '',
@@ -260,6 +323,7 @@ CREATE TABLE IF NOT EXISTS santiyeler (
 # santiyeler eksik kolonlar
 if tablo_var_mi("santiyeler"):
     degisiklik = False
+    degisiklik |= kolon_ekle("santiyeler", "organization_id", "INTEGER")
     degisiklik |= kolon_ekle("santiyeler", "kullanici_id",  "INTEGER")
     degisiklik |= kolon_ekle("santiyeler", "ad",            "TEXT",     "''")
     degisiklik |= kolon_ekle("santiyeler", "konum",         "TEXT",     "''")
