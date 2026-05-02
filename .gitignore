@@ -5,3 +5,13 @@
 __pycache__/
 *.pyc
 .qdrant/
+# local / temp
+.claude/settings.local.json
+buildingai.log
+hata.txt
+__pycache__/
+*.pyc
+
+# optional
+*.log
+*.mp4
