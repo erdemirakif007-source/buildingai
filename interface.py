@@ -2379,6 +2379,7 @@ NEW_HTML_TEMPLATE = f"""
 <div id="odemeModal" style="display:none;"></div>
 
 {JS_SCRIPT}
+<script src="/static/manual_evidence.js"></script>
 <script>
 if ('serviceWorker' in navigator) {{
   window.addEventListener('load', () => {{
