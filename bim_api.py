@@ -664,8 +664,9 @@ async def bim_mapping_sil(
         raise HTTPException(status_code=404, detail="Eşleştirme bulunamadı.")
 
     bim_model = db.query(models.BimModel).filter(models.BimModel.id == model_id).first()
-    if bim_model:
-        _bim_santiye_yetkisi_kontrol(user, bim_model.santiye_id, db)
+    if not bim_model:
+        raise HTTPException(status_code=404, detail="BIM modeli bulunamadı.")
+    _bim_santiye_yetkisi_kontrol(user, bim_model.santiye_id, db)
 
     db.delete(eslestirme)
     db.commit()
