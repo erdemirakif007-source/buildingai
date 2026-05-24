@@ -173,6 +173,11 @@ export interface SingleMappingResponse {
 export interface MappingInput {
   ifc_global_id: string;
   is_kalemi_id: number;
+  ifc_tip?: string;
+  ifc_kat?: string;
+  metraj?: number;
+  metraj_birimi?: string;
+  metraj_kaynagi?: string;
 }
 
 /**
@@ -205,6 +210,55 @@ export interface UploadProgress {
   total: number;
   /** Yüzde (0–100) */
   percent: number;
+}
+
+// ─── AI Öneri ────────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/bim/ai/eslestirme-oner — malzeme reçetesi öğesi
+ */
+export interface AISuggestionMalzeme {
+  malzeme: string;
+  miktar_birim_basina: number;
+  birim: string;
+  zorunlu: boolean;
+}
+
+/**
+ * POST /api/bim/ai/eslestirme-oner — tek bir öneri
+ */
+export interface AISuggestion {
+  katalog_id: number;
+  poz_no: string;
+  ad: string;
+  birim: string;
+  guven_skoru: number;
+  gerekce: string;
+  metraj: number | null;
+  metraj_birimi: string | null;
+  metraj_kaynagi: string | null;
+  malzeme_recetesi: AISuggestionMalzeme[];
+}
+
+/**
+ * POST /api/bim/ai/eslestirme-oner response
+ */
+export interface AISuggestionResponse {
+  status: string;
+  oneriler: AISuggestion[];
+}
+
+/**
+ * POST /api/bim/model/{id}/mapping request body (single mapping)
+ */
+export interface SingleMappingBody {
+  ifc_global_id: string;
+  is_kalemi_id: number;
+  ifc_tip?: string;
+  ifc_kat?: string;
+  metraj?: number;
+  metraj_birimi?: string;
+  metraj_kaynagi?: string;
 }
 
 // ─── Hata Tipleri ────────────────────────────────────────────────────────────

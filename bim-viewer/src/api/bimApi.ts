@@ -14,6 +14,7 @@
  *  ├── getProgressData()    → GET  /api/bim/model/{id}/progress
  *  ├── saveMapping()        → POST /api/bim/model/{id}/mapping
  *  ├── saveBulkMapping()    → POST /api/bim/model/{id}/mapping/bulk
+ *  ├── suggestMapping()     → POST /api/bim/ai/eslestirme-oner
  *  └── deleteModel()        → DELETE /api/bim/model/{id}
  *
  * ─── MODEL YÜKLEME AKIŞI ─────────────────────────────────────────────────────
@@ -42,6 +43,7 @@
 import {
   BIMAPIError,
   BIMNetworkError,
+  type AISuggestionResponse,
   type BIMModelResponse,
   type BulkMappingRequest,
   type BulkMappingResponse,
@@ -50,9 +52,11 @@ import {
   type MappingInput,
   type ProgressData,
   type ProgressDataResponse,
+  type SingleMappingBody,
   type UploadProgress,
   type ElementProgressMappingLegacy,
 } from './types';
+import type { ElementInfo } from '../viewer/elementPicker';
 
 // ─── Sabitler ────────────────────────────────────────────────────────────────
 
@@ -307,25 +311,50 @@ export class BIMApiClient {
    * Bir IFC elementini bir BuildingAI iş kalemine eşler (veya günceller).
    *
    * Backend UPSERT yapar: aynı (model, globalId) çifti varsa günceller,
-   * yoksa ekler.
+   * yoksa ekler. İsteğe bağlı metraj ve IFC metadata alanları da kaydedilir.
    *
    * @param modelId      - BIM model ID'si
-   * @param ifcGlobalId  - IFC elementinin GlobalId değeri
-   * @param isKalemiId   - BuildingAI iş kalemi ID'si
+   * @param body         - Eşleştirme verisi (ifc_global_id, is_kalemi_id, + opsiyonel alanlar)
    */
-  async saveMapping(
-    modelId: number,
-    ifcGlobalId: string,
-    isKalemiId: number,
-  ): Promise<void> {
+  async saveMapping(modelId: number, body: SingleMappingBody): Promise<void> {
     await this._fetchWithRetry(
       `${this._baseUrl}/api/bim/model/${modelId}/mapping`,
       {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ ifc_global_id: ifcGlobalId, is_kalemi_id: isKalemiId }),
+        body:    JSON.stringify(body),
       },
     );
+  }
+
+  /**
+   * IFC elementi için Gemini destekli iş kalemi önerisi alır.
+   *
+   * @param santiyeId   - Şantiye ID'si (filtreleme için)
+   * @param elementInfo - Seçili IFC elementinin bilgileri
+   * @returns AISuggestionResponse — öneriler dizisi
+   */
+  async suggestMapping(
+    santiyeId: number,
+    elementInfo: ElementInfo,
+  ): Promise<AISuggestionResponse> {
+    const response = await this._fetchWithRetry(
+      `${this._baseUrl}/api/bim/ai/eslestirme-oner`,
+      {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          santiye_id: santiyeId,
+          element: {
+            ifc_type:       elementInfo.ifcType,
+            name:           elementInfo.name,
+            storey:         elementInfo.storey,
+            properties:     elementInfo.properties,
+          },
+        }),
+      },
+    );
+    return response.json() as Promise<AISuggestionResponse>;
   }
 
   // ─── Toplu Eşleştirme ────────────────────────────────────────────────────
