@@ -50,10 +50,17 @@
     if (site && site.id) localStorage.setItem('varsayilan_santiye', JSON.stringify(site));
   }
 
-  function getActiveSite() {
+  function getManualActiveSite() {
     if (window._kpAktifSantiye && window._kpAktifSantiye.id) return window._kpAktifSantiye;
     var stored = getStoredSite();
-    return stored && stored.id ? stored : null;
+    if (stored && stored.id) return stored;
+    var list = Array.isArray(window._kpSantiyeler) ? window._kpSantiyeler : [];
+    if (list.length === 1 && list[0] && list[0].id) return list[0];
+    return null;
+  }
+
+  function getActiveSite() {
+    return getManualActiveSite();
   }
 
   function getActiveSiteId() {
