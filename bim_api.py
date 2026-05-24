@@ -100,6 +100,11 @@ def _bim_kullanici_dogrula(request: Request, db: Session) -> models.User:
 class MappingItem(BaseModel):
     ifc_global_id: str
     is_kalemi_id: int
+    ifc_tip: Optional[str] = None
+    ifc_kat: Optional[str] = None
+    metraj: Optional[float] = None
+    metraj_birimi: Optional[str] = None
+    metraj_kaynagi: Optional[str] = None  # "ifc_quantity" | "manuel"
 
 
 class BulkMappingBody(BaseModel):
@@ -109,6 +114,11 @@ class BulkMappingBody(BaseModel):
 class SingleMappingBody(BaseModel):
     ifc_global_id: str
     is_kalemi_id: int
+    ifc_tip: Optional[str] = None
+    ifc_kat: Optional[str] = None
+    metraj: Optional[float] = None
+    metraj_birimi: Optional[str] = None
+    metraj_kaynagi: Optional[str] = None  # "ifc_quantity" | "manuel"
 
 
 class SuggestBody(BaseModel):
@@ -492,29 +502,42 @@ async def bim_mapping_kaydet(
     ).first()
 
     if eslestirme:
-        eslestirme.is_kalemi_id = body.is_kalemi_id
-        eslestirme.eslestiren_kullanici_id = user.id
-        eslestirme.eslestirme_tarihi = dt.utcnow()
+        eslestirme.is_kalemi_id             = body.is_kalemi_id
+        eslestirme.eslestiren_kullanici_id  = user.id
+        eslestirme.eslestirme_tarihi        = dt.utcnow()
+        if body.ifc_tip       is not None: eslestirme.ifc_tip       = body.ifc_tip
+        if body.ifc_kat       is not None: eslestirme.ifc_kat       = body.ifc_kat
+        if body.metraj        is not None: eslestirme.metraj        = body.metraj
+        if body.metraj_birimi is not None: eslestirme.metraj_birimi = body.metraj_birimi
+        if body.metraj_kaynagi is not None: eslestirme.metraj_kaynagi = body.metraj_kaynagi
     else:
         eslestirme = models.BimElementEslestirme(
-            bim_model_id=model_id,
-            ifc_global_id=body.ifc_global_id,
-            is_kalemi_id=body.is_kalemi_id,
-            eslestiren_kullanici_id=user.id,
+            bim_model_id            = model_id,
+            ifc_global_id           = body.ifc_global_id,
+            is_kalemi_id            = body.is_kalemi_id,
+            eslestiren_kullanici_id = user.id,
+            ifc_tip                 = body.ifc_tip,
+            ifc_kat                 = body.ifc_kat,
+            metraj                  = body.metraj,
+            metraj_birimi           = body.metraj_birimi,
+            metraj_kaynagi          = body.metraj_kaynagi,
         )
         db.add(eslestirme)
 
     db.commit()
 
     logger.info(
-        "BIM mapping: model=%d global_id=%s → is_kalemi=%d user=%s",
-        model_id, body.ifc_global_id, body.is_kalemi_id, user.email,
+        "BIM mapping: model=%d global_id=%s → is_kalemi=%d metraj=%s%s user=%s",
+        model_id, body.ifc_global_id, body.is_kalemi_id,
+        body.metraj, body.metraj_birimi or "", user.email,
     )
     return {
-        "status": "ok",
-        "model_id": model_id,
+        "status":        "ok",
+        "model_id":      model_id,
         "ifc_global_id": body.ifc_global_id,
-        "is_kalemi_id": body.is_kalemi_id,
+        "is_kalemi_id":  body.is_kalemi_id,
+        "metraj":        body.metraj,
+        "metraj_birimi": body.metraj_birimi,
     }
 
 
@@ -553,15 +576,25 @@ async def bim_mapping_bulk(
                     ifc_global_id=item.ifc_global_id,
                 ).first()
                 if eslestirme:
-                    eslestirme.is_kalemi_id = item.is_kalemi_id
+                    eslestirme.is_kalemi_id            = item.is_kalemi_id
                     eslestirme.eslestiren_kullanici_id = user.id
-                    eslestirme.eslestirme_tarihi = dt.utcnow()
+                    eslestirme.eslestirme_tarihi       = dt.utcnow()
+                    if item.ifc_tip        is not None: eslestirme.ifc_tip        = item.ifc_tip
+                    if item.ifc_kat        is not None: eslestirme.ifc_kat        = item.ifc_kat
+                    if item.metraj         is not None: eslestirme.metraj         = item.metraj
+                    if item.metraj_birimi  is not None: eslestirme.metraj_birimi  = item.metraj_birimi
+                    if item.metraj_kaynagi is not None: eslestirme.metraj_kaynagi = item.metraj_kaynagi
                 else:
                     db.add(models.BimElementEslestirme(
-                        bim_model_id=model_id,
-                        ifc_global_id=item.ifc_global_id,
-                        is_kalemi_id=item.is_kalemi_id,
-                        eslestiren_kullanici_id=user.id,
+                        bim_model_id            = model_id,
+                        ifc_global_id           = item.ifc_global_id,
+                        is_kalemi_id            = item.is_kalemi_id,
+                        eslestiren_kullanici_id = user.id,
+                        ifc_tip                 = item.ifc_tip,
+                        ifc_kat                 = item.ifc_kat,
+                        metraj                  = item.metraj,
+                        metraj_birimi           = item.metraj_birimi,
+                        metraj_kaynagi          = item.metraj_kaynagi,
                     ))
             basarili += 1
         except Exception as exc:

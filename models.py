@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, UniqueConstraint, Float
 from sqlalchemy.orm import relationship
 from database import Base
 import datetime
@@ -51,6 +51,9 @@ class User(Base):
     auth_provider    = Column(String, default="local", nullable=False)
     google_sub       = Column(String, unique=True, nullable=True)
     email_verified   = Column(Boolean, default=False, nullable=False)
+    avatar_url       = Column(String, nullable=True, default=None)
+    avatar_position  = Column(String, nullable=True, default="50% 50%")
+    avatar_scale     = Column(String, nullable=True, default="1")
     created_at       = Column(DateTime, default=datetime.datetime.utcnow)
 
     reports          = relationship("Report", back_populates="owner")
@@ -105,6 +108,86 @@ class MalzemeFiyat(Base):
     giren_id   = Column(Integer, nullable=True)  # user_id who entered
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
+class OzelMalzeme(Base):
+    __tablename__ = "ozel_malzeme"
+    id              = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, nullable=False, index=True)
+    malzeme_key     = Column(String, nullable=False)
+    ad              = Column(String, nullable=False)
+    birim           = Column(String, nullable=False)
+    created_by      = Column(Integer, nullable=False)
+    created_at      = Column(DateTime, default=datetime.datetime.utcnow)
+    aktif           = Column(Boolean, default=True)
+
+class MalzemeKatalog(Base):
+    __tablename__ = "malzeme_katalog"
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, nullable=False, unique=True)
+    ad = Column(String, nullable=False)
+    varsayilan_birim = Column(String, nullable=False)
+    kategori = Column(String, default="genel")
+    sistem = Column(Boolean, default=True)
+    organization_id = Column(Integer, nullable=True)
+    aktif = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class MalzemeCesit(Base):
+    __tablename__ = "malzeme_cesit"
+    id = Column(Integer, primary_key=True, index=True)
+    katalog_id = Column(Integer, nullable=False, index=True)
+    key = Column(String, nullable=False)
+    ad = Column(String, nullable=False)
+    birim = Column(String, nullable=False)
+    min_fiyat = Column(Float, nullable=True)
+    max_fiyat = Column(Float, nullable=True)
+    sistem = Column(Boolean, default=True)
+    organization_id = Column(Integer, nullable=True)
+    aktif = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class Tedarikci(Base):
+    __tablename__ = "tedarikci"
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, nullable=False, index=True)
+    ad = Column(String, nullable=False)
+    yetkili_kisi = Column(String, nullable=True)
+    telefon = Column(String, nullable=True)
+    email = Column(String, nullable=True)
+    sehir = Column(String, nullable=True)
+    vergi_no = Column(String, nullable=True)
+    adres = Column(String, nullable=True)
+    notlar = Column(String, nullable=True)
+    aktif = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class SatinAlma(Base):
+    __tablename__ = "satin_alma"
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, nullable=False, index=True)
+    santiye_id = Column(Integer, nullable=True)
+    tedarikci_id = Column(Integer, nullable=True)
+    cesit_id = Column(Integer, nullable=True)
+    malzeme_ad = Column(String, nullable=True)
+    miktar = Column(Float, nullable=False)
+    birim = Column(String, nullable=True)
+    birim_fiyat = Column(Float, nullable=False)
+    toplam_tutar = Column(Float, nullable=True)
+    fatura_no = Column(String, nullable=True)
+    durum = Column(String, default="onaylandi")
+    giren_id = Column(Integer, nullable=True)
+    tarih = Column(DateTime, nullable=True)
+    notlar = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class DashboardAyar(Base):
+    __tablename__ = "dashboard_ayar"
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, nullable=False, index=True)
+    cesit_id = Column(Integer, nullable=True)
+    santiye_id = Column(Integer, nullable=True)
+    siralama = Column(Integer, default=0)
+    aktif = Column(Boolean, default=True)
+
 class MalzemeUyari(Base):
     __tablename__ = "malzeme_uyari"
     id         = Column(Integer, primary_key=True, index=True)
@@ -113,9 +196,11 @@ class MalzemeUyari(Base):
     onceki     = Column(String, nullable=False)  # TODO(PostgreSQL): Numeric olarak güncellenmeli
     yeni       = Column(String, nullable=False)  # TODO(PostgreSQL): Numeric olarak güncellenmeli
     degisim    = Column(String, nullable=False)  # TODO(PostgreSQL): Numeric veya Float (Yüzdelik değişim için) olmalı
+    santiye_id = Column(Integer, nullable=True)
     status     = Column(String, default="pending", index=True)  # pending | in_review | approved | rejected | correction_requested
     decided_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
 
 class ReviewDecision(Base):
     __tablename__ = "review_decisions"
@@ -145,13 +230,39 @@ class Stok(Base):
     santiye_id = Column(Integer, ForeignKey("santiyeler.id"), nullable=True)
     malzeme    = Column(String, nullable=False)  # 'demir', 'cimento', 'beton', 'tugla', 'kum', 'diger'
     malzeme_ad = Column(String, default="")      # custom name if 'diger'
-    miktar     = Column(String, nullable=False)  # TODO(PostgreSQL): String yerine Float/Numeric olmalı e.g. 5.5
+    miktar     = Column(Float, nullable=True)
     birim      = Column(String, default="")      # 'ton', 'm³', 'adet', 'çuval'
     tip        = Column(String, nullable=False)  # 'giris' | 'cikis'
     tedarikci  = Column(String, default="")
-    fiyat      = Column(String, default="")      # TODO(PostgreSQL): String yerine Numeric olmalı
+    fiyat      = Column(Float, nullable=True)
     notlar     = Column(String, default="")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class StokHareket(Base):
+    __tablename__ = "stok_hareketler"
+    id              = Column(Integer, primary_key=True)
+    malzeme         = Column(String)
+    malzeme_ad      = Column(String, nullable=True)
+    miktar          = Column(Float)
+    fiyat           = Column(Float, nullable=True)
+    tip             = Column(String)                  # 'giris' | 'cikis'
+    kaynak          = Column(String, nullable=True)   # 'manuel' | 'sarf' | 'ai_asistan'
+    kullanici_id    = Column(Integer, ForeignKey("users.id"))
+    santiye_id      = Column(Integer, ForeignKey("santiyeler.id"), nullable=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"))
+    notlar          = Column(String, nullable=True)
+    created_at      = Column(DateTime, default=datetime.datetime.utcnow)
+
+class StokEsik(Base):
+    __tablename__ = "stok_esik"
+    id              = Column(Integer, primary_key=True)
+    malzeme         = Column(String)
+    malzeme_ad      = Column(String, nullable=True)
+    min_miktar      = Column(Float, default=0)
+    max_miktar      = Column(Float, nullable=True)
+    santiye_id      = Column(Integer, ForeignKey("santiyeler.id"), nullable=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"))
+    created_at      = Column(DateTime, default=datetime.datetime.utcnow)
 
 class Santiye(Base):
     __tablename__ = "santiyeler"
@@ -160,6 +271,7 @@ class Santiye(Base):
     user_id      = Column(Integer, ForeignKey("users.id"), nullable=False)
     ad           = Column(String, nullable=False)
     konum        = Column(String, default="")
+    sehir        = Column(String, nullable=True)
     lat          = Column(String, default="")    # TODO(PostgreSQL): String yerine Float veya PostGIS Geometry/Geography
     lon          = Column(String, default="")    # TODO(PostgreSQL): String yerine Float veya PostGIS Geometry/Geography
     ilerleme     = Column(Integer, default=0)      # 0-100
@@ -185,6 +297,7 @@ class Camera(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     owner      = relationship("User", back_populates="cameras")
+
 
 class ArchiveRecord(Base):
     __tablename__ = "archive_records"
@@ -213,6 +326,16 @@ class ArchiveRecord(Base):
     gps_lon         = Column(String, default="")
     exif_payload    = Column(Text, default="")
     ai_suggestions  = Column(Text, default="")
+    ai_status       = Column(String, default="none", index=True)  # none | processing | ready | failed
+    ai_suggestion_json = Column(Text, default="")
+    ai_description  = Column(Text, default="")
+    ai_risk_level   = Column(String, default="")
+    ai_detected_type = Column(String, default="")
+    final_description = Column(Text, default="")
+    final_risk_level = Column(String, default="")
+    reviewed_by     = Column(Integer, nullable=True, index=True)
+    reviewed_at     = Column(DateTime, nullable=True, index=True)
+    review_note     = Column(Text, default="")
     status          = Column(String, default="active", index=True)   # active | archived | deleted
     verification_status = Column(String, default="DRAFT", index=True)
     workflow_status = Column(String, default="NEW", index=True)
@@ -255,6 +378,15 @@ class DailyReportItem(Base):
     created_at      = Column(DateTime, default=dt.utcnow, index=True)
     updated_at      = Column(DateTime, default=dt.utcnow)
 
+
+class DailyReportSahaKaydi(Base):
+    __tablename__ = "daily_report_saha_kayitlari"
+    id              = Column(Integer, primary_key=True, index=True)
+    report_id       = Column(Integer, ForeignKey("daily_reports.id"), nullable=False, index=True)
+    saha_kaydi_id   = Column(Integer, ForeignKey("archive_records.id"), nullable=False, index=True)
+    included_at     = Column(DateTime, default=dt.utcnow, index=True)
+    snapshot_json   = Column(Text, default="")
+
 class ResetToken(Base):
     __tablename__ = "reset_tokens"
     id         = Column(Integer, primary_key=True)
@@ -296,6 +428,7 @@ class VideoAnaliz(Base):
     tespitler       = Column(Text, default="[]")         # JSON raw YOLO detections (tek kare için)
     created_at      = Column(DateTime, default=dt.utcnow, index=True)
 
+
 class DecisionMessage(Base):
     __tablename__ = "decision_messages"
     id          = Column(Integer, primary_key=True, index=True)
@@ -304,3 +437,232 @@ class DecisionMessage(Base):
     user_id     = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     message     = Column(Text, nullable=False)
     created_at  = Column(DateTime, default=dt.utcnow, nullable=False, index=True)
+
+
+# ─────────────────────────────────────────────
+# Hiyerarşi Modelleri: Bina → Kat → Mahal → İş Kalemi
+# ─────────────────────────────────────────────
+
+class Bina(Base):
+    __tablename__ = "binalar"
+    id           = Column(Integer, primary_key=True, index=True)
+    santiye_id   = Column(Integer, ForeignKey("santiyeler.id", ondelete="CASCADE"), nullable=False, index=True)
+    ad           = Column(String, nullable=False)
+    bina_tipi    = Column(String, default="konut")  # konut | ticari | sanayi | karma
+    toplam_kat   = Column(Integer, nullable=True)
+    created_at   = Column(DateTime, default=dt.utcnow)
+
+    santiye      = relationship("Santiye", back_populates="binalar")
+    katlar       = relationship("Kat", back_populates="bina", cascade="all, delete-orphan")
+
+
+class Kat(Base):
+    __tablename__ = "katlar"
+    id           = Column(Integer, primary_key=True, index=True)
+    bina_id      = Column(Integer, ForeignKey("binalar.id", ondelete="CASCADE"), nullable=False, index=True)
+    kat_no       = Column(Integer, nullable=False)
+    etiket       = Column(String, nullable=True)   # ör: "Zemin Kat", "1. Normal Kat", "Çatı"
+    brut_alan_m2 = Column(Float, nullable=True)
+    created_at   = Column(DateTime, default=dt.utcnow)
+
+    bina         = relationship("Bina", back_populates="katlar")
+    mahaller     = relationship("Mahal", back_populates="kat", cascade="all, delete-orphan")
+
+
+class Mahal(Base):
+    __tablename__ = "mahaller"
+    id           = Column(Integer, primary_key=True, index=True)
+    kat_id       = Column(Integer, ForeignKey("katlar.id", ondelete="CASCADE"), nullable=False, index=True)
+    ad           = Column(String, nullable=False)
+    mahal_tipi   = Column(String, nullable=True)  # salon | yatak_odasi | banyo | koridor | merdiven | genel
+    alan_m2      = Column(Float, nullable=True)
+    created_at   = Column(DateTime, default=dt.utcnow)
+
+    kat          = relationship("Kat", back_populates="mahaller")
+    is_kalemleri = relationship("IsKalemi", back_populates="mahal")
+
+
+class IsKalemi(Base):
+    __tablename__ = "is_kalemleri"
+    id            = Column(Integer, primary_key=True, index=True)
+    mahal_id      = Column(Integer, ForeignKey("mahaller.id", ondelete="SET NULL"), nullable=True, index=True)
+    santiye_id    = Column(Integer, ForeignKey("santiyeler.id", ondelete="CASCADE"), nullable=False, index=True)
+    katalog_id    = Column(Integer, ForeignKey("csb_is_kalemi_katalog.id"), nullable=True, index=True)
+    poz_no        = Column(String, nullable=True)   # Türk metraj poz no, ör: "04.613/2A"
+    tanim         = Column(String, nullable=False)
+    birim         = Column(String, nullable=False)  # m2, m3, kg, mt, adet, ton vb.
+    metraj        = Column(Float, nullable=False, default=0)
+    birim_fiyat   = Column(Integer, nullable=False, default=0)   # KURUŞ cinsinden
+    toplam_fiyat  = Column(Integer, nullable=False, default=0)   # KURUŞ cinsinden
+    durum         = Column(String, default="planli")             # planli | devam_eden | tamamlandi | iptal
+    created_at    = Column(DateTime, default=dt.utcnow)
+    updated_at    = Column(DateTime, default=dt.utcnow)
+
+    mahal              = relationship("Mahal", back_populates="is_kalemleri")
+    katalog            = relationship("CsbIsKalemiKatalog", back_populates="is_kalemleri")
+    ilerleme_kayitlari = relationship("IlerlemeKaydi", back_populates="is_kalemi", cascade="all, delete-orphan")
+    malzemeler         = relationship("IsKalemiMalzeme", back_populates="is_kalemi", cascade="all, delete-orphan")
+
+
+class IlerlemeKaydi(Base):
+    __tablename__ = "ilerleme_kayitlari"
+    id             = Column(Integer, primary_key=True, index=True)
+    is_kalemi_id   = Column(Integer, ForeignKey("is_kalemleri.id", ondelete="CASCADE"), nullable=False, index=True)
+    raporlayan_id  = Column(Integer, ForeignKey("users.id"), nullable=True)
+    yuzde          = Column(Float, nullable=False, default=0)  # 0-100
+    tarih          = Column(String, nullable=False)            # DATE olarak TEXT saklanır (ISO 8601)
+    notlar         = Column(Text, nullable=True)
+    created_at     = Column(DateTime, default=dt.utcnow)
+
+    is_kalemi      = relationship("IsKalemi", back_populates="ilerleme_kayitlari")
+
+
+class IsKalemiMalzeme(Base):
+    """İş kalemi ↔ malzeme_katalog bağlantı tablosu."""
+    __tablename__ = "is_kalemi_malzeme"
+    __table_args__ = (
+        UniqueConstraint("is_kalemi_id", "malzeme_katalog_id", name="uq_ik_malzeme"),
+    )
+    id                 = Column(Integer, primary_key=True, index=True)
+    is_kalemi_id       = Column(Integer, ForeignKey("is_kalemleri.id", ondelete="CASCADE"), nullable=False, index=True)
+    malzeme_katalog_id = Column(Integer, ForeignKey("malzeme_katalog.id", ondelete="CASCADE"), nullable=False, index=True)
+    miktar             = Column(Float, nullable=False, default=1.0)
+    birim              = Column(String, nullable=True)
+    created_at         = Column(DateTime, default=dt.utcnow)
+
+    is_kalemi  = relationship("IsKalemi", back_populates="malzemeler")
+    malzeme    = relationship("MalzemeKatalog")
+
+
+# Santiye modeline binalar relationship'i eklenir (mevcut sınıf tanımı değiştirilmez)
+Santiye.binalar = relationship("Bina", back_populates="santiye", cascade="all, delete-orphan")
+
+
+# ─────────────────────────────────────────────
+# BIM Modelleri
+# ─────────────────────────────────────────────
+
+class BimModel(Base):
+    __tablename__ = "bim_modeller"
+    id                    = Column(Integer, primary_key=True, index=True)
+    santiye_id            = Column(Integer, ForeignKey("santiyeler.id", ondelete="CASCADE"), nullable=False, index=True)
+    blok_id               = Column(Integer, nullable=True)
+    dosya_adi             = Column(String, nullable=False)
+    orijinal_dosya_adi    = Column(String, nullable=False)
+    fragment_dosya_yolu   = Column(String, nullable=True)
+    ifc_dosya_yolu        = Column(String, nullable=True)
+    dosya_boyutu          = Column(Integer, nullable=True)
+    yukleme_tarihi        = Column(DateTime, default=dt.utcnow)
+    yukleyen_kullanici_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    durum                 = Column(String, default="aktif")
+    metadata_json         = Column(Text, nullable=True)
+
+    santiye       = relationship("Santiye")
+    eslestirmeler = relationship("BimElementEslestirme", back_populates="model", cascade="all, delete-orphan")
+
+
+class BimElementEslestirme(Base):
+    __tablename__ = "bim_element_eslestirme"
+    __table_args__ = (
+        UniqueConstraint("bim_model_id", "ifc_global_id", name="idx_bim_eslestirme_global_id"),
+    )
+    id                      = Column(Integer, primary_key=True, index=True)
+    bim_model_id            = Column(Integer, ForeignKey("bim_modeller.id", ondelete="CASCADE"), nullable=False, index=True)
+    ifc_global_id           = Column(String, nullable=False)
+    ifc_tip                 = Column(String, nullable=True)
+    ifc_kat                 = Column(String, nullable=True)
+    is_kalemi_id            = Column(Integer, ForeignKey("is_kalemleri.id"), nullable=True)
+    eslestirme_tarihi       = Column(DateTime, default=dt.utcnow)
+    eslestiren_kullanici_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    metraj                  = Column(Float, nullable=True)
+    metraj_birimi           = Column(String, nullable=True)
+    metraj_kaynagi          = Column(String, nullable=True)  # "ifc_quantity" | "manuel"
+
+    model     = relationship("BimModel", back_populates="eslestirmeler")
+    is_kalemi = relationship("IsKalemi")
+
+
+# ─────────────────────────────────────────────
+# ÇŞB Birim Fiyat Katalog Modelleri
+# ─────────────────────────────────────────────
+
+class CsbIsKalemiKatalog(Base):
+    __tablename__ = "csb_is_kalemi_katalog"
+    id       = Column(Integer, primary_key=True, index=True)
+    poz_no   = Column(String, unique=True, nullable=False, index=True)
+    grup     = Column(String, nullable=False)
+    alt_grup = Column(String, nullable=True)
+    ad       = Column(String, nullable=False)
+    birim    = Column(String, nullable=False)
+    aciklama = Column(Text, nullable=True)
+    aktif    = Column(Integer, default=1)
+
+    malzemeler   = relationship("CsbIsKalemiMalzeme", back_populates="is_kalemi")
+    is_kalemleri = relationship("IsKalemi", back_populates="katalog")
+
+
+class CsbIsKalemiMalzeme(Base):
+    """CSB iş kalemi kataloğu ↔ birleşik malzemeler tablosu ilişkisi."""
+    __tablename__ = "csb_is_kalemi_malzeme"
+    __table_args__ = (
+        UniqueConstraint("is_kalemi_katalog_id", "malzeme_katalog_id",
+                         name="uq_csb_ik_m"),
+    )
+    id                   = Column(Integer, primary_key=True, index=True)
+    is_kalemi_katalog_id = Column(Integer, ForeignKey("csb_is_kalemi_katalog.id"), nullable=False, index=True)
+    malzeme_katalog_id   = Column(Integer, ForeignKey("malzemeler.id"), nullable=False, index=True)
+    miktar               = Column(Float, nullable=False)
+    birim                = Column(String, nullable=False)
+    zorunlu              = Column(Integer, default=1)
+    aciklama             = Column(Text, nullable=True)
+
+    is_kalemi = relationship("CsbIsKalemiKatalog", back_populates="malzemeler")
+
+
+# ─────────────────────────────────────────────
+# Hakediş Modeli
+# ─────────────────────────────────────────────
+
+class Hakedis(Base):
+    __tablename__ = "hakedisler"
+    __table_args__ = (
+        UniqueConstraint("santiye_id", "hakedis_no", name="uq_hakedis_santiye_no"),
+    )
+    id                = Column(Integer, primary_key=True, index=True)
+    organization_id   = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+    santiye_id        = Column(Integer, ForeignKey("santiyeler.id", ondelete="CASCADE"), nullable=False, index=True)
+    hakedis_no        = Column(Integer, nullable=False)
+    donem_baslangic   = Column(String, nullable=False)
+    donem_bitis       = Column(String, nullable=False)
+    durum             = Column(String, default="taslak", index=True)  # taslak | onay_bekliyor | onaylandi | reddedildi
+    hazirlayan_id     = Column(Integer, ForeignKey("users.id"), nullable=True)
+    onaylayan_id      = Column(Integer, ForeignKey("users.id"), nullable=True)
+    toplam_tutar      = Column(Integer, default=0)       # kuruş cinsinden
+    onceki_toplam     = Column(Integer, default=0)       # kuruş — önceki hakedişlerin kümülatif toplamı
+    notlar            = Column(Text, nullable=True)
+    created_at        = Column(DateTime, default=dt.utcnow)
+    updated_at        = Column(DateTime, default=dt.utcnow)
+
+    santiye           = relationship("Santiye")
+    kalemler          = relationship("HakedisKalemi", back_populates="hakedis", cascade="all, delete-orphan")
+
+
+class HakedisKalemi(Base):
+    __tablename__ = "hakedis_kalemleri"
+    __table_args__ = (
+        UniqueConstraint("hakedis_id", "is_kalemi_id", name="uq_hakedis_kalem"),
+    )
+    id                   = Column(Integer, primary_key=True, index=True)
+    hakedis_id           = Column(Integer, ForeignKey("hakedisler.id", ondelete="CASCADE"), nullable=False, index=True)
+    is_kalemi_id         = Column(Integer, ForeignKey("is_kalemleri.id", ondelete="CASCADE"), nullable=False, index=True)
+    sozlesme_metraj      = Column(Float, default=0)
+    onceki_toplam_miktar = Column(Float, default=0)
+    bu_donem_miktar      = Column(Float, default=0)
+    kumulatif_miktar     = Column(Float, default=0)
+    birim_fiyat          = Column(Integer, default=0)     # kuruş — snapshot
+    bu_donem_tutar       = Column(Integer, default=0)     # kuruş
+    kumulatif_tutar      = Column(Integer, default=0)     # kuruş
+    notlar               = Column(Text, nullable=True)
+
+    hakedis              = relationship("Hakedis", back_populates="kalemler")
+    is_kalemi            = relationship("IsKalemi")
