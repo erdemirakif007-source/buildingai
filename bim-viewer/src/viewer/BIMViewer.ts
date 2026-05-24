@@ -1276,7 +1276,7 @@ export class BIMViewer {
    * Bilinen aday key'leri sırayla dener; bulunan ilk geçerli tamsayıyı döner.
    */
   private _readSantiyeIdFromLocalStorage(): number | null {
-    const candidates = ['bai_santiye_id', 'bai_secili_santiye', 'selectedSantiye', 'santiye_id'];
+    const candidates = ['bai_aktif_santiye', 'bai_santiye_id', 'bai_secili_santiye', 'selectedSantiye', 'santiye_id'];
     for (const key of candidates) {
       const val = localStorage.getItem(key);
       if (val) {
