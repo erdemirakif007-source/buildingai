@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Body, Request, Uplo
 from fastapi.responses import HTMLResponse, Response, JSONResponse, FileResponse, RedirectResponse
 from typing import Optional, List
 from pathlib import Path
+from contextlib import asynccontextmanager
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -53,6 +54,7 @@ def _get_redirect_uri(request: Request) -> str:
         return f"https://{PRODUCTION_DOMAIN}/auth/callback/"
     return LOCALHOST_CALLBACK
 import models, schemas, auth, database
+import bim_api
 from models import Santiye, ResetToken, LoginAttempt
 VERIFICATION_STATUSES = {"DRAFT", "VERIFIED", "REJECTED"}
 WORKFLOW_STATUSES = {"NEW", "ACKNOWLEDGED", "CLOSED"}
@@ -703,13 +705,17 @@ def _user_profile_payload(user: models.User) -> dict:
         "status": "success",
         "id": user.id,
         "user_id": user.id,
-        "full_name": user.full_name,
+        "full_name": user.full_name or "",
         "email": user.email,
+        "role": getattr(user, "role", "santi_sefi") or "santi_sefi",
         "plan": getattr(user, "plan", "free"),
         "is_admin": bool(getattr(user, "is_admin", False)),
+        "organization_id": getattr(user, "organization_id", None),
         "auth_provider": getattr(user, "auth_provider", "local") or "local",
         "email_verified": bool(getattr(user, "email_verified", False)),
         "has_password": bool(getattr(user, "hashed_password", None)),
+        "telefon": getattr(user, "telefon", "") or "",
+        "avatar_url": getattr(user, "avatar_url", None),
     }
 
 class InMemoryRateLimiter:
@@ -737,8 +743,47 @@ class InMemoryRateLimiter:
 
 global_rate_limiter = InMemoryRateLimiter(requests=120, window=60)
 
-app = FastAPI(dependencies=[Depends(global_rate_limiter)])
+_scraper_logger = logging.getLogger("buildingai.scheduler")
+
+async def _haftalik_scraper_calistir():
+    try:
+        from scraper.runner import run_all
+        _scraper_logger.info("Haftalik otomatik scraper baslatildi")
+        ozet = await run_all()
+        toplam = sum(v.get("eklendi", 0) for v in ozet.values())
+        hatali = [k for k, v in ozet.items() if v.get("hata")]
+        _scraper_logger.info("Haftalik scraper tamamlandi: +%d kayit, %d scraper basarili", toplam, len(ozet) - len(hatali))
+        if hatali:
+            _scraper_logger.warning("Hatali scraper'lar: %s", ", ".join(hatali))
+    except Exception as exc:
+        _scraper_logger.error("Haftalik scraper hatasi: %s", exc, exc_info=True)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        scheduler = AsyncIOScheduler(timezone="UTC")
+        scheduler.add_job(
+            _haftalik_scraper_calistir,
+            "cron",
+            day_of_week="mon",
+            hour=3,
+            minute=0,
+            id="haftalik_scraper",
+            replace_existing=True,
+        )
+        scheduler.start()
+        _scraper_logger.info("Haftalik scraper scheduler baslatildi (Her Pazartesi 03:00 UTC)")
+    except ImportError:
+        _scraper_logger.warning("APScheduler yuklu degil — haftalik scraper devre disi")
+        scheduler = None
+    yield
+    if scheduler and scheduler.running:
+        scheduler.shutdown(wait=False)
+
+app = FastAPI(dependencies=[Depends(global_rate_limiter)], lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
+app.include_router(bim_api.bim_router)
 
 import signal, sys
 def handle_shutdown(signum, frame):
@@ -775,7 +820,11 @@ app.add_middleware(
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
+    # bim-viewer sayfası kendi içinden iframe olarak gömülüyor — SAMEORIGIN izni gerekli
+    if request.url.path.startswith("/bim-viewer"):
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    else:
+        response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     return response
@@ -1291,7 +1340,12 @@ async def google_callback(request: Request, code: Optional[str] = None, error: O
 
 @app.get("/beni-tanı")
 @limiter.limit("60/minute")
-def beni_tani(request: Request, token: str, db: Session = Depends(database.get_db)):
+def beni_tani(request: Request, token: str = "", db: Session = Depends(database.get_db)):
+    if not token:
+        auth_header = request.headers.get("Authorization", "")
+        token = auth_header.replace("Bearer ", "").strip() if auth_header else ""
+    if not token:
+        raise HTTPException(status_code=422, detail="Token gerekli.")
     try:
         payload = auth.verify_token(token)
         email = payload.get("email")
@@ -1299,6 +1353,8 @@ def beni_tani(request: Request, token: str, db: Session = Depends(database.get_d
         if not user:
             raise HTTPException(status_code=401, detail="Kullanıcı bulunamadı.")
         return _user_profile_payload(user)
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(status_code=401, detail="Token geçersiz veya süresi dolmuş.")
 
@@ -1533,6 +1589,12 @@ async def sesli_oku(request: Request, payload: dict = Body(...)):
 
 # --- 📸 KAMERA ANALİZİ ---
 ADMIN_EMAIL = "erdemirakif007@gmail.com"
+
+def _request_token(request: Request) -> str:
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        return auth_header[7:].strip()
+    return request.query_params.get("token", "")
 
 def kullanici_dogrula(token: str, db: Session):
     try:
@@ -2029,6 +2091,24 @@ def _extract_video_metadata(file_path: Path) -> dict:
         if cap is not None:
             cap.release()
     return metadata
+
+
+def get_allowed_santiye_ids(user, db: Session) -> Optional[list]:
+    """Return list of santiye IDs the user can access, or None if all are allowed."""
+    if not user.organization_id:
+        return None
+    org = db.query(models.Organization).filter(models.Organization.id == user.organization_id).first()
+    if org and org.owner_user_id == user.id:
+        return None
+    members = db.query(models.ProjectMember).filter(
+        models.ProjectMember.user_id == user.id,
+        models.ProjectMember.organization_id == user.organization_id,
+        models.ProjectMember.status == "active",
+    ).all()
+    if not members:
+        return None
+    ids = [m.santiye_id for m in members if m.santiye_id]
+    return ids if ids else None
 
 
 def _santiye_kontrol(organization_id: Optional[int], santiye_id: Optional[int], db: Session) -> Optional[models.Santiye]:
@@ -2941,7 +3021,9 @@ def arsiv_detay(request: Request, tip: str, id: int, db: Session = Depends(datab
 
 @app.delete("/kanit-sil/{id}")
 @limiter.limit("60/minute")
-def kanit_sil(request: Request, id: int, token: str, db: Session = Depends(database.get_db)):
+def kanit_sil(request: Request, id: int, token: str = "", db: Session = Depends(database.get_db)):
+    if not token:
+        token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
     user = kullanici_dogrula(token, db)
     item = db.query(models.KameraAnaliz).filter(models.KameraAnaliz.id == id, models.KameraAnaliz.user_id == user.id).first()
     if not item:
@@ -2952,7 +3034,9 @@ def kanit_sil(request: Request, id: int, token: str, db: Session = Depends(datab
 
 @app.delete("/rapor-sil/{id}")
 @limiter.limit("60/minute")
-def rapor_sil(request: Request, id: int, token: str, db: Session = Depends(database.get_db)):
+def rapor_sil(request: Request, id: int, token: str = "", db: Session = Depends(database.get_db)):
+    if not token:
+        token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
     user = kullanici_dogrula(token, db)
     item = db.query(models.Report).filter(models.Report.id == id, models.Report.user_id == user.id).first()
     if not item:
@@ -2964,7 +3048,9 @@ def rapor_sil(request: Request, id: int, token: str, db: Session = Depends(datab
 # --- 📷 KAMERA YÖNETİMİ ---
 @app.get("/cameras")
 @limiter.limit("60/minute")
-def cameras_list(request: Request, token: str, db: Session = Depends(database.get_db)):
+def cameras_list(request: Request, token: str = "", db: Session = Depends(database.get_db)):
+    if not token:
+        token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
     user = kullanici_dogrula(token, db)
     cams = db.query(models.Camera).filter(models.Camera.user_id == user.id).order_by(models.Camera.created_at.asc()).all()
     return [{"id": c.id, "name": c.name, "url": c.url, "location": c.location, "tip": c.tip, "aktif": c.aktif, "created_at": str(c.created_at)} for c in cams]
@@ -2991,7 +3077,9 @@ async def camera_ekle(request: Request, payload: dict = Body(...), db: Session =
 
 @app.delete("/cameras/{cam_id}")
 @limiter.limit("30/minute")
-def camera_sil(request: Request, cam_id: int, token: str, db: Session = Depends(database.get_db)):
+def camera_sil(request: Request, cam_id: int, token: str = "", db: Session = Depends(database.get_db)):
+    if not token:
+        token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
     user = kullanici_dogrula(token, db)
     cam = db.query(models.Camera).filter(models.Camera.id == cam_id, models.Camera.user_id == user.id).first()
     if not cam:
@@ -3003,7 +3091,9 @@ def camera_sil(request: Request, cam_id: int, token: str, db: Session = Depends(
 # --- 📊 KULLANIM DURUMU ---
 @app.get("/kullanim-durumu")
 @limiter.limit("60/minute")
-def kullanim_durumu(request: Request, token: str, db: Session = Depends(database.get_db)):
+def kullanim_durumu(request: Request, token: str = "", db: Session = Depends(database.get_db)):
+    if not token:
+        token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
     user = kullanici_dogrula(token, db)
     plan = get_user_plan(user)
 
@@ -3414,7 +3504,10 @@ Fiyatlar KDV dahil Türkiye ortalaması, gerçekçi trend göstermeli. 12 ay top
 
 # --- 📦 STOK YÖNETİMİ ---
 @app.get("/stok")
-def stok_getir(token: str, santiye_id: int = None, db: Session = Depends(database.get_db)):
+def stok_getir(request: Request, token: str = "", santiye_id: int = None, db: Session = Depends(database.get_db)):
+    if not token:
+        auth_header = request.headers.get("Authorization", "")
+        token = auth_header.replace("Bearer ", "").strip() if auth_header else ""
     user = kullanici_dogrula(token, db)
     plan = get_user_plan(user)
     if not get_plan_limit(plan, "stok"):
@@ -3485,7 +3578,10 @@ def stok_getir(token: str, santiye_id: int = None, db: Session = Depends(databas
             "santiye_adi": None, "gruplar": gruplar}
 
 @app.get("/stok-gecmis/{malzeme}")
-def stok_gecmis(malzeme: str, token: str, santiye_id: int = None, db: Session = Depends(database.get_db)):
+def stok_gecmis(request: Request, malzeme: str, token: str = "", santiye_id: int = None, db: Session = Depends(database.get_db)):
+    if not token:
+        auth_header = request.headers.get("Authorization", "")
+        token = auth_header.replace("Bearer ", "").strip() if auth_header else ""
     user = kullanici_dogrula(token, db)
     q = db.query(models.Stok).filter(
         models.Stok.user_id == user.id, models.Stok.malzeme == malzeme
@@ -3533,7 +3629,10 @@ def stok_ekle(payload: dict = Body(...), db: Session = Depends(database.get_db))
     return {"mesaj": "Stok kaydedildi.", "id": kayit.id}
 
 @app.delete("/stok-sil/{stok_id}")
-def stok_sil(stok_id: int, token: str, db: Session = Depends(database.get_db)):
+def stok_sil(request: Request, stok_id: int, token: str = "", db: Session = Depends(database.get_db)):
+    if not token:
+        auth_header = request.headers.get("Authorization", "")
+        token = auth_header.replace("Bearer ", "").strip() if auth_header else ""
     user = kullanici_dogrula(token, db)
     kayit = db.query(models.Stok).filter(models.Stok.id == stok_id, models.Stok.user_id == user.id).first()
     if not kayit:
@@ -3599,7 +3698,9 @@ def admin_panel_page(request: Request):
     return HTMLResponse(content=ADMIN_HTML)
 
 @app.get("/admin/kullanicilar")
-def admin_kullanicilar(token: str, db: Session = Depends(database.get_db)):
+def admin_kullanicilar(request: Request, token: str = "", db: Session = Depends(database.get_db)):
+    if not token:
+        token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
     admin_kontrol(token, db)
     users = db.query(models.User).order_by(models.User.created_at.desc()).all()
     return [
@@ -3629,7 +3730,9 @@ def admin_plan_degistir(payload: dict = Body(...), db: Session = Depends(databas
     return {"mesaj": f"{user.email} artik {yeni_plan.upper()} kullanici."}
 
 @app.delete("/admin/kullanici-sil/{user_id}")
-def admin_kullanici_sil(user_id: int, token: str, db: Session = Depends(database.get_db)):
+def admin_kullanici_sil(request: Request, user_id: int, token: str = "", db: Session = Depends(database.get_db)):
+    if not token:
+        token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
     admin_kontrol(token, db)
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
@@ -3639,7 +3742,9 @@ def admin_kullanici_sil(user_id: int, token: str, db: Session = Depends(database
     return {"mesaj": "Kullanici silindi."}
 
 @app.get("/admin/istatistikler")
-def admin_istatistikler(token: str, db: Session = Depends(database.get_db)):
+def admin_istatistikler(request: Request, token: str = "", db: Session = Depends(database.get_db)):
+    if not token:
+        token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
     admin_kontrol(token, db)
     toplam_kullanici = db.query(models.User).count()
     pro_kullanici = db.query(models.User).filter(models.User.plan == 'pro').count()
@@ -4355,4 +4460,1922 @@ def yolo_analiz_detay(
 def yolo_durum():
     """YOLO model durumunu ve OpenCV versiyonunu döner. Token gerekmez."""
     return _ka.model_durum()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# YENİ ENDPOINT'LER — Frontend tarafından çağrılan ama eksik olan endpoint'ler
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# --- 👤 PROFİL ---
+
+@app.get("/profil")
+@limiter.limit("60/minute")
+def profil_getir(request: Request, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    user = kullanici_dogrula(token, db)
+    return _user_profile_payload(user)
+
+
+@app.post("/profil")
+@limiter.limit("30/minute")
+async def profil_guncelle(request: Request, payload: dict = Body(default={}), db: Session = Depends(database.get_db)):
+    token = _request_token(request) or (payload or {}).get("token", "")
+    user = kullanici_dogrula(token, db)
+    if payload.get("full_name") is not None:
+        user.full_name = str(payload["full_name"])[:200]
+    if payload.get("telefon") is not None:
+        user.telefon = str(payload["telefon"])[:30]
+    if user.is_admin and payload.get("role"):
+        user.role = str(payload["role"])[:50]
+    db.commit()
+    db.refresh(user)
+    return _user_profile_payload(user)
+
+
+# --- 📸 KAMERA ANALİZLERİ (frontend /api/camera-analyses kullanıyor) ---
+
+@app.get("/api/camera-analyses")
+@limiter.limit("60/minute")
+def api_camera_analyses(request: Request, santiye_id: int = None, limit: int = 50, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    user = kullanici_dogrula(token, db)
+    q = db.query(models.ArchiveRecord).filter(
+        models.ArchiveRecord.user_id == user.id,
+        models.ArchiveRecord.status != "deleted",
+    )
+    if santiye_id:
+        q = q.filter(models.ArchiveRecord.santiye_id == santiye_id)
+    kayitlar = q.order_by(models.ArchiveRecord.created_at.desc()).limit(limit).all()
+    return {"analyses": [
+        {
+            "id": k.id, "title": k.title, "description": k.description,
+            "source_type": k.source_type, "media_type": k.media_type,
+            "thumbnail_url": k.thumbnail_url, "file_url": k.file_url,
+            "verification_status": k.verification_status, "status": k.status,
+            "zone_label": k.zone_label, "santiye_id": k.santiye_id,
+            "captured_at": str(k.captured_at or k.created_at)[:19],
+            "created_at": str(k.created_at)[:19],
+        } for k in kayitlar
+    ]}
+
+
+# --- 📋 SAHA KAYITLARI ---
+
+@app.get("/api/saha-kayitlari")
+@limiter.limit("60/minute")
+def api_saha_kayitlari(request: Request, santiye_id: int = None, limit: int = 50, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    user = kullanici_dogrula(token, db)
+    q = db.query(models.ArchiveRecord).filter(
+        models.ArchiveRecord.user_id == user.id,
+        models.ArchiveRecord.status == "active",
+    )
+    if santiye_id:
+        q = q.filter(models.ArchiveRecord.santiye_id == santiye_id)
+    kayitlar = q.order_by(models.ArchiveRecord.created_at.desc()).limit(limit).all()
+    return {"kayitlar": [
+        {
+            "id": k.id, "title": k.title, "description": k.description,
+            "source_type": k.source_type, "media_type": k.media_type,
+            "thumbnail_url": k.thumbnail_url, "file_url": k.file_url,
+            "verification_status": k.verification_status,
+            "zone_label": k.zone_label, "santiye_id": k.santiye_id,
+            "captured_at": str(k.captured_at or k.created_at)[:19],
+            "created_at": str(k.created_at)[:19],
+        } for k in kayitlar
+    ]}
+
+
+@app.get("/saha-kayitlari")
+async def saha_kayitlari_page(request: Request):
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/app")
+
+
+# --- 📦 ÖZEL MALZEMELER ---
+
+@app.get("/ozel-malzemeler")
+@limiter.limit("60/minute")
+def ozel_malzemeler_getir(request: Request, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    user = kullanici_dogrula(token, db)
+    if not user.organization_id:
+        return {"status": "success", "malzemeler": []}
+    kayitlar = db.query(models.OzelMalzeme).filter(
+        models.OzelMalzeme.organization_id == user.organization_id,
+        models.OzelMalzeme.aktif == True,
+    ).order_by(models.OzelMalzeme.ad).all()
+    return {"status": "success", "malzemeler": [
+        {"id": m.id, "key": m.malzeme_key, "ad": m.ad, "birim": m.birim} for m in kayitlar
+    ]}
+
+
+@app.post("/ozel-malzeme-ekle")
+@limiter.limit("30/minute")
+async def ozel_malzeme_ekle(request: Request, payload: dict = Body(...), db: Session = Depends(database.get_db)):
+    token = _request_token(request) or payload.get("token", "")
+    user = kullanici_dogrula(token, db)
+    if not user.organization_id:
+        raise HTTPException(status_code=400, detail="Organizasyona dahil olmanız gerekli.")
+    ad = (payload.get("ad") or "").strip()
+    birim = (payload.get("birim") or "").strip()
+    if not ad or not birim:
+        raise HTTPException(status_code=400, detail="Ad ve birim zorunludur.")
+    import uuid
+    key = f"ozel_{uuid.uuid4().hex[:8]}"
+    m = models.OzelMalzeme(
+        organization_id=user.organization_id,
+        malzeme_key=key, ad=ad, birim=birim, created_by=user.id,
+    )
+    db.add(m)
+    db.commit()
+    db.refresh(m)
+    return {"status": "success", "id": m.id, "key": m.malzeme_key, "ad": m.ad, "birim": m.birim}
+
+
+@app.post("/ozel-malzeme-sil")
+@limiter.limit("30/minute")
+async def ozel_malzeme_sil(request: Request, payload: dict = Body(...), db: Session = Depends(database.get_db)):
+    token = _request_token(request) or payload.get("token", "")
+    user = kullanici_dogrula(token, db)
+    mid = payload.get("id")
+    m = db.query(models.OzelMalzeme).filter(
+        models.OzelMalzeme.id == mid,
+        models.OzelMalzeme.organization_id == user.organization_id,
+    ).first()
+    if not m:
+        raise HTTPException(status_code=404, detail="Malzeme bulunamadı.")
+    m.aktif = False
+    db.commit()
+    return {"status": "success"}
+
+
+# --- 🧰 MALZEME KATEGORİLERİ (/api/malzemeler — FiyatTakip için) ---
+
+@app.get("/api/malzemeler")
+@limiter.limit("60/minute")
+def api_malzemeler(request: Request, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    user = kullanici_dogrula(token, db)
+    from sqlalchemy import text as _sql_text
+    # scrape malzeme tablosu (fiyat takibi için) — sadece scrape_tipi olan malzemeler
+    scrape_rows = db.execute(_sql_text(
+        "SELECT m.id, m.ad, m.birim, m.kategori, m.alt_kategori, "
+        "COUNT(sf.id) AS kayit_sayisi "
+        "FROM malzemeler m "
+        "LEFT JOIN scrape_fiyatlar sf ON sf.malzeme_id = m.id "
+        "WHERE m.aktif = 1 AND m.scrape_tipi IS NOT NULL "
+        "GROUP BY m.id ORDER BY m.ad"
+    )).fetchall()
+    scrape = [
+        {
+            "id": r[0], "ad": r[1], "birim": r[2],
+            "kategori": r[3] or "genel", "alt_kategori": r[4] or "",
+            "scrape_kayit_sayisi": r[5], "sistem": True,
+        }
+        for r in scrape_rows
+    ]
+    ozel = []
+    if user.organization_id:
+        ozel_rows = db.query(models.OzelMalzeme).filter(
+            models.OzelMalzeme.organization_id == user.organization_id,
+            models.OzelMalzeme.aktif == True,
+        ).all()
+        ozel = [
+            {"id": None, "key": m.malzeme_key, "ad": m.ad, "birim": m.birim, "kategori": "ozel", "sistem": False}
+            for m in ozel_rows
+        ]
+    return {"malzemeler": scrape + ozel}
+
+
+# --- 💰 FİYAT ALERTLER ---
+
+@app.get("/api/fiyat/alertler")
+@limiter.limit("60/minute")
+def fiyat_alertler(request: Request, limit: int = 20, status: str = "pending", db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    user = kullanici_dogrula(token, db)
+    org_id = user.organization_id
+    q = db.query(models.MalzemeUyari)
+    if org_id:
+        q = q.filter((models.MalzemeUyari.organization_id == org_id) | (models.MalzemeUyari.organization_id == None))
+    else:
+        q = q.filter(models.MalzemeUyari.organization_id == None)
+    def _sf(v):
+        try: return float(v)
+        except (TypeError, ValueError): return 0.0
+    alertler = q.order_by(models.MalzemeUyari.id.desc()).limit(limit).all()
+    return {"alertler": [
+        {
+            "id": a.id, "malzeme": a.malzeme,
+            "onceki": _sf(a.onceki), "yeni": _sf(a.yeni),
+            "degisim": _sf(a.degisim),
+            "tip": a.degisim if a.degisim and not a.degisim[0].isdigit() and a.degisim[0] not in ('+', '-') else None,
+            "status": a.status or "pending",
+            "created_at": str(a.created_at)[:19] if a.created_at else "",
+        } for a in alertler
+    ], "toplam": len(alertler)}
+
+
+# --- 📊 FİYAT MARKA KARŞILAŞTIRMA ---
+
+@app.get("/api/fiyat/marka-karsilastirma")
+@limiter.limit("60/minute")
+def fiyat_marka_karsilastirma(request: Request, alt_kategori: str = "", db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    q = db.query(models.MalzemeFiyat)
+    if alt_kategori:
+        q = q.filter(models.MalzemeFiyat.malzeme.ilike(f"%{alt_kategori}%"))
+    kayitlar = q.order_by(models.MalzemeFiyat.created_at.desc()).limit(100).all()
+    return {"karsilastirma": [
+        {
+            "malzeme": k.malzeme, "fiyat": float(k.fiyat or 0),
+            "birim": k.birim, "sehir": k.sehir, "kaynak": k.kaynak,
+            "tarih": str(k.created_at)[:10],
+        } for k in kayitlar
+    ]}
+
+
+# --- 🏗️ HİYERARŞİ (Bina/Kat/Mahal/İş Kalemleri) ---
+
+@app.get("/api/v2/santiye/{santiye_id}/hiyerarsi")
+@limiter.limit("60/minute")
+def santiye_hiyerarsi(request: Request, santiye_id: int, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    user = kullanici_dogrula(token, db)
+    santiye = db.query(Santiye).filter(Santiye.id == santiye_id).first()
+    if not santiye:
+        raise HTTPException(status_code=404, detail="Şantiye bulunamadı.")
+
+    def _ik_dict(k, mahal_ad=None):
+        son_ilerleme = db.query(models.IlerlemeKaydi).filter(
+            models.IlerlemeKaydi.is_kalemi_id == k.id
+        ).order_by(models.IlerlemeKaydi.created_at.desc()).first()
+        d = {
+            "id": k.id, "poz_no": k.poz_no or "",
+            "tanim": k.tanim, "birim": k.birim,
+            "metraj": k.metraj or 0,
+            "birim_fiyat_tl": (k.birim_fiyat or 0) / 100.0,
+            "toplam_fiyat_tl": (k.toplam_fiyat or 0) / 100.0,
+            "durum": k.durum or "planli",
+            "son_ilerleme_yuzde": son_ilerleme.yuzde if son_ilerleme else 0,
+        }
+        if mahal_ad is not None:
+            d["_mahalAd"] = mahal_ad
+        return d
+
+    binalar = db.query(models.Bina).filter(models.Bina.santiye_id == santiye_id).order_by(models.Bina.ad).all()
+    sonuc = []
+    for b in binalar:
+        katlar = db.query(models.Kat).filter(models.Kat.bina_id == b.id).order_by(models.Kat.kat_no).all()
+        kat_list = []
+        for k in katlar:
+            mahaller = db.query(models.Mahal).filter(models.Mahal.kat_id == k.id).order_by(models.Mahal.ad).all()
+            mahal_list = []
+            for m in mahaller:
+                ik_rows = db.query(models.IsKalemi).filter(
+                    models.IsKalemi.mahal_id == m.id
+                ).order_by(models.IsKalemi.id).all()
+                mahal_list.append({
+                    "id": m.id, "ad": m.ad, "alan": m.alan_m2,
+                    "is_kalemleri": [_ik_dict(ik) for ik in ik_rows],
+                })
+            kat_list.append({
+                "id": k.id, "kat_no": k.kat_no,
+                "etiket": k.etiket or f"Kat {k.kat_no}",
+                "mahaller": mahal_list,
+            })
+        sonuc.append({"id": b.id, "ad": b.ad, "katlar": kat_list})
+
+    mahalsiz_rows = db.query(models.IsKalemi).filter(
+        models.IsKalemi.santiye_id == santiye_id,
+        models.IsKalemi.mahal_id.is_(None),
+    ).order_by(models.IsKalemi.id).all()
+
+    return {
+        "santiye_id": santiye_id,
+        "binalar": sonuc,
+        "mahalsiz_is_kalemleri": [_ik_dict(k) for k in mahalsiz_rows],
+    }
+
+
+@app.get("/api/v2/santiye/{santiye_id}/is-kalemleri")
+@limiter.limit("60/minute")
+def santiye_is_kalemleri(request: Request, santiye_id: int, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    user = kullanici_dogrula(token, db)
+    santiye = db.query(Santiye).filter(Santiye.id == santiye_id).first()
+    if not santiye:
+        raise HTTPException(status_code=404, detail="Şantiye bulunamadı.")
+    kalemler = db.query(models.IsKalemi).filter(models.IsKalemi.santiye_id == santiye_id).order_by(models.IsKalemi.id).all()
+    return {"kalemler": [
+        {
+            "id": k.id, "ad": k.tanim, "birim": k.birim,
+            "miktar": k.metraj, "birim_fiyat": k.birim_fiyat / 100.0,
+            "toplam_fiyat": k.toplam_fiyat / 100.0, "durum": k.durum,
+        } for k in kalemler
+    ]}
+
+
+# --- 🏗️ HİYERARŞİ CRUD (Bina / Kat / Mahal / İş Kalemi / İlerleme) ---
+
+@app.post("/api/v2/santiye/{santiye_id}/binalar")
+@limiter.limit("60/minute")
+def bina_ekle(request: Request, santiye_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    santiye = db.query(Santiye).filter(Santiye.id == santiye_id).first()
+    if not santiye:
+        raise HTTPException(status_code=404, detail="Şantiye bulunamadı.")
+    ad = (body.get("ad") or "").strip()
+    if not ad:
+        raise HTTPException(status_code=422, detail="Bina adı zorunludur.")
+    bina = models.Bina(
+        santiye_id=santiye_id,
+        ad=ad,
+        bina_tipi=body.get("bina_tipi") or "konut",
+        toplam_kat=body.get("toplam_kat"),
+    )
+    db.add(bina)
+    db.commit()
+    db.refresh(bina)
+    return {"id": bina.id, "ad": bina.ad}
+
+
+@app.patch("/api/v2/binalar/{bina_id}")
+@limiter.limit("60/minute")
+def bina_guncelle(request: Request, bina_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    bina = db.query(models.Bina).filter(models.Bina.id == bina_id).first()
+    if not bina:
+        raise HTTPException(status_code=404, detail="Bina bulunamadı.")
+    if "ad" in body and body["ad"]:
+        bina.ad = body["ad"].strip()
+    if "bina_tipi" in body:
+        bina.bina_tipi = body["bina_tipi"]
+    if "toplam_kat" in body:
+        bina.toplam_kat = body["toplam_kat"]
+    db.commit()
+    return {"id": bina.id, "ad": bina.ad}
+
+
+@app.delete("/api/v2/binalar/{bina_id}")
+@limiter.limit("60/minute")
+def bina_sil(request: Request, bina_id: int, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    bina = db.query(models.Bina).filter(models.Bina.id == bina_id).first()
+    if not bina:
+        raise HTTPException(status_code=404, detail="Bina bulunamadı.")
+    db.delete(bina)
+    db.commit()
+    return {"ok": True}
+
+
+@app.post("/api/v2/bina/{bina_id}/katlar")
+@limiter.limit("60/minute")
+def kat_ekle(request: Request, bina_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    bina = db.query(models.Bina).filter(models.Bina.id == bina_id).first()
+    if not bina:
+        raise HTTPException(status_code=404, detail="Bina bulunamadı.")
+    kat_no = body.get("kat_no")
+    if kat_no is None:
+        raise HTTPException(status_code=422, detail="Kat numarası zorunludur.")
+    kat = models.Kat(
+        bina_id=bina_id,
+        kat_no=int(kat_no),
+        etiket=body.get("etiket") or None,
+        brut_alan_m2=body.get("brut_alan_m2"),
+    )
+    db.add(kat)
+    db.commit()
+    db.refresh(kat)
+    return {"id": kat.id, "kat_no": kat.kat_no, "etiket": kat.etiket}
+
+
+@app.patch("/api/v2/katlar/{kat_id}")
+@limiter.limit("60/minute")
+def kat_guncelle(request: Request, kat_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    kat = db.query(models.Kat).filter(models.Kat.id == kat_id).first()
+    if not kat:
+        raise HTTPException(status_code=404, detail="Kat bulunamadı.")
+    if "kat_no" in body and body["kat_no"] is not None:
+        kat.kat_no = int(body["kat_no"])
+    if "etiket" in body:
+        kat.etiket = body["etiket"] or None
+    if "brut_alan_m2" in body:
+        kat.brut_alan_m2 = body["brut_alan_m2"]
+    db.commit()
+    return {"id": kat.id, "kat_no": kat.kat_no}
+
+
+@app.delete("/api/v2/katlar/{kat_id}")
+@limiter.limit("60/minute")
+def kat_sil(request: Request, kat_id: int, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    kat = db.query(models.Kat).filter(models.Kat.id == kat_id).first()
+    if not kat:
+        raise HTTPException(status_code=404, detail="Kat bulunamadı.")
+    db.delete(kat)
+    db.commit()
+    return {"ok": True}
+
+
+@app.post("/api/v2/kat/{kat_id}/mahaller")
+@limiter.limit("60/minute")
+def mahal_ekle(request: Request, kat_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    kat = db.query(models.Kat).filter(models.Kat.id == kat_id).first()
+    if not kat:
+        raise HTTPException(status_code=404, detail="Kat bulunamadı.")
+    ad = (body.get("ad") or "").strip()
+    if not ad:
+        raise HTTPException(status_code=422, detail="Mahal adı zorunludur.")
+    mahal = models.Mahal(
+        kat_id=kat_id,
+        ad=ad,
+        mahal_tipi=body.get("mahal_tipi") or "genel",
+        alan_m2=body.get("alan_m2"),
+    )
+    db.add(mahal)
+    db.commit()
+    db.refresh(mahal)
+    return {"id": mahal.id, "ad": mahal.ad}
+
+
+@app.patch("/api/v2/mahaller/{mahal_id}")
+@limiter.limit("60/minute")
+def mahal_guncelle(request: Request, mahal_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    mahal = db.query(models.Mahal).filter(models.Mahal.id == mahal_id).first()
+    if not mahal:
+        raise HTTPException(status_code=404, detail="Mahal bulunamadı.")
+    if "ad" in body and body["ad"]:
+        mahal.ad = body["ad"].strip()
+    if "mahal_tipi" in body:
+        mahal.mahal_tipi = body["mahal_tipi"]
+    if "alan_m2" in body:
+        mahal.alan_m2 = body["alan_m2"]
+    db.commit()
+    return {"id": mahal.id, "ad": mahal.ad}
+
+
+@app.delete("/api/v2/mahaller/{mahal_id}")
+@limiter.limit("60/minute")
+def mahal_sil(request: Request, mahal_id: int, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    mahal = db.query(models.Mahal).filter(models.Mahal.id == mahal_id).first()
+    if not mahal:
+        raise HTTPException(status_code=404, detail="Mahal bulunamadı.")
+    db.delete(mahal)
+    db.commit()
+    return {"ok": True}
+
+
+def _is_kalemi_body_to_model(body: dict) -> dict:
+    birim_fiyat_tl = float(body.get("birim_fiyat_tl") or 0)
+    metraj = float(body.get("metraj") or 0)
+    return {
+        "poz_no": body.get("poz_no") or None,
+        "tanim": (body.get("tanim") or "").strip(),
+        "birim": body.get("birim") or "m²",
+        "metraj": metraj,
+        "birim_fiyat": int(round(birim_fiyat_tl * 100)),
+        "toplam_fiyat": int(round(birim_fiyat_tl * metraj * 100)),
+        "durum": body.get("durum") or "planli",
+        "katalog_id": body.get("katalog_id") or None,
+    }
+
+
+@app.post("/api/v2/mahal/{mahal_id}/is-kalemleri")
+@limiter.limit("60/minute")
+def is_kalemi_mahal_ekle(request: Request, mahal_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    mahal = db.query(models.Mahal).filter(models.Mahal.id == mahal_id).first()
+    if not mahal:
+        raise HTTPException(status_code=404, detail="Mahal bulunamadı.")
+    fields = _is_kalemi_body_to_model(body)
+    if not fields["tanim"]:
+        raise HTTPException(status_code=422, detail="Tanım zorunludur.")
+    kat = db.query(models.Kat).filter(models.Kat.id == mahal.kat_id).first()
+    bina = db.query(models.Bina).filter(models.Bina.id == kat.bina_id).first() if kat else None
+    ik = models.IsKalemi(
+        mahal_id=mahal_id,
+        santiye_id=bina.santiye_id if bina else None,
+        **fields,
+    )
+    db.add(ik)
+    db.commit()
+    db.refresh(ik)
+    return {"id": ik.id, "tanim": ik.tanim}
+
+
+@app.post("/api/v2/santiye/{santiye_id}/is-kalemleri")
+@limiter.limit("60/minute")
+def is_kalemi_santiye_ekle(request: Request, santiye_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    santiye = db.query(Santiye).filter(Santiye.id == santiye_id).first()
+    if not santiye:
+        raise HTTPException(status_code=404, detail="Şantiye bulunamadı.")
+    fields = _is_kalemi_body_to_model(body)
+    if not fields["tanim"]:
+        raise HTTPException(status_code=422, detail="Tanım zorunludur.")
+    ik = models.IsKalemi(santiye_id=santiye_id, mahal_id=None, **fields)
+    db.add(ik)
+    db.commit()
+    db.refresh(ik)
+    return {"id": ik.id, "tanim": ik.tanim}
+
+
+@app.patch("/api/v2/is-kalemleri/{ik_id}")
+@limiter.limit("60/minute")
+def is_kalemi_guncelle(request: Request, ik_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == ik_id).first()
+    if not ik:
+        raise HTTPException(status_code=404, detail="İş kalemi bulunamadı.")
+    if "tanim" in body and body["tanim"]:
+        ik.tanim = body["tanim"].strip()
+    if "poz_no" in body:
+        ik.poz_no = body["poz_no"] or None
+    if "birim" in body:
+        ik.birim = body["birim"]
+    if "metraj" in body:
+        ik.metraj = float(body["metraj"] or 0)
+    if "birim_fiyat_tl" in body:
+        ik.birim_fiyat = int(round(float(body["birim_fiyat_tl"] or 0) * 100))
+    if "durum" in body:
+        ik.durum = body["durum"]
+    if "katalog_id" in body:
+        ik.katalog_id = body["katalog_id"] or None
+    ik.toplam_fiyat = int(round((ik.birim_fiyat / 100.0) * (ik.metraj or 0) * 100))
+    ik.updated_at = datetime.datetime.utcnow()
+    db.commit()
+    return {"id": ik.id, "tanim": ik.tanim}
+
+
+@app.delete("/api/v2/is-kalemleri/{ik_id}")
+@limiter.limit("60/minute")
+def is_kalemi_sil(request: Request, ik_id: int, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == ik_id).first()
+    if not ik:
+        raise HTTPException(status_code=404, detail="İş kalemi bulunamadı.")
+    db.delete(ik)
+    db.commit()
+    return {"ok": True}
+
+
+@app.get("/api/v2/is-kalemleri/{ik_id}/ilerleme")
+@limiter.limit("60/minute")
+def is_kalemi_ilerleme_listele(request: Request, ik_id: int, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == ik_id).first()
+    if not ik:
+        raise HTTPException(status_code=404, detail="İş kalemi bulunamadı.")
+    kayitlar = (
+        db.query(models.IlerlemeKaydi)
+        .filter(models.IlerlemeKaydi.is_kalemi_id == ik_id)
+        .order_by(models.IlerlemeKaydi.tarih.desc())
+        .all()
+    )
+    return {"ilerleme_kayitlari": [
+        {"id": k.id, "yuzde": k.yuzde, "tarih": k.tarih, "notlar": k.notlar}
+        for k in kayitlar
+    ]}
+
+
+@app.post("/api/v2/is-kalemleri/{ik_id}/ilerleme")
+@limiter.limit("60/minute")
+def is_kalemi_ilerleme_ekle(request: Request, ik_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == ik_id).first()
+    if not ik:
+        raise HTTPException(status_code=404, detail="İş kalemi bulunamadı.")
+    yuzde = body.get("yuzde")
+    tarih = body.get("tarih")
+    if yuzde is None or tarih is None:
+        raise HTTPException(status_code=422, detail="Yüzde ve tarih zorunludur.")
+    kayit = models.IlerlemeKaydi(
+        is_kalemi_id=ik_id,
+        yuzde=float(yuzde),
+        tarih=str(tarih),
+        notlar=body.get("notlar") or None,
+    )
+    db.add(kayit)
+    db.commit()
+    db.refresh(kayit)
+    return {"id": kayit.id, "yuzde": kayit.yuzde, "tarih": kayit.tarih}
+
+
+@app.post("/api/v2/santiye/{santiye_id}/is-kalemleri/excel-import")
+@limiter.limit("10/minute")
+async def is_kalemi_excel_import(
+    request: Request,
+    santiye_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(database.get_db),
+):
+    import openpyxl
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    santiye = db.query(Santiye).filter(Santiye.id == santiye_id).first()
+    if not santiye:
+        raise HTTPException(status_code=404, detail="Şantiye bulunamadı.")
+
+    data = await file.read()
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True)
+    except Exception:
+        raise HTTPException(status_code=422, detail="Geçersiz Excel dosyası.")
+
+    ws = wb.active
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        return {"basarili": 0, "hatali": 0, "hatalar": []}
+
+    header = [str(c or "").strip().lower() for c in rows[0]]
+    col = {h: i for i, h in enumerate(header)}
+
+    ZORUNLU = ["poz_no", "tanim", "birim", "metraj", "birim_fiyat"]
+    eksik = [z for z in ZORUNLU if z not in col]
+    if eksik:
+        raise HTTPException(status_code=422, detail=f"Eksik sütunlar: {', '.join(eksik)}")
+
+    basarili = 0
+    hatalar = []
+    bina_cache: dict = {}
+    kat_cache: dict = {}
+    mahal_cache: dict = {}
+
+    for idx, row in enumerate(rows[1:], start=2):
+        def _cell(name):
+            i = col.get(name)
+            return row[i] if i is not None and i < len(row) else None
+
+        tanim = str(_cell("tanim") or "").strip()
+        if not tanim:
+            hatalar.append({"satir": idx, "sebep": "Tanım boş"})
+            continue
+        try:
+            metraj = float(_cell("metraj") or 0)
+            birim_fiyat_tl = float(_cell("birim_fiyat") or 0)
+        except (ValueError, TypeError):
+            hatalar.append({"satir": idx, "sebep": "Metraj veya birim fiyat sayı değil"})
+            continue
+
+        mahal_id = None
+        bina_adi = str(_cell("bina_adi") or "").strip() if "bina_adi" in col else ""
+        kat_no_raw = _cell("kat_no") if "kat_no" in col else None
+        mahal_adi = str(_cell("mahal_adi") or "").strip() if "mahal_adi" in col else ""
+
+        if bina_adi and kat_no_raw is not None and mahal_adi:
+            try:
+                kat_no = int(float(kat_no_raw))
+            except (ValueError, TypeError):
+                kat_no = 0
+            bina_key = (santiye_id, bina_adi)
+            if bina_key not in bina_cache:
+                b = db.query(models.Bina).filter(
+                    models.Bina.santiye_id == santiye_id,
+                    models.Bina.ad == bina_adi,
+                ).first()
+                if not b:
+                    b = models.Bina(santiye_id=santiye_id, ad=bina_adi)
+                    db.add(b)
+                    db.flush()
+                bina_cache[bina_key] = b.id
+            bina_id = bina_cache[bina_key]
+
+            kat_key = (bina_id, kat_no)
+            if kat_key not in kat_cache:
+                k = db.query(models.Kat).filter(
+                    models.Kat.bina_id == bina_id,
+                    models.Kat.kat_no == kat_no,
+                ).first()
+                if not k:
+                    k = models.Kat(bina_id=bina_id, kat_no=kat_no)
+                    db.add(k)
+                    db.flush()
+                kat_cache[kat_key] = k.id
+            kat_id = kat_cache[kat_key]
+
+            mahal_key = (kat_id, mahal_adi)
+            if mahal_key not in mahal_cache:
+                m = db.query(models.Mahal).filter(
+                    models.Mahal.kat_id == kat_id,
+                    models.Mahal.ad == mahal_adi,
+                ).first()
+                if not m:
+                    m = models.Mahal(kat_id=kat_id, ad=mahal_adi)
+                    db.add(m)
+                    db.flush()
+                mahal_cache[mahal_key] = m.id
+            mahal_id = mahal_cache[mahal_key]
+
+        ik = models.IsKalemi(
+            santiye_id=santiye_id,
+            mahal_id=mahal_id,
+            poz_no=str(_cell("poz_no") or "").strip() or None,
+            tanim=tanim,
+            birim=str(_cell("birim") or "m²").strip(),
+            metraj=metraj,
+            birim_fiyat=int(round(birim_fiyat_tl * 100)),
+            toplam_fiyat=int(round(birim_fiyat_tl * metraj * 100)),
+        )
+        db.add(ik)
+        basarili += 1
+
+    db.commit()
+    return {"basarili": basarili, "hatali": len(hatalar), "hatalar": hatalar}
+
+
+# --- 🧱 İŞ KALEMİ MALZEME ENDPOINT'LERİ ---
+
+@app.get("/api/v2/malzemeler-katalog")
+@limiter.limit("60/minute")
+def malzemeler_katalog(request: Request, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    malzemeler = (
+        db.query(models.MalzemeKatalog)
+        .filter(models.MalzemeKatalog.aktif == True)
+        .order_by(models.MalzemeKatalog.ad)
+        .all()
+    )
+    return {"malzemeler": [
+        {"id": m.id, "ad": m.ad, "birim": m.varsayilan_birim, "kategori": m.kategori}
+        for m in malzemeler
+    ]}
+
+
+@app.get("/api/v2/is-kalemleri/{ik_id}/malzemeler")
+@limiter.limit("60/minute")
+def is_kalemi_malzemeler(request: Request, ik_id: int, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == ik_id).first()
+    if not ik:
+        raise HTTPException(status_code=404, detail="İş kalemi bulunamadı.")
+    baglar = (
+        db.query(models.IsKalemiMalzeme)
+        .filter(models.IsKalemiMalzeme.is_kalemi_id == ik_id)
+        .all()
+    )
+    mal_list = []
+    toplam_kullanici = 0.0
+    toplam_bolgesel = 0.0
+    for b in baglar:
+        mk = b.malzeme
+        mal_list.append({
+            "malzeme_id": b.malzeme_katalog_id,
+            "malzeme_ad": mk.ad if mk else f"#{b.malzeme_katalog_id}",
+            "birim": b.birim or (mk.varsayilan_birim if mk else None),
+            "miktar": b.miktar,
+            "kullanici_fiyat": None,
+            "bolgesel_fiyat": None,
+            "toplam_maliyet": None,
+            "fark_yuzdesi": None,
+            "malzeme_katalog_id": b.malzeme_katalog_id,
+        })
+    return {
+        "malzemeler": mal_list,
+        "toplam_bolgesel_maliyet": toplam_bolgesel,
+        "toplam_kullanici_maliyet": toplam_kullanici,
+        "toplam_fark_yuzdesi": None,
+    }
+
+
+@app.post("/api/v2/is-kalemleri/{ik_id}/malzeme-ekle")
+@limiter.limit("60/minute")
+def is_kalemi_malzeme_ekle(request: Request, ik_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == ik_id).first()
+    if not ik:
+        raise HTTPException(status_code=404, detail="İş kalemi bulunamadı.")
+    malzeme_id = body.get("malzeme_id")
+    if not malzeme_id:
+        raise HTTPException(status_code=422, detail="malzeme_id zorunludur.")
+    mk = db.query(models.MalzemeKatalog).filter(models.MalzemeKatalog.id == malzeme_id).first()
+    if not mk:
+        raise HTTPException(status_code=404, detail="Malzeme bulunamadı.")
+    mevcut = db.query(models.IsKalemiMalzeme).filter(
+        models.IsKalemiMalzeme.is_kalemi_id == ik_id,
+        models.IsKalemiMalzeme.malzeme_katalog_id == malzeme_id,
+    ).first()
+    if mevcut:
+        mevcut.miktar = float(body.get("miktar") or mevcut.miktar)
+        mevcut.birim = body.get("birim") or mevcut.birim
+    else:
+        mevcut = models.IsKalemiMalzeme(
+            is_kalemi_id=ik_id,
+            malzeme_katalog_id=malzeme_id,
+            miktar=float(body.get("miktar") or 1.0),
+            birim=body.get("birim") or mk.varsayilan_birim,
+        )
+        db.add(mevcut)
+    db.commit()
+    return {"ok": True, "malzeme_id": malzeme_id}
+
+
+@app.put("/api/v2/is-kalemleri/{ik_id}/malzeme/{malzeme_id}")
+@limiter.limit("60/minute")
+def is_kalemi_malzeme_miktar_guncelle(request: Request, ik_id: int, malzeme_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    bag = db.query(models.IsKalemiMalzeme).filter(
+        models.IsKalemiMalzeme.is_kalemi_id == ik_id,
+        models.IsKalemiMalzeme.malzeme_katalog_id == malzeme_id,
+    ).first()
+    if not bag:
+        raise HTTPException(status_code=404, detail="Malzeme bağlantısı bulunamadı.")
+    miktar = body.get("miktar")
+    if miktar is not None:
+        bag.miktar = float(miktar)
+    db.commit()
+    return {"ok": True}
+
+
+@app.delete("/api/v2/is-kalemleri/{ik_id}/malzeme/{malzeme_id}")
+@limiter.limit("60/minute")
+def is_kalemi_malzeme_sil(request: Request, ik_id: int, malzeme_id: int, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    bag = db.query(models.IsKalemiMalzeme).filter(
+        models.IsKalemiMalzeme.is_kalemi_id == ik_id,
+        models.IsKalemiMalzeme.malzeme_katalog_id == malzeme_id,
+    ).first()
+    if not bag:
+        raise HTTPException(status_code=404, detail="Malzeme bağlantısı bulunamadı.")
+    db.delete(bag)
+    db.commit()
+    return {"ok": True}
+
+
+@app.patch("/api/v2/is-kalemleri/{ik_id}/malzemeler")
+@limiter.limit("60/minute")
+def is_kalemi_malzeme_toplu_ekle(request: Request, ik_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
+    """CSB öneri modalından toplu malzeme ekleme. body = {ekle: [{malzeme_katalog_id, miktar}]}"""
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == ik_id).first()
+    if not ik:
+        raise HTTPException(status_code=404, detail="İş kalemi bulunamadı.")
+    ekle_listesi = body.get("ekle") or []
+    eklendi = 0
+    for item in ekle_listesi:
+        mk_id = item.get("malzeme_katalog_id")
+        if not mk_id:
+            continue
+        mk = db.query(models.MalzemeKatalog).filter(models.MalzemeKatalog.id == mk_id).first()
+        if not mk:
+            continue
+        mevcut = db.query(models.IsKalemiMalzeme).filter(
+            models.IsKalemiMalzeme.is_kalemi_id == ik_id,
+            models.IsKalemiMalzeme.malzeme_katalog_id == mk_id,
+        ).first()
+        if mevcut:
+            mevcut.miktar = float(item.get("miktar") or mevcut.miktar)
+        else:
+            db.add(models.IsKalemiMalzeme(
+                is_kalemi_id=ik_id,
+                malzeme_katalog_id=mk_id,
+                miktar=float(item.get("miktar") or 1.0),
+                birim=mk.varsayilan_birim,
+            ))
+        eklendi += 1
+    db.commit()
+    return {"ok": True, "eklendi": eklendi}
+
+
+@app.get("/api/v2/is-kalemleri/{ik_id}/csb-malzemeler")
+@limiter.limit("60/minute")
+def is_kalemi_csb_malzemeler(request: Request, ik_id: int, db: Session = Depends(database.get_db)):
+    """İş kalemine eklenmiş malzemelerin csb_malzeme_katalog_id listesi — 'zaten ekli' tespiti için."""
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    baglar = db.query(models.IsKalemiMalzeme).filter(
+        models.IsKalemiMalzeme.is_kalemi_id == ik_id
+    ).all()
+    return {"malzemeler": [
+        {"malzeme_katalog_id": b.malzeme_katalog_id, "miktar": b.miktar}
+        for b in baglar
+    ]}
+
+
+@app.get("/api/v2/is-kalemleri/{ik_id}/malzeme-oner")
+@limiter.limit("60/minute")
+def is_kalemi_malzeme_oner(request: Request, ik_id: int, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == ik_id).first()
+    if not ik:
+        raise HTTPException(status_code=404, detail="İş kalemi bulunamadı.")
+
+    # CSB kataloğuna bağlıysa, katalog malzemelerini öner
+    if ik.katalog_id:
+        csb_malzemeler = (
+            db.query(models.CsbIsKalemiMalzeme)
+            .filter(models.CsbIsKalemiMalzeme.is_kalemi_katalog_id == ik.katalog_id)
+            .all()
+        )
+        oneriler = []
+        for cm in csb_malzemeler:
+            mk = db.query(models.MalzemeKatalog).filter(
+                models.MalzemeKatalog.id == cm.malzeme_katalog_id
+            ).first()
+            oneriler.append({
+                "malzeme_katalog_id": cm.malzeme_katalog_id,
+                "malzeme_ad": mk.ad if mk else f"#{cm.malzeme_katalog_id}",
+                "birim": cm.birim,
+                "miktar": cm.miktar,
+                "zorunlu": bool(cm.zorunlu),
+                "poz_no": None,
+                "neden": None,
+            })
+        return {"oneriler": oneriler, "kaynak": "katalog"}
+
+    # Katalog bağlantısı yoksa: iş kalemi tanımında geçen kelimelere göre malzeme_katalog'dan eşleştir
+    tanim = (ik.tanim or "").lower()
+    tum_malzemeler = db.query(models.MalzemeKatalog).filter(
+        models.MalzemeKatalog.aktif == True
+    ).all()
+    oneriler = []
+    for mk in tum_malzemeler:
+        anahtar_kelimeler = [w for w in mk.ad.lower().split() if len(w) > 3]
+        eslesme = any(k in tanim for k in anahtar_kelimeler)
+        if eslesme:
+            oneriler.append({
+                "malzeme_id": mk.id,
+                "malzeme_katalog_id": mk.id,
+                "malzeme_ad": mk.ad,
+                "birim": mk.varsayilan_birim,
+                "miktar": 1.0,
+                "zorunlu": False,
+                "neden": f"'{mk.ad}' tanımda geçiyor",
+            })
+        if len(oneriler) >= 10:
+            break
+    return {"oneriler": oneriler, "kaynak": "keyword"}
+
+
+# --- 📐 METRAJ ÖZET ---
+
+@app.get("/api/metraj/ozet/{santiye_id}")
+@limiter.limit("60/minute")
+def metraj_ozet(request: Request, santiye_id: int, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    user = kullanici_dogrula(token, db)
+    kalemler = db.query(models.IsKalemi).filter(models.IsKalemi.santiye_id == santiye_id).all()
+    toplam = len(kalemler)
+    tamamlanan = sum(1 for k in kalemler if k.durum == "tamamlandi")
+    devam = sum(1 for k in kalemler if k.durum == "devam_eden")
+    baslanmamis = toplam - tamamlanan - devam
+    toplam_tutar = sum(k.toplam_fiyat or 0 for k in kalemler) / 100.0
+    return {
+        "santiye_id": santiye_id,
+        "toplam_kalem": toplam,
+        "tamamlanan": tamamlanan,
+        "devam_eden": devam,
+        "baslanmamis": baslanmamis,
+        "toplam_tutar": toplam_tutar,
+    }
+
+
+# --- 💵 HAKEDİŞ ---
+
+@app.get("/api/hakedis/liste/{santiye_id}")
+@limiter.limit("60/minute")
+def hakedis_liste(request: Request, santiye_id: int, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    user = kullanici_dogrula(token, db)
+    liste = db.query(models.Hakedis).filter(
+        models.Hakedis.santiye_id == santiye_id
+    ).order_by(models.Hakedis.hakedis_no.desc()).all()
+    return {"hakedisler": [
+        {
+            "id": h.id, "hakedis_no": h.hakedis_no,
+            "donem_baslangic": h.donem_baslangic, "donem_bitis": h.donem_bitis,
+            "durum": h.durum,
+            "toplam_tutar": h.toplam_tutar / 100.0,
+            "onceki_toplam": h.onceki_toplam / 100.0,
+            "created_at": str(h.created_at)[:10],
+        } for h in liste
+    ]}
+
+
+# --- 👥 EKİP YÖNETİMİ ---
+
+@app.get("/ekip")
+@limiter.limit("60/minute")
+def ekip_getir(request: Request, db: Session = Depends(database.get_db)):
+    token = _request_token(request) or request.query_params.get("token", "")
+    user = kullanici_dogrula(token, db)
+    if not user.organization_id:
+        return {"uyeler": []}
+    uyeler = db.query(models.ProjectMember).filter(
+        models.ProjectMember.organization_id == user.organization_id,
+        models.ProjectMember.status == "active",
+    ).all()
+    sonuc = []
+    for u in uyeler:
+        uye = db.query(models.User).filter(models.User.id == u.user_id).first()
+        if not uye:
+            continue
+        santiye = db.query(Santiye).filter(Santiye.id == u.santiye_id).first() if u.santiye_id else None
+        sonuc.append({
+            "id": u.id, "user_id": u.user_id,
+            "ad": uye.full_name or uye.email, "email": uye.email,
+            "rol": u.role, "santiye_id": u.santiye_id,
+            "santiye_adi": santiye.ad if santiye else None,
+            "is_owner": uye.id == db.query(models.Organization).filter(
+                models.Organization.id == user.organization_id
+            ).first().owner_user_id if user.organization_id else False,
+        })
+    return {"uyeler": sonuc}
+
+
+@app.get("/davetler")
+@limiter.limit("60/minute")
+def davetler_getir(request: Request, db: Session = Depends(database.get_db)):
+    token = _request_token(request) or request.query_params.get("token", "")
+    user = kullanici_dogrula(token, db)
+    if not user.organization_id:
+        return {"davetler": []}
+    davetler = db.query(models.Invitation).filter(
+        models.Invitation.organization_id == user.organization_id,
+        models.Invitation.status == "pending",
+    ).order_by(models.Invitation.created_at.desc()).all()
+    return {"davetler": [
+        {
+            "id": d.id, "email": d.email, "rol": d.role,
+            "expires_at": str(d.expires_at)[:16],
+        } for d in davetler
+    ]}
+
+
+@app.post("/ekip/cikar")
+@limiter.limit("20/minute")
+async def ekip_cikar(request: Request, payload: dict = Body(...), db: Session = Depends(database.get_db)):
+    token = _request_token(request) or payload.get("token", "")
+    user = kullanici_dogrula(token, db)
+    member_id = payload.get("member_id")
+    uye = db.query(models.ProjectMember).filter(
+        models.ProjectMember.id == member_id,
+        models.ProjectMember.organization_id == user.organization_id,
+    ).first()
+    if not uye:
+        raise HTTPException(status_code=404, detail="Üye bulunamadı.")
+    uye.status = "removed"
+    db.commit()
+    return {"ok": True}
+
+
+# --- 📊 DASHBOARD — CONTRACTOR ---
+
+@app.get("/api/dashboard/contractor")
+@limiter.limit("30/minute")
+def api_dashboard_contractor(request: Request, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    user = kullanici_dogrula(token, db)
+    org_id = user.organization_id
+    bugun = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Aktif şantiyeler
+    santiye_q = db.query(Santiye).filter(Santiye.aktif == True)
+    if org_id:
+        santiye_q = santiye_q.filter(
+            (Santiye.user_id == user.id) | (Santiye.organization_id == org_id)
+        )
+    else:
+        santiye_q = santiye_q.filter(Santiye.user_id == user.id)
+    aktif_santiyeler = santiye_q.all()
+    aktif_santiye_sayisi = len(aktif_santiyeler)
+
+    # Bugün onaylanan kayıtlar
+    approved_q = db.query(models.ArchiveRecord).filter(
+        models.ArchiveRecord.verification_status == "VERIFIED",
+        models.ArchiveRecord.reviewed_at >= bugun,
+        models.ArchiveRecord.status == "active",
+    )
+    if org_id:
+        approved_q = approved_q.filter(
+            (models.ArchiveRecord.user_id == user.id) | (models.ArchiveRecord.organization_id == org_id)
+        )
+    else:
+        approved_q = approved_q.filter(models.ArchiveRecord.user_id == user.id)
+    approved_today = approved_q.count()
+
+    # Açık kritik risk (onay bekleyen kayıtlar)
+    pending_q = db.query(models.ArchiveRecord).filter(
+        models.ArchiveRecord.verification_status.in_(["DRAFT", "PENDING"]),
+        models.ArchiveRecord.status == "active",
+    )
+    if org_id:
+        pending_q = pending_q.filter(
+            (models.ArchiveRecord.user_id == user.id) | (models.ArchiveRecord.organization_id == org_id)
+        )
+    else:
+        pending_q = pending_q.filter(models.ArchiveRecord.user_id == user.id)
+    open_critical = pending_q.count()
+
+    # Stok uyarı sayısı
+    stok_uyari = db.query(models.MalzemeUyari)
+    if org_id:
+        stok_uyari = stok_uyari.filter(
+            (models.MalzemeUyari.organization_id == org_id) | (models.MalzemeUyari.organization_id == None)
+        )
+    stok_uyari_sayisi = stok_uyari.count()
+
+    # Son onaylanan feed
+    feed_q = db.query(models.ArchiveRecord).filter(
+        models.ArchiveRecord.verification_status == "VERIFIED",
+        models.ArchiveRecord.status == "active",
+    )
+    if org_id:
+        feed_q = feed_q.filter(
+            (models.ArchiveRecord.user_id == user.id) | (models.ArchiveRecord.organization_id == org_id)
+        )
+    else:
+        feed_q = feed_q.filter(models.ArchiveRecord.user_id == user.id)
+    feed = feed_q.order_by(models.ArchiveRecord.reviewed_at.desc()).limit(20).all()
+
+    return {
+        "kpis": [
+            {"id": "approved_today", "value": approved_today, "label": "Bugün Onaylanan", "context": f"{approved_today} kayıt", "note": ""},
+            {"id": "open_critical_risk", "value": open_critical, "label": "Açık Risk", "context": f"{open_critical} bekliyor", "note": ""},
+            {"id": "critical_stock_delta", "value": 0, "label": "Stok Sapması", "context": "Stok hattı sakin", "note": ""},
+            {"id": "active_sites", "value": aktif_santiye_sayisi, "label": "Aktif Şantiye", "context": f"{aktif_santiye_sayisi} şantiye", "note": ""},
+        ],
+        "today_approved_feed": [
+            {
+                "id": r.id, "title": r.title or "Saha Kaydı",
+                "source_type": r.source_type, "thumbnail_url": r.thumbnail_url,
+                "zone_label": r.zone_label, "santiye_id": r.santiye_id,
+                "verification_status": r.verification_status,
+                "reviewed_at": str(r.reviewed_at)[:19] if r.reviewed_at else "",
+                "created_at": str(r.created_at)[:19],
+            } for r in feed
+        ],
+        "stok_uyari_toplam": stok_uyari_sayisi,
+        "local_filter_context": {"today_approved_total": approved_today},
+    }
+
+
+# --- 📊 DASHBOARD — ENGINEER ---
+
+@app.get("/api/dashboard/engineer")
+@limiter.limit("30/minute")
+def api_dashboard_engineer(request: Request, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    user = kullanici_dogrula(token, db)
+    org_id = user.organization_id
+
+    # Şantiye sayısı
+    if org_id:
+        members = db.query(models.ProjectMember).filter(
+            models.ProjectMember.user_id == user.id,
+            models.ProjectMember.status == "active",
+        ).all()
+        santiye_ids = [m.santiye_id for m in members if m.santiye_id]
+        santiye_sayisi = len(santiye_ids)
+    else:
+        santiyeler = db.query(Santiye).filter(Santiye.user_id == user.id, Santiye.aktif == True).all()
+        santiye_sayisi = len(santiyeler)
+
+    # Review queue: onay bekleyen kayıtlar
+    pending_q = db.query(models.ArchiveRecord).filter(
+        models.ArchiveRecord.user_id == user.id,
+        models.ArchiveRecord.verification_status.in_(["DRAFT", "PENDING"]),
+        models.ArchiveRecord.status == "active",
+    ).order_by(models.ArchiveRecord.created_at.desc()).limit(30).all()
+
+    # Review history: onaylanan/reddedilen son kayıtlar
+    history_q = db.query(models.ArchiveRecord).filter(
+        models.ArchiveRecord.user_id == user.id,
+        models.ArchiveRecord.verification_status.in_(["VERIFIED", "REJECTED"]),
+        models.ArchiveRecord.status == "active",
+    ).order_by(models.ArchiveRecord.reviewed_at.desc()).limit(20).all()
+
+    def serialize_record(r, status_override=None):
+        return {
+            "id": r.id, "title": r.title or "Saha Tespiti",
+            "source_type": r.source_type, "source_id": r.id,
+            "thumbnail_url": r.thumbnail_url, "image_url": r.thumbnail_url,
+            "description": r.description, "zone_label": r.zone_label,
+            "santiye_id": r.santiye_id,
+            "verification_status": r.verification_status,
+            "status": status_override or (
+                "approved" if r.verification_status == "VERIFIED"
+                else "rejected" if r.verification_status == "REJECTED"
+                else "pending"
+            ),
+            "priority": r.ai_risk_level or "Normal",
+            "captured_at": str(r.captured_at or r.created_at)[:19],
+            "created_at": str(r.created_at)[:19],
+            "reviewed_at": str(r.reviewed_at)[:19] if r.reviewed_at else "",
+            "review_note": r.review_note or "",
+            "created_by": user.full_name or user.email,
+        }
+
+    return {
+        "santiye_sayisi": santiye_sayisi,
+        "review_queue": [serialize_record(r, "pending") for r in pending_q],
+        "review_history": [serialize_record(r) for r in history_q],
+    }
+
+
+# --- 📦 STOK HAREKETLERİ ---
+
+@app.get("/stok-hareketler")
+@limiter.limit("60/minute")
+def stok_hareketler(request: Request, santiye_id: int = None, limit: int = 50, db: Session = Depends(database.get_db)):
+    token = _request_token(request) or request.query_params.get("token", "")
+    user = kullanici_dogrula(token, db)
+    q = db.query(models.StokHareket).filter(models.StokHareket.kullanici_id == user.id)
+    if santiye_id:
+        q = q.filter(models.StokHareket.santiye_id == santiye_id)
+    hareketler = q.order_by(models.StokHareket.created_at.desc()).limit(limit).all()
+    return {"hareketler": [
+        {
+            "id": h.id, "malzeme": h.malzeme, "malzeme_ad": h.malzeme_ad,
+            "miktar": h.miktar, "fiyat": h.fiyat, "tip": h.tip,
+            "kaynak": h.kaynak, "santiye_id": h.santiye_id, "notlar": h.notlar,
+            "created_at": str(h.created_at)[:19],
+        } for h in hareketler
+    ]}
+
+
+@app.delete("/stok-hareket/{hareket_id}")
+@limiter.limit("30/minute")
+def stok_hareket_sil(request: Request, hareket_id: int, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    user = kullanici_dogrula(token, db)
+    h = db.query(models.StokHareket).filter(
+        models.StokHareket.id == hareket_id,
+        models.StokHareket.kullanici_id == user.id,
+    ).first()
+    if not h:
+        raise HTTPException(status_code=404, detail="Hareket bulunamadı.")
+    db.delete(h)
+    db.commit()
+    return {"ok": True}
+
+
+# --- 📋 KATALOG MALZEMELERİ ---
+
+@app.get("/api/katalog/malzemeler")
+@limiter.limit("60/minute")
+def api_katalog_malzemeler(request: Request, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    user = kullanici_dogrula(token, db)
+    sistem = db.query(models.MalzemeKatalog).filter(models.MalzemeKatalog.aktif == True).order_by(models.MalzemeKatalog.ad).all()
+    ozel = []
+    if user.organization_id:
+        ozel = db.query(models.OzelMalzeme).filter(
+            models.OzelMalzeme.organization_id == user.organization_id,
+            models.OzelMalzeme.aktif == True,
+        ).all()
+    return {
+        "malzemeler": [
+            {
+                "id": m.id, "key": m.key, "ad": m.ad,
+                "birim": m.varsayilan_birim, "kategori": m.kategori,
+                "sistem": True,
+            }
+            for m in sistem
+        ] + [
+            {
+                "id": m.id, "key": m.malzeme_key, "ad": m.ad,
+                "birim": m.birim, "kategori": "ozel",
+                "sistem": False,
+            }
+            for m in ozel
+        ]
+    }
+
+
+# --- 💵 HAKEDİŞ DETAY ---
+
+@app.get("/api/hakedis/detay/{hakedis_id}")
+@limiter.limit("60/minute")
+def hakedis_detay(request: Request, hakedis_id: int, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    user = kullanici_dogrula(token, db)
+    h = db.query(models.Hakedis).filter(models.Hakedis.id == hakedis_id).first()
+    if not h:
+        raise HTTPException(status_code=404, detail="Hakediş bulunamadı.")
+    kalemler = db.query(models.HakedisKalemi).filter(models.HakedisKalemi.hakedis_id == hakedis_id).all()
+    kalem_list = []
+    for k in kalemler:
+        ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == k.is_kalemi_id).first()
+        kalem_list.append({
+            "id": k.id,
+            "is_kalemi_id": k.is_kalemi_id,
+            "tanim": ik.tanim if ik else "",
+            "birim": ik.birim if ik else "",
+            "sozlesme_metraj": k.sozlesme_metraj,
+            "onceki_toplam_miktar": k.onceki_toplam_miktar,
+            "bu_donem_miktar": k.bu_donem_miktar,
+            "kumulatif_miktar": k.kumulatif_miktar,
+            "birim_fiyat": k.birim_fiyat / 100.0,
+            "bu_donem_tutar": k.bu_donem_tutar / 100.0,
+            "kumulatif_tutar": k.kumulatif_tutar / 100.0,
+            "notlar": k.notlar or "",
+        })
+    return {
+        "hakedis": {
+            "id": h.id, "hakedis_no": h.hakedis_no,
+            "santiye_id": h.santiye_id,
+            "donem_baslangic": h.donem_baslangic, "donem_bitis": h.donem_bitis,
+            "durum": h.durum,
+            "toplam_tutar": h.toplam_tutar / 100.0,
+            "onceki_toplam": h.onceki_toplam / 100.0,
+            "notlar": h.notlar or "",
+            "created_at": str(h.created_at)[:10],
+        },
+        "kalemler": kalem_list,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MOTOR FONKSİYONLARI — İlerleme / Hakediş / Stok
+# BIM endpoint'leri de bu fonksiyonları doğrudan import edip kullanabilir.
+# ═══════════════════════════════════════════════════════════════════════
+
+def update_hakedis_from_ilerleme(db: Session, is_kalemi_id: int):
+    """Motor 1: Son IlerlemeKaydi yüzdesine göre aktif taslak hakedişi günceller."""
+    from sqlalchemy import func as _func
+
+    ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == is_kalemi_id).first()
+    if not ik:
+        return None
+
+    son_ilerleme = (
+        db.query(models.IlerlemeKaydi)
+        .filter(models.IlerlemeKaydi.is_kalemi_id == is_kalemi_id)
+        .order_by(models.IlerlemeKaydi.created_at.desc())
+        .first()
+    )
+    if not son_ilerleme:
+        return None
+
+    hakedis = (
+        db.query(models.Hakedis)
+        .filter(
+            models.Hakedis.santiye_id == ik.santiye_id,
+            models.Hakedis.durum == "taslak",
+        )
+        .order_by(models.Hakedis.hakedis_no.desc())
+        .first()
+    )
+    if not hakedis:
+        return None
+
+    metraj = ik.metraj or 0.0
+    birim_fiyat = ik.birim_fiyat or 0  # kuruş
+    yuzde = son_ilerleme.yuzde or 0.0
+    kumulatif_miktar = metraj * (yuzde / 100.0)
+
+    # Önceki onaylı/onay-bekleyen hakedişlerde bu iş kalemi için toplam miktar
+    onceki = (
+        db.query(_func.coalesce(_func.sum(models.HakedisKalemi.bu_donem_miktar), 0.0))
+        .join(models.Hakedis, models.HakedisKalemi.hakedis_id == models.Hakedis.id)
+        .filter(
+            models.HakedisKalemi.is_kalemi_id == is_kalemi_id,
+            models.Hakedis.id != hakedis.id,
+            models.Hakedis.durum.in_(["onaylandi", "onay_bekliyor"]),
+        )
+        .scalar()
+    ) or 0.0
+
+    bu_donem_miktar = max(0.0, kumulatif_miktar - onceki)
+    bu_donem_tutar = round(bu_donem_miktar * birim_fiyat)   # kuruş
+    kumulatif_tutar = round(kumulatif_miktar * birim_fiyat)  # kuruş
+
+    mevcut = (
+        db.query(models.HakedisKalemi)
+        .filter(
+            models.HakedisKalemi.hakedis_id == hakedis.id,
+            models.HakedisKalemi.is_kalemi_id == is_kalemi_id,
+        )
+        .first()
+    )
+    if mevcut:
+        mevcut.sozlesme_metraj     = metraj
+        mevcut.onceki_toplam_miktar = onceki
+        mevcut.bu_donem_miktar     = bu_donem_miktar
+        mevcut.kumulatif_miktar    = kumulatif_miktar
+        mevcut.birim_fiyat         = birim_fiyat
+        mevcut.bu_donem_tutar      = bu_donem_tutar
+        mevcut.kumulatif_tutar     = kumulatif_tutar
+    else:
+        mevcut = models.HakedisKalemi(
+            hakedis_id=hakedis.id,
+            is_kalemi_id=is_kalemi_id,
+            sozlesme_metraj=metraj,
+            onceki_toplam_miktar=onceki,
+            bu_donem_miktar=bu_donem_miktar,
+            kumulatif_miktar=kumulatif_miktar,
+            birim_fiyat=birim_fiyat,
+            bu_donem_tutar=bu_donem_tutar,
+            kumulatif_tutar=kumulatif_tutar,
+        )
+        db.add(mevcut)
+
+    db.flush()
+    toplam = (
+        db.query(_func.coalesce(_func.sum(models.HakedisKalemi.bu_donem_tutar), 0))
+        .filter(models.HakedisKalemi.hakedis_id == hakedis.id)
+        .scalar()
+    ) or 0
+    hakedis.toplam_tutar = toplam
+    hakedis.updated_at = datetime.datetime.utcnow()
+
+    return {
+        "hakedis_id": hakedis.id,
+        "hakedis_no": hakedis.hakedis_no,
+        "bu_donem_miktar": bu_donem_miktar,
+        "bu_donem_tutar_tl": bu_donem_tutar / 100.0,
+        "kumulatif_miktar": kumulatif_miktar,
+        "yuzde": yuzde,
+    }
+
+
+def auto_stok_sarf(
+    db: Session,
+    is_kalemi_id: int,
+    santiye_id: int,
+    tamamlanan_miktar: float,
+    kullanici_id: int,
+    organization_id: int,
+) -> list:
+    """Motor 2: İş kalemi tamamlandığında reçeteden teorik stok çıkışı oluşturur."""
+    ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == is_kalemi_id).first()
+    if not ik or not ik.katalog_id:
+        return []
+
+    receteler = (
+        db.query(models.CsbIsKalemiMalzeme)
+        .filter(models.CsbIsKalemiMalzeme.is_kalemi_katalog_id == ik.katalog_id)
+        .all()
+    )
+    if not receteler:
+        return []
+
+    olusan = []
+    for recete in receteler:
+        mk = db.query(models.MalzemeKatalog).filter(
+            models.MalzemeKatalog.id == recete.malzeme_katalog_id
+        ).first()
+        malzeme_key = mk.key if mk else "diger"
+        malzeme_ad  = mk.ad  if mk else f"Malzeme #{recete.malzeme_katalog_id}"
+        sarf_miktari = tamamlanan_miktar * recete.miktar
+
+        hareket = models.StokHareket(
+            malzeme=malzeme_key,
+            malzeme_ad=malzeme_ad,
+            miktar=sarf_miktari,
+            tip="cikis",
+            kaynak="otomatik_sarf",
+            santiye_id=santiye_id,
+            kullanici_id=kullanici_id,
+            organization_id=organization_id,
+            notlar="Teorik sarf - reçete bazlı",
+        )
+        db.add(hareket)
+        olusan.append({
+            "malzeme": malzeme_key,
+            "malzeme_ad": malzeme_ad,
+            "miktar": sarf_miktari,
+            "birim": recete.birim,
+        })
+
+    return olusan
+
+
+def check_stok_esik(db: Session, santiye_id: int, malzeme_id: str) -> dict:
+    """Motor 3: Malzeme net stokunu hesaplar; eşik altındaysa uyarı döner."""
+    from sqlalchemy import func as _func
+
+    giris = (
+        db.query(_func.coalesce(_func.sum(models.StokHareket.miktar), 0.0))
+        .filter(
+            models.StokHareket.santiye_id == santiye_id,
+            models.StokHareket.malzeme == malzeme_id,
+            models.StokHareket.tip == "giris",
+        )
+        .scalar()
+    ) or 0.0
+
+    cikis = (
+        db.query(_func.coalesce(_func.sum(models.StokHareket.miktar), 0.0))
+        .filter(
+            models.StokHareket.santiye_id == santiye_id,
+            models.StokHareket.malzeme == malzeme_id,
+            models.StokHareket.tip == "cikis",
+        )
+        .scalar()
+    ) or 0.0
+
+    net = giris - cikis
+
+    esik = db.query(models.StokEsik).filter(
+        models.StokEsik.santiye_id == santiye_id,
+        models.StokEsik.malzeme == malzeme_id,
+    ).first()
+
+    if esik and net < esik.min_miktar:
+        logging.warning(
+            "Stok eşik uyarısı: santiye=%s malzeme=%s mevcut=%.2f min=%.2f",
+            santiye_id, malzeme_id, net, esik.min_miktar,
+        )
+        return {
+            "uyari": True,
+            "malzeme": malzeme_id,
+            "malzeme_ad": esik.malzeme_ad or malzeme_id,
+            "mevcut": net,
+            "esik": esik.min_miktar,
+        }
+
+    return {
+        "uyari": False,
+        "malzeme": malzeme_id,
+        "mevcut": net,
+        "esik": esik.min_miktar if esik else None,
+    }
+
+
+# --- 📈 İLERLEME KAYDET ---
+
+@app.post("/api/ilerleme-kaydet")
+@limiter.limit("60/minute")
+def api_ilerleme_kaydet(request: Request, payload: dict = Body(...), db: Session = Depends(database.get_db)):
+    """
+    İlerleme kaydeder ve 3 motoru zincirir:
+    IlerlemeKaydi → update_hakedis → (eğer %100 ise) auto_stok_sarf → check_stok_esik
+    """
+    token = _request_token(request) or payload.get("token", "")
+    user = kullanici_dogrula(token, db)
+
+    is_kalemi_id = payload.get("is_kalemi_id")
+    yuzde        = float(payload.get("yuzde", 0))
+    tarih        = payload.get("tarih") or datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    notlar       = payload.get("notlar", "")
+
+    if not is_kalemi_id:
+        raise HTTPException(status_code=400, detail="is_kalemi_id zorunludur.")
+    if not (0 <= yuzde <= 100):
+        raise HTTPException(status_code=400, detail="Yüzde 0-100 arasında olmalıdır.")
+
+    ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == is_kalemi_id).first()
+    if not ik:
+        raise HTTPException(status_code=404, detail="İş kalemi bulunamadı.")
+
+    kayit = models.IlerlemeKaydi(
+        is_kalemi_id=is_kalemi_id,
+        raporlayan_id=user.id,
+        yuzde=yuzde,
+        tarih=tarih,
+        notlar=notlar,
+    )
+    db.add(kayit)
+    db.flush()
+
+    # Motor 1 — Hakediş güncelle
+    hakedis_guncelleme = update_hakedis_from_ilerleme(db, is_kalemi_id)
+
+    stok_sarflari  = []
+    esik_uyarilari = []
+
+    # Motor 2 + 3 — Yalnızca %100 tamamlanmada
+    if yuzde >= 100.0:
+        ik.durum      = "tamamlandi"
+        ik.updated_at = datetime.datetime.utcnow()
+        stok_sarflari = auto_stok_sarf(
+            db,
+            is_kalemi_id=is_kalemi_id,
+            santiye_id=ik.santiye_id,
+            tamamlanan_miktar=ik.metraj or 0.0,
+            kullanici_id=user.id,
+            organization_id=user.organization_id or 0,
+        )
+        db.flush()
+        for sarf in stok_sarflari:
+            esik_sonuc = check_stok_esik(db, ik.santiye_id, sarf["malzeme"])
+            if esik_sonuc.get("uyari"):
+                esik_uyarilari.append(esik_sonuc)
+
+    db.commit()
+    db.refresh(kayit)
+
+    return {
+        "status": "success",
+        "ilerleme_id": kayit.id,
+        "yuzde": yuzde,
+        "hakedis_guncelleme": hakedis_guncelleme,
+        "stok_sarflari": stok_sarflari,
+        "esik_uyarilari": esik_uyarilari,
+    }
+
+
+# --- 📊 FİYAT GRAFİK (bolgesel) ---
+
+@app.get("/api/fiyat/grafik")
+@limiter.limit("60/minute")
+def api_fiyat_grafik(request: Request, malzeme_id: int = 0, il: str = "genel", donem: str = "3ay", db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+    from sqlalchemy import text as _sql_text
+    donem_gun = {"1ay": 30, "3ay": 90, "6ay": 180, "1yil": 365}.get(donem, 90)
+    baslangic = (datetime.datetime.utcnow() - datetime.timedelta(days=donem_gun)).strftime("%Y-%m-%d")
+
+    # Referans merkez bul (il → referans_merkez_id)
+    ref_row = db.execute(_sql_text(
+        "SELECT referans_merkez_id FROM il_eslestirme WHERE il_adi LIKE :il ORDER BY mesafe_km ASC LIMIT 1"
+    ), {"il": f"%{il}%"}).fetchone()
+    ref_id = ref_row[0] if ref_row else None
+
+    bolgesel = []
+    if malzeme_id and ref_id:
+        rows = db.execute(_sql_text(
+            "SELECT tarih, fiyat FROM scrape_fiyatlar "
+            "WHERE malzeme_id = :mid AND referans_merkez_id = :rid AND tarih >= :bas "
+            "ORDER BY tarih ASC"
+        ), {"mid": malzeme_id, "rid": ref_id, "bas": baslangic}).fetchall()
+        bolgesel = [{"tarih": r[0], "fiyat": float(r[1])} for r in rows]
+
+    # Il bazli veri yoksa (veya il secilmediyse) ulusal/genel veriyle fallback
+    # Hasir, filmasin, kum, gazbeton, cimento gibi NULL referans_merkez_id ile yazilan
+    # malzemelerin grafigi de gozukebilmesi icin gerekli
+    if malzeme_id and not bolgesel:
+        rows = db.execute(_sql_text(
+            "SELECT tarih, AVG(fiyat) FROM scrape_fiyatlar "
+            "WHERE malzeme_id = :mid AND tarih >= :bas "
+            "GROUP BY tarih ORDER BY tarih ASC"
+        ), {"mid": malzeme_id, "bas": baslangic}).fetchall()
+        bolgesel = [{"tarih": r[0], "fiyat": float(r[1])} for r in rows]
+
+    # Kullanıcı fiyatları (malzeme_fiyat tablosundan — bu basit eşleşme)
+    kullanici = []
+
+    fark = None
+    if len(bolgesel) >= 2:
+        try:
+            fark = round((bolgesel[-1]["fiyat"] - bolgesel[0]["fiyat"]) / bolgesel[0]["fiyat"] * 100, 1)
+        except ZeroDivisionError:
+            pass
+
+    return {"bolgesel_tahmin": bolgesel, "kullanici_fiyat": kullanici, "fark_yuzdesi": fark}
+
+
+# --- 🛒 SATIN ALMA ---
+
+@app.get("/api/katalog")
+@limiter.limit("60/minute")
+def api_katalog(request: Request, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    user = kullanici_dogrula(token, db)
+    katalogler = db.query(models.MalzemeKatalog).filter(
+        models.MalzemeKatalog.aktif == True,
+        (models.MalzemeKatalog.organization_id == None) |
+        (models.MalzemeKatalog.organization_id == user.organization_id),
+    ).order_by(models.MalzemeKatalog.ad).all()
+    sonuc = []
+    for k in katalogler:
+        cesitler = db.query(models.MalzemeCesit).filter(
+            models.MalzemeCesit.katalog_id == k.id,
+            models.MalzemeCesit.aktif == True,
+        ).order_by(models.MalzemeCesit.ad).all()
+        sonuc.append({
+            "id": k.id, "ad": k.ad, "kategori": k.kategori,
+            "cesitler": [{"id": c.id, "ad": c.ad, "birim": c.birim} for c in cesitler],
+        })
+    return {"katalog": sonuc}
+
+
+@app.get("/api/tedarikciler")
+@limiter.limit("60/minute")
+def api_tedarikciler(request: Request, db: Session = Depends(database.get_db)):
+    token = _request_token(request)
+    user = kullanici_dogrula(token, db)
+    tedarikciler = db.query(models.Tedarikci).filter(
+        models.Tedarikci.organization_id == user.organization_id,
+        models.Tedarikci.aktif == True,
+    ).order_by(models.Tedarikci.ad).all()
+    return {"tedarikciler": [{"id": t.id, "ad": t.ad, "telefon": t.telefon or "", "sehir": t.sehir or ""} for t in tedarikciler]}
+
+
+@app.post("/api/tedarikci-ekle")
+@limiter.limit("30/minute")
+def api_tedarikci_ekle(request: Request, payload: dict = Body(...), db: Session = Depends(database.get_db)):
+    token = _request_token(request) or payload.get("token", "")
+    user = kullanici_dogrula(token, db)
+    ad = (payload.get("ad") or "").strip()
+    if not ad:
+        raise HTTPException(status_code=400, detail="Tedarikçi adı zorunludur.")
+    t = models.Tedarikci(
+        organization_id=user.organization_id,
+        ad=ad,
+        yetkili_kisi=payload.get("yetkili_kisi"),
+        telefon=payload.get("telefon"),
+        email=payload.get("email"),
+        sehir=payload.get("sehir"),
+        vergi_no=payload.get("vergi_no"),
+        adres=payload.get("adres"),
+    )
+    db.add(t)
+    db.commit()
+    db.refresh(t)
+    return {"status": "success", "tedarikci": {"id": t.id, "ad": t.ad}}
+
+
+@app.get("/api/satin-almalar")
+@limiter.limit("60/minute")
+def api_satin_almalar(
+    request: Request,
+    santiye_id: int = 0,
+    tedarikci_id: int = 0,
+    limit: int = 100,
+    db: Session = Depends(database.get_db),
+):
+    token = _request_token(request)
+    user = kullanici_dogrula(token, db)
+    q = db.query(models.SatinAlma).filter(models.SatinAlma.organization_id == user.organization_id)
+    if santiye_id:
+        q = q.filter(models.SatinAlma.santiye_id == santiye_id)
+    if tedarikci_id:
+        q = q.filter(models.SatinAlma.tedarikci_id == tedarikci_id)
+    kayitlar = q.order_by(models.SatinAlma.tarih.desc()).limit(limit).all()
+
+    santiye_map = {s.id: s.ad for s in db.query(models.Santiye).filter(models.Santiye.organization_id == user.organization_id).all()} if kayitlar else {}
+    tedarikci_map = {t.id: t.ad for t in db.query(models.Tedarikci).filter(models.Tedarikci.organization_id == user.organization_id).all()} if kayitlar else {}
+    cesit_map = {}
+    if kayitlar:
+        cesit_ids = [k.cesit_id for k in kayitlar if k.cesit_id]
+        if cesit_ids:
+            cesitler = db.query(models.MalzemeCesit).filter(models.MalzemeCesit.id.in_(cesit_ids)).all()
+            cesit_map = {c.id: c.ad for c in cesitler}
+
+    sonuc = []
+    for k in kayitlar:
+        malzeme_ad = k.malzeme_ad or cesit_map.get(k.cesit_id, "-")
+        sonuc.append({
+            "id": k.id,
+            "tarih": str(k.tarih)[:10] if k.tarih else None,
+            "santiye_id": k.santiye_id,
+            "santiye_ad": santiye_map.get(k.santiye_id, "-") if k.santiye_id else "-",
+            "tedarikci_id": k.tedarikci_id,
+            "tedarikci_ad": tedarikci_map.get(k.tedarikci_id, "-") if k.tedarikci_id else "-",
+            "malzeme_ad": malzeme_ad,
+            "miktar": k.miktar,
+            "birim": k.birim or "",
+            "birim_fiyat": k.birim_fiyat,
+            "toplam_tutar": k.toplam_tutar or round(k.miktar * k.birim_fiyat, 2),
+            "fatura_no": k.fatura_no or "",
+            "notlar": k.notlar or "",
+        })
+    return {"kayitlar": sonuc}
+
+
+@app.post("/api/satin-alma-ekle")
+@limiter.limit("30/minute")
+def api_satin_alma_ekle(request: Request, payload: dict = Body(...), db: Session = Depends(database.get_db)):
+    token = _request_token(request) or payload.get("token", "")
+    user = kullanici_dogrula(token, db)
+    miktar = float(payload.get("miktar", 0) or 0)
+    birim_fiyat = float(payload.get("birim_fiyat", 0) or 0)
+    if miktar <= 0 or birim_fiyat <= 0:
+        raise HTTPException(status_code=400, detail="Miktar ve birim fiyat sıfırdan büyük olmalıdır.")
+    cesit_id = payload.get("cesit_id")
+    malzeme_ad = payload.get("malzeme_ad")
+    if cesit_id and not malzeme_ad:
+        c = db.query(models.MalzemeCesit).filter(models.MalzemeCesit.id == int(cesit_id)).first()
+        if c:
+            malzeme_ad = c.ad
+    tarih_str = payload.get("tarih")
+    tarih = datetime.datetime.strptime(tarih_str, "%Y-%m-%d") if tarih_str else datetime.datetime.utcnow()
+    sa = models.SatinAlma(
+        organization_id=user.organization_id,
+        santiye_id=payload.get("santiye_id") or None,
+        tedarikci_id=payload.get("tedarikci_id") or None,
+        cesit_id=int(cesit_id) if cesit_id else None,
+        malzeme_ad=malzeme_ad,
+        miktar=miktar,
+        birim=payload.get("birim", ""),
+        birim_fiyat=birim_fiyat,
+        toplam_tutar=round(miktar * birim_fiyat, 2),
+        fatura_no=payload.get("fatura_no", ""),
+        notlar=payload.get("notlar", ""),
+        giren_id=user.id,
+        tarih=tarih,
+    )
+    db.add(sa)
+    db.commit()
+    db.refresh(sa)
+    return {"status": "success", "id": sa.id}
+
+
+@app.post("/api/satin-alma-sil")
+@limiter.limit("30/minute")
+def api_satin_alma_sil(request: Request, payload: dict = Body(...), db: Session = Depends(database.get_db)):
+    token = _request_token(request) or payload.get("token", "")
+    user = kullanici_dogrula(token, db)
+    sid = payload.get("id")
+    kayit = db.query(models.SatinAlma).filter(
+        models.SatinAlma.id == sid,
+        models.SatinAlma.organization_id == user.organization_id,
+    ).first()
+    if not kayit:
+        raise HTTPException(status_code=404, detail="Kayıt bulunamadı.")
+    db.delete(kayit)
+    db.commit()
+    return {"status": "success"}
+
+
+@app.post("/api/tedarikci-sil")
+@limiter.limit("30/minute")
+def api_tedarikci_sil(request: Request, payload: dict = Body(...), db: Session = Depends(database.get_db)):
+    token = _request_token(request) or payload.get("token", "")
+    user = kullanici_dogrula(token, db)
+    tid = payload.get("id")
+    t = db.query(models.Tedarikci).filter(
+        models.Tedarikci.id == tid,
+        models.Tedarikci.organization_id == user.organization_id,
+    ).first()
+    if not t:
+        raise HTTPException(status_code=404, detail="Tedarikçi bulunamadı.")
+    t.aktif = False
+    db.commit()
+    return {"status": "success"}
+
+
+@app.post("/api/fatura-yukle")
+@limiter.limit("10/minute")
+async def api_fatura_yukle(
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(database.get_db),
+):
+    token = _request_token(request)
+    kullanici_dogrula(token, db)
+
+    icerik = await file.read()
+    if len(icerik) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Dosya 10MB'ı aşamaz.")
+
+    try:
+        import google.generativeai as genai_lib
+        import base64 as _b64
+
+        mime = file.content_type or "image/jpeg"
+        b64_data = _b64.b64encode(icerik).decode()
+
+        model = genai_lib.GenerativeModel("gemini-2.0-flash")
+        prompt = """Bu fatura veya teklif belgesini analiz et ve aşağıdaki JSON formatında döndür:
+{
+  "tedarikci_ad": "...",
+  "fatura_no": "...",
+  "tarih": "YYYY-MM-DD",
+  "satirlar": [
+    {"malzeme_ad": "...", "miktar": 0.0, "birim": "...", "birim_fiyat": 0.0}
+  ]
+}
+Sadece JSON döndür, başka açıklama ekleme. Birim fiyatlar TL cinsinden olmalı."""
+
+        response = model.generate_content([
+            {"mime_type": mime, "data": b64_data},
+            prompt,
+        ])
+        metin = response.text.strip()
+        if metin.startswith("```"):
+            metin = metin.split("```")[1]
+            if metin.startswith("json"):
+                metin = metin[4:]
+        parse_sonucu = json.loads(metin)
+        return {"status": "success", "parse_durumu": "parsed", "parse_sonucu": parse_sonucu}
+    except Exception as exc:
+        logging.warning("Fatura parse hatasi: %s", exc)
+        return {"status": "success", "parse_durumu": "failed", "parse_sonucu": None}
+
+
+# BIM viewer static dosyaları — diğer route'ların altında catch-all olmaması için en sona
+app.mount("/bim-viewer", StaticFiles(directory="bim-viewer/dist", html=True), name="bim-viewer")
 

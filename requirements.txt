@@ -23,6 +23,10 @@ python-jose
 pdfplumber
 iyzipay
 PyJWT
+openpyxl>=3.1.0
+# ── Fiyat Takip Scraper ──────────────────────────
+beautifulsoup4>=4.12.0
+apscheduler>=3.10.0
 # ── Yerel Kamera & Video Analiz ──────────────────
 opencv-python-headless
 ultralytics

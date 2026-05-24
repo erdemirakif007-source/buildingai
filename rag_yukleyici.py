@@ -18,7 +18,7 @@ embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 qdrant_url = "http://localhost:6333"
 
 # --- Koleksiyon 1: Yönetmelikler ---
-print("\n🏗️ 1. Adım: Yönetmelikler klasörü okunuyor...")
+print("\n 1. Adım: Yönetmelikler klasörü okunuyor...")
 loader1 = PyPDFDirectoryLoader("./Yönetmelikler")
 docs1 = loader1.load()
 chunks1 = text_splitter.split_documents(docs1)

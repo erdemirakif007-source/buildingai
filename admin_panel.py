@@ -50,7 +50,7 @@ body{background:#0d1117;color:#f0f0f0;font-family:Arial,sans-serif;min-height:10
 
 <div id="loginScreen" class="login-screen">
   <div class="login-box">
-    <div style="font-size:2.5rem;margin-bottom:10px">🏗️</div>
+    <div style="font-size:2.5rem;margin-bottom:10px"></div>
     <h2>Admin Panel</h2>
     <p style="color:#aaa;margin-bottom:25px;font-size:0.9rem">BuildingAI</p>
     <input type="email" id="adminEmail" class="input" placeholder="Admin email">
@@ -62,7 +62,7 @@ body{background:#0d1117;color:#f0f0f0;font-family:Arial,sans-serif;min-height:10
 
 <div id="mainPanel">
   <div class="header">
-    <h1>🏗️ BuildingAI — Admin</h1>
+    <h1> BuildingAI — Admin</h1>
     <div style="display:flex;align-items:center;gap:15px">
       <span id="adminWelcome" style="color:#aaa;font-size:0.9rem"></span>
       <button onclick="adminCikis()" style="background:none;border:1px solid #555;color:#aaa;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:0.85rem">Çıkış</button>
@@ -185,17 +185,23 @@ function kullanicilariRender(liste) {
   const tbody = document.getElementById('kullaniciTablosu');
   if(!liste.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:#aaa;padding:30px">Kullanici bulunamadi</td></tr>';return;}
   tbody.innerHTML = liste.map(u => {
-    const isAdmin = u.email === 'erdemirakif007@gmail.com';
+    const isAdmin = u.is_admin === true;
     const badge = isAdmin ? '<span class="badge badge-admin">ADMIN</span>' :
                   (u.plan==='profesyonel') ? '<span class="badge badge-profesyonel" style="background:rgba(241,196,15,0.15);border-color:#f1c40f;color:#f1c40f;">Profesyonel</span>' :
                   '<span class="badge badge-baslangic">Başlangıç</span>';
     const tarih = u.created_at ? u.created_at.substring(0,10) : '-';
+    const rolDropdown = `<select id="rol-select-${u.id}" style="margin-right:4px;padding:3px 6px;border-radius:4px;border:1px solid #444;background:#1e1e2e;color:#cdd6f4;font-size:0.78rem;">
+      <option value="muhendis" ${u.role==='muhendis'?'selected':''}>Mühendis</option>
+      <option value="muteahhit" ${(u.role==='muteahhit'||u.role==='mutahhit')?'selected':''}>Müteahhit</option>
+      <option value="santi_sefi" ${u.role==='santi_sefi'?'selected':''}>Şantiye Şefi</option>
+      <option value="yonetici" ${u.role==='yonetici'?'selected':''}>Yönetici</option>
+      <option value="proje_muduru" ${u.role==='proje_muduru'?'selected':''}>Proje Müdürü</option>
+    </select><button class="btn btn-small btn-green" style="margin-right:8px" onclick="rolKaydet(${u.id})">Rol Kaydet</button>`;
     const islemler = isAdmin ? '<span style="color:#555;font-size:0.8rem">—</span>' :
-      (u.plan==='free'
-        ? `<button class="btn btn-small btn-green" style="margin-right:4px" onclick="planDegistir(${u.id},'pro')">Pro ⚡</button><button class="btn btn-small btn-green" style="margin-right:4px;background:#b7791f" onclick="planDegistir(${u.id},'max')">Max 👑</button>`
-        : u.plan==='pro'
-        ? `<button class="btn btn-small btn-red" style="margin-right:4px" onclick="planDegistir(${u.id},'free')">Free Yap</button><button class="btn btn-small btn-green" style="margin-right:4px;background:#b7791f" onclick="planDegistir(${u.id},'max')">Max 👑</button>`
-        : `<button class="btn btn-small btn-red" style="margin-right:4px" onclick="planDegistir(${u.id},'free')">Free Yap</button><button class="btn btn-small btn-green" style="margin-right:4px" onclick="planDegistir(${u.id},'pro')">Pro ⚡</button>`
+      rolDropdown +
+      (u.plan==='profesyonel'
+        ? `<button class="btn btn-small btn-red" style="margin-right:4px" onclick="planDegistir(${u.id},'baslangic')">Başlangıç Yap</button>`
+        : `<button class="btn btn-small btn-green" style="margin-right:4px;background:#b7791f" onclick="planDegistir(${u.id},'profesyonel')">Profesyonel</button>`
       ) + `<button class="btn btn-small btn-red" onclick="kullaniciyiSil(${u.id},'${u.email}')">Sil</button>`;
     return `<tr><td style="color:#555">#${u.id}</td><td>${u.full_name}</td><td style="color:#aaa">${u.email}</td><td>${badge}</td><td style="color:#555">${tarih}</td><td>${islemler}</td></tr>`;
   }).join('');
@@ -213,6 +219,19 @@ async function planDegistir(userId, yeniPlan) {
     if(res.ok){mesajGoster(data.mesaj,'success');await kullanicilariYukle();await istatistikleriYukle();}
     else mesajGoster(data.detail,'error');
   } catch(e){mesajGoster('Hata olustu.','error');}
+}
+
+async function rolKaydet(userId) {
+  const select = document.getElementById('rol-select-' + userId);
+  if (!select) return;
+  const yeniRol = select.value;
+  if (!confirm('Bu kullanıcının rolünü "' + yeniRol + '" yapmak istediğinizden emin misiniz?')) return;
+  try {
+    const res = await fetch('/admin/rol-degistir', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({token: adminToken, user_id: userId, yeni_rol: yeniRol})});
+    const data = await res.json();
+    if (res.ok) { mesajGoster('Rol başarıyla değiştirildi.', 'success'); await kullanicilariYukle(); }
+    else mesajGoster(data.detail || 'Rol değiştirilemedi.', 'error');
+  } catch(e) { mesajGoster('Hata oluştu.', 'error'); }
 }
 
 async function kullaniciyiSil(userId, email) {

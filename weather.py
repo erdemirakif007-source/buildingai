@@ -26,15 +26,24 @@ def ikon_sec(desc: str) -> str:
             return ikon
     return "🌤️"
 
-async def hava_getir(sehir: str = "Sivas") -> dict:
+async def hava_getir(sehir: str = "Sivas", lat: str = None, lon: str = None) -> dict:
     try:
-        url = (
-            f"https://api.openweathermap.org/data/2.5/weather"
-            f"?q={sehir},TR"
-            f"&appid={WEATHER_API_KEY}"
-            f"&units=metric"
-            f"&lang=tr"
-        )
+        if lat and lon:
+            url = (
+                f"https://api.openweathermap.org/data/2.5/weather"
+                f"?lat={lat}&lon={lon}"
+                f"&appid={WEATHER_API_KEY}"
+                f"&units=metric"
+                f"&lang=tr"
+            )
+        else:
+            url = (
+                f"https://api.openweathermap.org/data/2.5/weather"
+                f"?q={sehir},TR"
+                f"&appid={WEATHER_API_KEY}"
+                f"&units=metric"
+                f"&lang=tr"
+            )
         async with httpx.AsyncClient(timeout=5) as client:
             response = await client.get(url)
             data = response.json()
@@ -64,7 +73,7 @@ async def hava_getir(sehir: str = "Sivas") -> dict:
 
         cond = f"{ikon} {desc} | Hissedilen: {hissedilen}°C | Nem: %{nem} | Rüzgar: {ruzgar}km/h | {uyari_str}"
 
-        return {"temp": f"{temp}°C", "cond": cond}
+        return {"temp": f"{temp}°C", "cond": cond, "sicaklik": temp, "durum": desc, "ikon": ikon}
 
     except httpx.TimeoutException:
         return {"temp": "--°C", "cond": "⏱️ Zaman aşımı"}

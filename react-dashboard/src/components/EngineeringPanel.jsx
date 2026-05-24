@@ -63,7 +63,7 @@ export default function EngineeringPanel({ resultHtml }) {
           " />
 
           <h2 className="text-[14px] font-semibold text-gray-100">
-            🏗️ Mühendislik Paneli Hazır
+             Mühendislik Paneli Hazır
           </h2>
 
           {/* LIVE badge */}

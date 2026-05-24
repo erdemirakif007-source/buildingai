@@ -5,7 +5,7 @@ NEW_HTML_TEMPLATE = f"""
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta charset="utf-8">
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,15 +13,18 @@ NEW_HTML_TEMPLATE = f"""
     <meta name="apple-mobile-web-app-title" content="BuildingAI">
     <meta name="theme-color" content="#f97316">
     <link rel="manifest" href="/static/manifest.json">
-    <link rel="apple-touch-icon" href="/static/logo_3d_baret.png">
-    <link rel="icon" type="image/png" href="/static/logo_3d_baret.png">
-    <link rel="shortcut icon" type="image/png" href="/static/logo_3d_baret.png">
+    <link rel="apple-touch-icon" href="/static/buildingai-logo.svg">
+    <link rel="icon" type="image/png" href="/static/buildingai-logo.svg">
+    <link rel="shortcut icon" type="image/png" href="/static/buildingai-logo.svg">
     <title>BuildingAI</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+    <link rel="stylesheet" href="/static/hiyerarsi.css">
+    <script src="/static/hiyerarsi.js" defer></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     {CSS_STYLE}
@@ -34,13 +37,121 @@ NEW_HTML_TEMPLATE = f"""
         .profile-stat .stat-value {{ font-size: 1.8rem; font-weight: 800; color: var(--amber); }}
         .profile-stat .stat-label {{ font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px; }}
         .stats-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 25px; }}
+
+        /* ---- KAMERA ANALIZI RESPONSIVE LAYOUT ---- */
+        #kameraPage {{ min-height: 0; overflow: auto !important; }}
+        .kamera-page-toolbar {{ flex-shrink: 0; }}
+        .kamera-layout {{
+          flex: 1;
+          min-height: 0;
+          min-width: 0;
+          display: grid !important;
+          grid-template-columns: minmax(0, 1fr) 300px;
+          align-items: start;
+          overflow: visible !important;
+        }}
+        .kamera-layout > * {{ min-width: 0; }}
+        .kamera-main {{
+          min-width: 0;
+          min-height: 0;
+          overflow: visible !important;
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }}
+        .kamera-sidebar {{
+          width: auto !important;
+          min-width: 0;
+          min-height: 0;
+          overflow: visible !important;
+          align-self: start;
+        }}
+        .kamera-section {{
+          min-width: 0;
+          overflow: visible !important;
+        }}
+        #kpCameraGrid,
+        #kpAiKartlar,
+        #kpManuelKartlar {{
+          min-width: 0;
+        }}
+        #kpAiKartlar,
+        #kpManuelKartlar {{
+          grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) !important;
+          align-items: start;
+        }}
+        @media (max-width: 1580px) {{
+          .kamera-layout {{
+            grid-template-columns: minmax(0, 1fr);
+          }}
+          .kamera-sidebar {{
+            padding: 0 24px 24px !important;
+          }}
+        }}
+        @media (max-width: 900px) {{
+          .kamera-main {{
+            padding: 16px !important;
+          }}
+          .kamera-sidebar {{
+            padding: 0 16px 20px !important;
+          }}
+        }}
+        @media (max-width: 720px) {{
+          .kamera-page-toolbar {{
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+          }}
+        }}
+
+        /* ===== AUTH OVERLAY TIKLAMA FIX - EN YÜKSEK ÖNCELİK ===== */
+        #auth-overlay {{
+            pointer-events: auto !important;
+            z-index: 9999 !important;
+            position: fixed !important;
+            isolation: isolate !important;
+        }}
+        #auth-overlay .auth-form-panel,
+        #auth-overlay .auth-card,
+        #auth-overlay button,
+        #auth-overlay input,
+        #auth-overlay a,
+        #auth-overlay .auth-btn,
+        #auth-overlay .auth-tab,
+        #auth-overlay .auth-input,
+        #auth-overlay .auth-lang-btn,
+        #auth-overlay .google-btn,
+        #auth-overlay .auth-forgot-link {{
+            pointer-events: auto !important;
+            position: relative !important;
+            z-index: 10 !important;
+            cursor: pointer !important;
+        }}
+        #auth-overlay input {{
+            cursor: text !important;
+        }}
+        #auth-overlay .auth-glow-1,
+        #auth-overlay .auth-glow-2 {{
+            pointer-events: none !important;
+            z-index: 0 !important;
+        }}
+        #auth-overlay::before {{
+            pointer-events: none !important;
+            z-index: 0 !important;
+        }}
+        #mobile-overlay {{
+            pointer-events: none !important;
+            z-index: -1 !important;
+        }}
+        body {{
+            overflow: visible !important;
+        }}
     </style>
 </head>
 <body>
-<div id="mobile-overlay" onclick="closeMobileMenu()"></div>
+<div id="mobile-overlay" onclick="closeMobileMenu()" style="display:none; pointer-events:none !important; z-index:-1 !important;"></div>
 
 <!-- ===== PREMIUM AUTH OVERLAY ===== -->
-<div id="auth-overlay">
+<div id="auth-overlay" style="pointer-events:auto;">
 
   <!-- Background glows -->
   <div class="auth-glow-1" aria-hidden="true"></div>
@@ -48,7 +159,12 @@ NEW_HTML_TEMPLATE = f"""
 
   <!-- ── LEFT: Brand Panel ── -->
   <div class="auth-brand-panel">
-    <div class="auth-logo">🏗️ Building<span>AI</span></div>
+    <a href="/" class="bai-logo" style="margin-bottom:56px;">
+      <img src="/static/buildingai_logo_clean.svg" alt="BuildingAI" class="bai-logo-icon">
+      <span class="bai-logo-text">
+        <span class="building" style="color:#fff;">Building</span><span class="ai">AI</span>
+      </span>
+    </a>
 
     <h2 class="auth-brand-h">Türkiye'nin<br>İnşaat Platformu</h2>
     <p class="auth-brand-sub">Saha mühendisleri ve müteahhitler için yapay zeka destekli tam kontrol. TBDY 2018 uyumlu, 7/24 aktif.</p>
@@ -91,7 +207,12 @@ NEW_HTML_TEMPLATE = f"""
   <!-- ── RIGHT: Form Panel ── -->
   <div class="auth-form-panel">
     <!-- Mobile-only mini logo (hidden on desktop via CSS) -->
-    <div class="auth-mobile-logo">🏗️ Building<span>AI</span></div>
+    <a href="/" class="auth-mobile-logo bai-logo" style="justify-content:center;">
+      <img src="/static/buildingai_logo_clean.svg" alt="BuildingAI" class="bai-logo-icon" style="height:32px;">
+      <span class="bai-logo-text" style="font-size:24px;">
+        <span class="building" style="color:#fff;">Building</span><span class="ai">AI</span>
+      </span>
+    </a>
 
     <div class="auth-card">
 
@@ -134,61 +255,67 @@ NEW_HTML_TEMPLATE = f"""
       <!-- REGISTER PANEL -->
       <div id="panel-register" style="display:none;">
         <h2>Hesap Oluştur</h2>
-        <p class="auth-card-sub">Ücretsiz başla, istediğin zaman yükselt.</p>
+        <p class="auth-card-sub">İnşaat şirketinizi BuildingAI'ye taşıyın.</p>
         <div class="auth-tabs">
           <button class="auth-tab tab-login" onclick="switchPanel('login')">Giriş Yap</button>
           <button class="auth-tab tab-register active" onclick="switchPanel('register')">Kayıt Ol</button>
         </div>
 
-        <!-- Google Register -->
-        <button class="google-btn" onclick="googleGirisYap()">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
-            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-          </svg>
-          Google ile Kayıt Ol
-        </button>
-        <div class="auth-divider"><span>veya e-posta ile</span></div>
-
-        <input type="text"     id="regName"        class="auth-input" placeholder="Ad Soyad">
-        <input type="text"     id="regCompany"     class="auth-input" placeholder="Şirket / Proje (opsiyonel)">
-        <input type="email"    id="regEmail"       class="auth-input" placeholder="E-posta adresi">
-        <input type="password" id="regPass"        class="auth-input" placeholder="Şifre (min. 8 karakter)">
-        <input type="password" id="regPassConfirm" class="auth-input" placeholder="Şifreyi tekrarla">
-
-        <!-- Premium Plan Chips -->
-        <div class="plan-section-label">Plan Seçin</div>
-        <div class="plan-chips" id="planChips">
-          <div class="plan-chip selected" id="plan-free" onclick="selectPlan('free')" role="radio" aria-checked="true">
-            <div class="plan-chip-radio"></div>
-            <div class="plan-chip-body">
-              <div class="plan-chip-name">Ücretsiz</div>
-              <div class="plan-chip-desc">10 AI sorgu/gün · 50+ hesaplama · 10 arşiv</div>
-            </div>
-            <div class="plan-chip-price">₺0<span>/ay</span></div>
+        <!-- ADIM 1: Rol seçimi -->
+        <div id="reg-step-select" style="display:block;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;">
+            <button onclick="regSelectRole('muteahhit')" style="
+              background:rgba(249,115,22,0.08);border:1.5px solid rgba(249,115,22,0.35);
+              border-radius:14px;padding:20px 12px;cursor:pointer;text-align:center;
+              transition:all 0.2s;color:#F1F5F9;
+            " onmouseover="this.style.borderColor='#F97316';this.style.background='rgba(249,115,22,0.15)'"
+               onmouseout="this.style.borderColor='rgba(249,115,22,0.35)';this.style.background='rgba(249,115,22,0.08)'">
+              <div style="font-size:28px;margin-bottom:8px;"></div>
+              <div style="font-weight:700;font-size:14px;margin-bottom:4px;">Müteahhit /<br>Şirket Sahibi</div>
+              <div style="font-size:11px;color:rgba(241,245,249,0.5);">Şirketinizi kaydedin,<br>ekibinizi davet edin</div>
+            </button>
+            <button onclick="regSelectRole('davet')" style="
+              background:rgba(56,189,248,0.06);border:1.5px solid rgba(56,189,248,0.25);
+              border-radius:14px;padding:20px 12px;cursor:pointer;text-align:center;
+              transition:all 0.2s;color:#F1F5F9;
+            " onmouseover="this.style.borderColor='#38BDF8';this.style.background='rgba(56,189,248,0.12)'"
+               onmouseout="this.style.borderColor='rgba(56,189,248,0.25)';this.style.background='rgba(56,189,248,0.06)'">
+              <div style="font-size:28px;margin-bottom:8px;">📨</div>
+              <div style="font-weight:700;font-size:14px;margin-bottom:4px;">Davet ile<br>Katıl</div>
+              <div style="font-size:11px;color:rgba(241,245,249,0.5);">Müteahhitinizden aldığınız<br>davet koduyla katılın</div>
+            </button>
           </div>
-          <div class="plan-chip" id="plan-pro" onclick="selectPlan('pro')" role="radio" aria-checked="false">
-            <div class="plan-chip-radio"></div>
-            <div class="plan-chip-body">
-              <div class="plan-chip-name">⚡ Pro <span class="plan-chip-badge">Popüler</span></div>
-              <div class="plan-chip-desc">Sınırsız AI · 5 şantiye · Kamera & stok takibi</div>
-            </div>
-            <div class="plan-chip-price">₺650<span>/ay</span></div>
-          </div>
-          <div class="plan-chip" id="plan-max" onclick="selectPlan('max')" role="radio" aria-checked="false">
-            <div class="plan-chip-radio"></div>
-            <div class="plan-chip-body">
-              <div class="plan-chip-name">👑 Max</div>
-              <div class="plan-chip-desc">Her şey sınırsız · Haftalık rapor · Filigransız PDF</div>
-            </div>
-            <div class="plan-chip-price">₺1.990<span>/ay</span></div>
+          <div style="text-align:center;margin-top:16px;">
+            <span style="font-size:12px;color:rgba(241,245,249,0.35);">Zaten hesabınız var mı</span>
+            <a onclick="switchPanel('login')" style="font-size:12px;color:#F97316;cursor:pointer;margin-left:4px;">Giriş yapın</a>
           </div>
         </div>
 
-        <button class="auth-btn" id="regBtn" onclick="kayitOl()" style="margin-top:4px;">Hesabı Oluştur →</button>
-        <div id="regMsg" style="margin-top:12px;font-size:13px;text-align:center;min-height:20px;"></div>
+        <!-- ADIM 2a: Müteahhit kayıt formu -->
+        <div id="reg-step-muteahhit" style="display:none;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+            <button onclick="regGeriDon()" style="background:none;border:none;color:rgba(241,245,249,0.5);cursor:pointer;font-size:18px;padding:0;">←</button>
+            <span style="font-size:13px;color:rgba(241,245,249,0.6);">Müteahhit / Şirket Kaydı</span>
+          </div>
+          <button class="google-btn" onclick="googleGirisYap()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            </svg>
+            Google ile Kayıt Ol
+          </button>
+          <div class="auth-divider"><span>veya e-posta ile</span></div>
+          <input type="text"     id="regName"        class="auth-input" placeholder="Ad Soyad *">
+          <input type="email"    id="regEmail"       class="auth-input" placeholder="E-posta adresi *">
+          <input type="password" id="regPass"        class="auth-input" placeholder="Şifre (min. 8 karakter) *">
+          <input type="password" id="regPassConfirm" class="auth-input" placeholder="Şifreyi tekrarla *">
+          <input type="text"     id="regCompany"     class="auth-input" placeholder="Şirket Adı (örn: Erdemir İnşaat) *" style="border-color:rgba(249,115,22,0.4);">
+          <input type="tel"      id="regTelefon"     class="auth-input" placeholder="Telefon (opsiyonel)">
+          <button class="auth-btn" id="regBtn" onclick="kayitOl()" style="margin-top:4px;">Hesabı Oluştur →</button>
+          <div id="regMsg" style="margin-top:12px;font-size:13px;text-align:center;min-height:20px;"></div>
+        </div>
       </div>
 
       <!-- FORGOT PASSWORD PANEL -->
@@ -205,7 +332,7 @@ NEW_HTML_TEMPLATE = f"""
           <input type="text"     id="resetKod"          class="auth-input" placeholder="6 haneli kod" maxlength="6" style="text-align:center;letter-spacing:10px;font-size:1.5rem;font-weight:700;">
           <input type="password" id="resetYeniSifre"    class="auth-input" placeholder="Yeni şifre (min. 8 karakter)">
           <input type="password" id="resetYeniSifreTekrar" class="auth-input" placeholder="Yeni şifreyi tekrarla">
-          <button class="auth-btn" onclick="sifreGuncelle()">Şifreyi Güncelle →</button>
+          <button class="auth-btn" onclick="sifreResetGuncelle()">Şifreyi Güncelle →</button>
           <div id="resetMsg" style="margin-top:12px;font-size:13px;text-align:center;"></div>
           <div style="text-align:center;margin-top:12px;">
             <a class="auth-link" style="font-size:12px;color:rgba(255,255,255,0.35);cursor:pointer;" onclick="document.getElementById('forgot-step1').style.display='block';document.getElementById('forgot-step2').style.display='none';">← Farklı e-posta dene</a>
@@ -232,7 +359,7 @@ NEW_HTML_TEMPLATE = f"""
             <div>
                 <div style="font-size:1.3rem; font-weight:800; color:white;" id="profileName">Erdem</div>
                 <div style="color:#aaa; font-size:0.9rem;" id="profileEmail">erdem@mail.com</div>
-                <div class="profile-badge" id="profilePlan" style="margin-top:8px;">ÜCRETSİZ PLAN</div>
+                <div class="profile-badge" id="profilePlan" style="margin-top:8px;">BAŞLANGIÇ PLAN</div>
             </div>
         </div>
         <div class="stats-grid">
@@ -242,8 +369,7 @@ NEW_HTML_TEMPLATE = f"""
         </div>
         <hr class="divider">
         <div style="display:flex; gap:8px; margin-bottom:4px;">
-            <button onclick="closeProfile(); odemePaneliAc('pro');" style="flex:1; padding:12px; background:linear-gradient(135deg,#6366f1,#818cf8); border:none; color:white; border-radius:14px; cursor:pointer; font-weight:700; font-size:0.9rem; transition:0.3s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">⚡ PRO — 650 TL/ay</button>
-            <button onclick="closeProfile(); odemePaneliAc('max');" style="flex:1; padding:12px; background:linear-gradient(135deg,#b7791f,#f1c40f); border:none; color:#111; border-radius:14px; cursor:pointer; font-weight:700; font-size:0.9rem; transition:0.3s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">👑 MAX — 1.990 TL/ay</button>
+            <button onclick="closeProfile(); odemePaneliAc('profesyonel');" style="flex:1; padding:12px; background:linear-gradient(135deg,#b7791f,#f1c40f); border:none; color:#111; border-radius:14px; cursor:pointer; font-weight:700; font-size:0.9rem; transition:0.3s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Profesyonel — 1.990 TL/ay</button>
         </div>
         <hr class="divider">
         <button onclick="closeProfile(); rolSifirla();" style="width:100%; padding:12px; background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.3); color:#818cf8; border-radius:14px; cursor:pointer; font-weight:700; margin-bottom:12px; transition:0.3s;" onmouseover="this.style.background='rgba(99,102,241,0.2)'" onmouseout="this.style.background='rgba(99,102,241,0.1)'">🔄 Rolümü Değiştir</button>
@@ -263,7 +389,7 @@ NEW_HTML_TEMPLATE = f"""
 <div id="historySidebar" style="display:none;"></div>
 <div id="historyList" style="display:none;"></div>
 <div id="weatherWidget" style="display:none;"></div>
-<div id="planBadge" style="display:none;">FREE</div>
+<div id="planBadge" style="display:none;">BAŞLANGIÇ</div>
 <span id="tbPageTitle" style="display:none;"></span>
 
 <!-- ===== ANA UYGULAMA ===== -->
@@ -274,8 +400,8 @@ NEW_HTML_TEMPLATE = f"""
       <div style="position:absolute; inset:0; background:radial-gradient(ellipse 80% 60% at 50% 0%, rgba(249,115,22,0.12) 0%, transparent 60%); pointer-events:none;"></div>
       <div style="position:relative; z-index:1; text-align:center; width:90%; max-width:700px;">
         <div style="margin-bottom:48px;">
-          <div style="font-size:3rem; margin-bottom:16px;">🏗️</div>
-          <h1 style="font-size:2rem; font-weight:900; letter-spacing:-1.5px; background:linear-gradient(135deg,var(--primary),#fb923c); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; margin-bottom:10px;">BuildingAI Pro'ya Hoş Geldiniz</h1>
+          <div style="font-size:3rem; margin-bottom:16px;"></div>
+          <h1 style="font-size:2rem; font-weight:900; letter-spacing:-1.5px; background:linear-gradient(135deg,var(--primary),#fb923c); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; margin-bottom:10px;">BuildingAI'a Hoş Geldiniz</h1>
           <p style="color:var(--text-secondary); font-size:1rem;">Size en iyi deneyimi sunabilmek için kim olduğunuzu öğrenmek istiyoruz.</p>
         </div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:32px;">
@@ -294,7 +420,7 @@ NEW_HTML_TEMPLATE = f"""
           <div class="rol-kart" data-rol="muteahhit" onclick="rolSecimYap('muteahhit')" style="background:rgba(255,255,255,0.04); border:2px solid rgba(255,255,255,0.08); border-radius:24px; padding:36px 24px; cursor:pointer; transition:all 0.3s; text-align:center;"
             onmouseover="this.style.borderColor='rgba(99,102,241,0.4)'; this.style.background='rgba(99,102,241,0.06)'; this.style.transform='translateY(-4px)';"
             onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'; this.style.background='rgba(255,255,255,0.04)'; this.style.transform='translateY(0)';">
-            <div style="font-size:3.5rem; margin-bottom:16px;">🏗️</div>
+            <div style="font-size:3.5rem; margin-bottom:16px;"></div>
             <h3 style="color:white; font-size:1.2rem; font-weight:800; margin-bottom:8px;">Müteahhit / Proje Yöneticisiyim</h3>
             <p style="color:var(--text-secondary); font-size:0.85rem; line-height:1.6;">Şantiye yönetimi, saha raporları ve proje takibi.</p>
             <div style="margin-top:20px; display:flex; flex-wrap:wrap; gap:6px; justify-content:center;">
@@ -316,10 +442,13 @@ NEW_HTML_TEMPLATE = f"""
         <button id="hamburger-btn" onclick="toggleMobileMenu()">
           <span></span><span></span><span></span>
         </button>
-        <div class="tb-logo">
-          <img src="/static/logo_3d_baret.png" style="width:38px; height:38px; object-fit:contain; filter: drop-shadow(0 0 6px rgba(249,115,22,0.4));">
-          Building<em>AI</em>&nbsp;<span id="planLabel">Pro</span>
-        </div>
+        <a href="/" class="bai-logo" style="gap:8px;">
+          <img src="/static/buildingai_logo_clean.svg" alt="BuildingAI" class="bai-logo-icon" style="height:36px;">
+          <span class="bai-logo-text" style="font-size:20px;">
+            <span class="building" style="color:#fff;">Building</span><span class="ai">AI</span>
+          </span>
+        </a>
+        <span id="planLabel" style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.5);margin-left:4px;">Başlangıç</span>
         <div class="tb-right">
           <select id="citySelect" class="tb-city tb-hide-mobile" onchange="havaGuncelle()">
             <option value="Adana">Adana</option><option value="Adıyaman">Adıyaman</option>
@@ -370,6 +499,10 @@ NEW_HTML_TEMPLATE = f"""
             <span id="temp" class="tb-temp">--°C</span>
           </div>
           <div class="theme-toggle" id="themeToggle"></div>
+          <div class="tb-bell" id="fiyatAlertBell" onclick="fiyatAlertBellTikla()" title="Fiyat Alertleri" style="position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;transition:background 0.15s;" onmouseover="this.style.background='rgba(249,115,22,0.1)'" onmouseout="this.style.background='transparent'">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#64748B;" id="fiyatAlertBellIcon"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span id="fiyatAlertBadge" style="display:none;position:absolute;top:3px;right:3px;background:#EF4444;color:#fff;font-size:9px;font-weight:700;border-radius:10px;padding:1px 4px;min-width:14px;text-align:center;line-height:14px;">0</span>
+          </div>
           <div class="tb-avatar" onclick="openProfile()" id="avatarBtn">EA</div>
         </div>
       </div>
@@ -381,65 +514,77 @@ NEW_HTML_TEMPLATE = f"""
         <div id="sidebar">
           <!-- Logo -->
           <div id="sidebarLogoBar">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
-              <div style="width:32px;height:32px;background:linear-gradient(135deg,#F97316,#EA6010);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px rgba(249,115,22,0.35);">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-              </div>
-              <div>
-                <div class="sb-brand">BuildingAI</div>
-              </div>
-            </div>
-            <div class="sb-brand-sub">Şantiye Komuta Merkezi</div>
+            <a href="/" class="bai-logo">
+              <img src="/static/buildingai_logo_clean.svg" alt="BuildingAI" class="bai-logo-icon">
+              <span class="bai-logo-text">
+                <span class="building">Building</span><span class="ai">AI</span>
+              </span>
+            </a>
+            <div id="sidebarOrgName"></div>
           </div>
 
           <!-- Nav -->
-          <div style="flex:1;padding:8px 0;">
+          <div style="flex:1;padding:4px 0;">
             <!-- Ana Panel -->
-            <div class="nav-item active" id="nav-home" onclick="navGit('home')" style="margin:4px 10px;">
+            <div class="nav-item active" id="nav-home" onclick="navGit('home')" style="margin:2px 8px;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
               Ana Panel
             </div>
             <!-- Şantiyelerim -->
-            <div class="nav-item" id="nav-santiye" onclick="navGit('santiye')" style="margin:4px 10px;">
+            <div class="nav-item" id="nav-santiye" onclick="navGit('santiye')" style="margin:2px 8px;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
               Şantiyelerim
             </div>
+            <!-- Metraj Yönetimi -->
+            <div class="nav-item" id="nav-hiyerarsi" onclick="navGit('hiyerarsi')" style="margin:2px 8px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="9"/><rect x="14" y="14" width="7" height="4"/></svg>
+              Metraj Yönetimi
+            </div>
+            <!-- Hakedis -->
+            <div class="nav-item" id="nav-hakedis" onclick="navGit('hakedis')" style="margin:2px 8px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
+              Hakedis
+            </div>
             <!-- Stok Takibi -->
-            <div class="nav-item" id="nav-stok" onclick="navGit('stok')" style="margin:4px 10px;">
+            <div class="nav-item" id="nav-stok" onclick="navGit('stok')" style="margin:2px 8px;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
               Stok Takibi
             </div>
             <!-- ISG & Güvenlik -->
-            <div class="nav-item" id="nav-guvenlik" onclick="guvenlikAc()" style="margin:4px 10px;">
+            <div class="nav-item" id="nav-guvenlik" onclick="guvenlikAc()" style="margin:2px 8px;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
               ISG &amp; Güvenlik
             </div>
             <!-- Raporlar -->
-            <div class="nav-item" id="nav-gunluk" onclick="navGit('gunluk')" style="margin:4px 10px;">
+            <div class="nav-item" id="nav-gunluk" onclick="navGit('gunluk')" style="margin:2px 8px;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
               Raporlar
             </div>
+            <div class="nav-item" id="nav-saha-kayitlari" onclick="navGit('saha-kayitlari')" style="margin:2px 8px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M9 3h6l2 2h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2l2-2z"/><path d="M8 11h8"/><path d="M8 15h6"/></svg>
+              Saha Kayıtları
+            </div>
             <!-- Ayarlar -->
-            <div class="nav-item" id="nav-ayarlar" onclick="sayfaGoster('ayarlar')" style="margin:4px 10px;">
+            <div class="nav-item" id="nav-ayarlar" onclick="sayfaGoster('ayarlar')" style="margin:2px 8px;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
               Ayarlar
             </div>
 
             <!-- Divider + ekstra nav -->
-            <div style="height:1px;background:#1E293B;margin:10px 16px;"></div>
-            <div class="nav-item" id="nav-kamera" onclick="navGit('kamera')" style="margin:4px 10px;">
+            <div style="height:1px;background:#1E293B;margin:6px 16px;"></div>
+            <div class="nav-item" id="nav-kamera" onclick="navGit('kamera')" style="margin:2px 8px;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
               Kamera Analizi
             </div>
-            <div class="nav-item" id="nav-hesaplama" onclick="navGit('hesaplama')" style="margin:4px 10px;">
+            <div class="nav-item" id="nav-hesaplama" onclick="navGit('hesaplama')" style="margin:2px 8px;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
               Mühendislik
             </div>
-            <div class="nav-item" id="nav-fiyat" onclick="navGit('fiyat')" style="margin:4px 10px;">
+            <div class="nav-item" id="nav-fiyat" onclick="navGit('fiyat')" style="margin:2px 8px;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
               Fiyat Takibi
             </div>
-            <div class="nav-item" id="nav-arsiv" onclick="navGit('arsiv')" style="margin:4px 10px;">
+            <div class="nav-item" id="nav-arsiv" onclick="navGit('arsiv')" style="margin:2px 8px;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
               Arşiv
             </div>
@@ -447,8 +592,8 @@ NEW_HTML_TEMPLATE = f"""
 
           <div class="sb-fill"></div>
           <div class="sb-foot">
-            <div class="sb-upgrade" onclick="odemePaneliAc('max')">
-              <div class="sb-upgrade-title">👑 Max'e Geç</div>
+            <div class="sb-upgrade" onclick="odemePaneliAc('profesyonel')">
+              <div class="sb-upgrade-title">Profesyonel'e Geç</div>
               <div class="sb-upgrade-sub">Çoklu şantiye &amp; stok</div>
             </div>
           </div>
@@ -464,26 +609,48 @@ NEW_HTML_TEMPLATE = f"""
               <div style="font-size:20px;font-weight:800;color:#0F172A;letter-spacing:-0.4px;" id="contentTitle">Genel Bakış</div>
               <div style="font-size:12px;color:#94A3B8;margin-top:2px;" id="contentDate"></div>
             </div>
-            <!-- Sağ: online durum + çan + kullanıcı -->
-            <div style="display:flex;align-items:center;gap:12px;position:relative;">
-              <!-- Online durum butonu -->
-              <div id="onlineStatusBtn" style="display:flex;align-items:center;gap:7px;border:1.5px solid #F97316;border-radius:8px;padding:6px 12px;cursor:default;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F97316" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55M5 12.55a10.94 10.94 0 0 1 5.17-2.39M10.71 5.05A16 16 0 0 1 22.56 9M1.42 9a15.91 15.91 0 0 1 4.7-2.88M12 20h.01"/></svg>
-                <span style="font-size:12px;font-weight:600;color:#F97316;" id="onlineStatusText">İnternet Yok</span>
-                <span id="offlineQueueBadge" style="font-size:11px;color:#F97316;display:none;"> · <span id="offlineQueueCount">0</span> Kayıt</span>
+            <!-- Sağ: şantiye seçici + hava + bildirim + kullanıcı -->
+            <div style="display:flex;align-items:center;gap:10px;position:relative;">
+              <!-- Müteahhit: mobile AI Paneli toggle (desktop'ta gizli, CSS+JS ile yönetilir) -->
+              <button type="button"
+                class="dashboard-rail-toggle dashboard-rail-toggle--compact"
+                id="contractorRailToggleMobile"
+                onclick="contractorToggleCommandRail()">
+                AI Paneli
+              </button>
+
+              <!-- Global şantiye seçici — pill style -->
+              <div style="display:flex;align-items:center;gap:7px;background:#F8F9FA;border:1px solid #E8ECF0;border-radius:10px;padding:7px 12px;cursor:pointer;min-width:160px;" onclick="document.getElementById('globalSantiyeSecici').focus()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2" style="flex-shrink:0;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                <select id="globalSantiyeSecici" onchange="globalSantiyeDegisti()"
+                  style="background:none;border:none;outline:none;font-size:13px;font-weight:600;color:#1A1D23;cursor:pointer;min-width:120px;appearance:none;-webkit-appearance:none;">
+                  <option value="">Tüm Şantiyeler</option>
+                </select>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2" style="flex-shrink:0;pointer-events:none;"><polyline points="6 9 12 15 18 9"/></svg>
               </div>
+
+              <!-- Hava durumu pill -->
+              <div id="globalHavaDurumuPill" style="display:none;align-items:center;gap:7px;background:#F8F9FA;border:1px solid #E8ECF0;border-radius:10px;padding:7px 12px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2" style="flex-shrink:0;"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                <span id="globalHavaDurumu" style="font-size:13px;font-weight:600;color:#1A1D23;white-space:nowrap;"></span>
+              </div>
+
               <!-- Bildirim çanı -->
-              <div style="position:relative;cursor:pointer;" onclick="showToast('Bildirimler yakında', 'info')">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                <span id="notifDot" style="display:none;position:absolute;top:-2px;right:-2px;width:8px;height:8px;border-radius:50%;background:#EF4444;border:1.5px solid #FFFFFF;"></span>
+              <div style="width:38px;height:38px;border-radius:10px;background:#F8F9FA;border:1px solid #E8ECF0;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;transition:background 0.15s;"
+                onclick="showToast('Bildirimler yakında', 'info')"
+                onmouseover="this.style.background='#F1F2F4'" onmouseout="this.style.background='#F8F9FA'">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <span id="notifDot" style="display:none;position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;background:#EF4444;border:1.5px solid #FFFFFF;"></span>
               </div>
-              <!-- Kullanıcı -->
-              <div style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:6px 10px;border-radius:8px;transition:background 0.15s;" onclick="avatarMenuAc()"
-                onmouseover="this.style.background='#F8FAFC'" onmouseout="this.style.background='transparent'">
-                <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#818cf8);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;flex-shrink:0;" id="headerAvatar">EA</div>
+
+              <!-- Kullanıcı pill -->
+              <div style="display:flex;align-items:center;gap:9px;background:#F8F9FA;border:1px solid #E8ECF0;border-radius:10px;padding:6px 12px 6px 6px;cursor:pointer;transition:background 0.15s;"
+                onclick="avatarMenuAc()"
+                onmouseover="this.style.background='#F1F2F4'" onmouseout="this.style.background='#F8F9FA'">
+                <div style="width:28px;height:28px;border-radius:50%;background:#E15A1F;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:white;flex-shrink:0;" id="headerAvatar">BA</div>
                 <div style="line-height:1.3;">
-                  <div style="font-size:13px;font-weight:600;color:#0F172A;" id="headerUserName">Kullanıcı</div>
-                  <div style="font-size:11px;color:#94A3B8;" id="headerUserRole">Şantiye Şefi</div>
+                  <div style="font-size:12px;font-weight:700;color:#1A1D23;" id="headerUserName">Building AI</div>
+                  <div style="font-size:11px;color:#9CA3AF;" id="headerUserRole">Müteahhit</div>
                 </div>
               </div>
 
@@ -584,7 +751,7 @@ NEW_HTML_TEMPLATE = f"""
               <button onclick="aiCommandCalistir('Stok durumu özeti')"
                 style="background:#F1F5F9;border:1px solid #E2E8F0;color:#475569;font-size:12px;font-weight:500;padding:5px 12px;border-radius:20px;cursor:pointer;transition:all 0.15s;"
                 onmouseover="this.style.background='#E2E8F0';this.style.color='#0F172A'" onmouseout="this.style.background='#F1F5F9';this.style.color='#475569'">Stok Durumu</button>
-              <button onclick="aiCommandCalistir('Bugünün özeti nedir?')"
+              <button onclick="aiCommandCalistir('Bugünün özeti nedir')"
                 style="background:#F1F5F9;border:1px solid #E2E8F0;color:#475569;font-size:12px;font-weight:500;padding:5px 12px;border-radius:20px;cursor:pointer;transition:all 0.15s;"
                 onmouseover="this.style.background='#E2E8F0';this.style.color='#0F172A'" onmouseout="this.style.background='#F1F5F9';this.style.color='#475569'">Bugünün Özeti</button>
               <button onclick="aiCommandCalistir('ISG tutanağı oluştur')"
@@ -607,113 +774,232 @@ NEW_HTML_TEMPLATE = f"""
 
           <div id="content">
 
-            <!-- 3 STAT KARTI -->
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;" class="fade-in" id="dashKpiGrid">
-
-              <!-- Kart 1: AI Sorgu -->
-              <div class="kpi-card" id="kpi-ai" style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:14px;padding:20px;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;box-shadow:0 1px 3px rgba(0,0,0,0.06);cursor:default;position:relative;overflow:hidden;">
-                <div>
-                  <div style="font-size:12px;font-weight:500;color:#64748B;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em;">AI Sorgu (Bugün)</div>
-                  <div class="kpi-val" id="kpiAiVal" style="font-size:36px;font-weight:700;color:#3B82F6;line-height:1;">--</div>
-                  <div style="font-size:12px;color:#94A3B8;margin-top:6px;">Limitsiz kullanım</div>
-                  <div class="kpi-bar-wrap" style="background:#EFF6FF;height:4px;border-radius:2px;margin-top:10px;width:100px;"><div class="kpi-bar" id="kpiAiBar" style="width:0%;background:#3B82F6;height:100%;border-radius:2px;transition:width 0.5s;"></div></div>
-                </div>
-                <div style="width:42px;height:42px;border-radius:10px;background:#EFF6FF;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-                </div>
-              </div>
-
-              <!-- Kart 2: Kamera Analizi -->
-              <div class="kpi-card" id="kpi-kamera" style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:14px;padding:20px;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;box-shadow:0 1px 3px rgba(0,0,0,0.06);cursor:default;position:relative;overflow:hidden;">
-                <div>
-                  <div style="font-size:12px;font-weight:500;color:#64748B;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em;">Kamera Analizi</div>
-                  <div class="kpi-val" id="kpiKameraVal" style="font-size:36px;font-weight:700;color:#10B981;line-height:1;">--</div>
-                  <div style="font-size:12px;color:#94A3B8;margin-top:6px;">Bu hafta</div>
-                  <div class="kpi-bar-wrap" style="background:#F0FDF4;height:4px;border-radius:2px;margin-top:10px;width:100px;"><div class="kpi-bar" id="kpiKameraBar" style="width:0%;background:#10B981;height:100%;border-radius:2px;transition:width 0.5s;"></div></div>
-                </div>
-                <div style="width:42px;height:42px;border-radius:10px;background:#F0FDF4;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
-                </div>
-              </div>
-
-              <!-- Kart 3: Aktif Plan -->
-              <div class="kpi-card kpi-plan-card" id="kpi-plan" onclick="openProfile()" style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:14px;padding:20px;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;box-shadow:0 1px 3px rgba(0,0,0,0.06);cursor:pointer;position:relative;overflow:hidden;">
-                <div>
-                  <div style="font-size:12px;font-weight:500;color:#64748B;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em;">Aktif Plan</div>
-                  <div class="kpi-val" id="kpiPlanVal" style="font-size:22px;font-weight:800;color:#8B5CF6;line-height:1;text-transform:uppercase;letter-spacing:0.04em;">--</div>
-                  <div class="kpi-lbl" id="kpiRaporVal" style="font-size:12px;color:#94A3B8;margin-top:6px;">Rapor: <span id="kpiRaporSpan">--</span> bugün</div>
-                  <div style="font-size:11px;color:#8B5CF6;margin-top:10px;font-weight:600;">Profili görüntüle →</div>
-                </div>
-                <div style="width:42px;height:42px;border-radius:10px;background:#F5F3FF;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                </div>
-              </div>
-
-            </div><!-- /3 stat kart -->
-
-            <!-- 2 KOLON: Saha Günlüğü (sol %60) + AI Uyarıları (sağ %40) -->
-            <div style="display:flex;gap:14px;flex:1;min-height:0;" class="fade-in">
-
-              <!-- SOL: Saha Günlüğü & OCR Akışı -->
-              <div style="flex:3;min-width:0;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:14px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
-                <div style="padding:16px 18px;border-bottom:1px solid #F1F5F9;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
-                  <div>
-                    <div style="font-size:14px;font-weight:700;color:#0F172A;">📋 Saha Günlüğü &amp; OCR Akışı</div>
-                    <div style="font-size:11px;color:#94A3B8;margin-top:2px;">Son kayıtlar ve otomatik okumalar</div>
+            <div id="engineerDashboard" class="engineer-dashboard fade-in">
+              <div class="engineer-dashboard__main">
+                <section class="engineer-panel engineer-bottleneck-panel engineer-workspace-panel" id="engineerBottleneckPanel">
+                  <div class="engineer-bottleneck-panel__top engineer-workspace-panel__top">
+                    <div>
+                      <div class="engineer-bottleneck-panel__eyebrow">Mühendis Çalışma Alanı</div>
+                      <h2 class="engineer-bottleneck-panel__title engineer-workspace-panel__title">Bekleyen saha kararlarını sırayla kapatın.</h2>
+                    </div>
+                    <div class="engineer-close-meter">
+                      <span class="engineer-close-meter__label">Açık Karar</span>
+                      <strong id="engineerCloseTasksValue">0</strong>
+                    </div>
                   </div>
-                  <button onclick="stokModalAc()"
-                    style="background:#3B82F6;border:none;color:white;font-size:12px;font-weight:600;padding:7px 14px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background 0.15s;white-space:nowrap;"
-                    onmouseover="this.style.background='#2563EB'" onmouseout="this.style.background='#3B82F6'">
-                    + Yeni Kayıt
-                  </button>
-                </div>
-                <div id="sahaGunluguListe" style="flex:1;overflow-y:auto;padding:8px 12px;display:flex;flex-direction:column;gap:2px;">
-                  <div style="color:#94A3B8;font-size:12px;text-align:center;padding:24px;">Yükleniyor...</div>
-                </div>
-                <!-- Alt hızlı eylemler -->
-                <div style="padding:10px 14px;border-top:1px solid #F1F5F9;display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap;">
-                  <button onclick="kameraAc('genel')"
-                    style="background:#F8FAFC;border:1px solid #E2E8F0;color:#475569;font-size:12px;font-weight:500;padding:6px 12px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all 0.15s;"
-                    onmouseover="this.style.background='#F1F5F9'" onmouseout="this.style.background='#F8FAFC'">
-                    📷 Fotoğraf Yükle
-                  </button>
-                  <button onclick="kameraAc('ocr')"
-                    style="background:#F8FAFC;border:1px solid #E2E8F0;color:#475569;font-size:12px;font-weight:500;padding:6px 12px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all 0.15s;"
-                    onmouseover="this.style.background='#F1F5F9'" onmouseout="this.style.background='#F8FAFC'">
-                    📄 İrsaliye Oku (OCR)
-                  </button>
-                  <button onclick="showToast('ISG modülü yakında aktif olacak', 'info')"
-                    style="background:#F8FAFC;border:1px solid #E2E8F0;color:#475569;font-size:12px;font-weight:500;padding:6px 12px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all 0.15s;"
-                    onmouseover="this.style.background='#F1F5F9'" onmouseout="this.style.background='#F8FAFC'">
-                    🛡️ ISG Tutanağı
-                  </button>
-                </div>
+
+                  <div class="engineer-bottleneck-panel__body engineer-workspace-panel__body">
+                    <p id="engineerBottleneckSummary" class="engineer-bottleneck-panel__summary">
+                      Bekleyen saha kayıtları yükleniyor.
+                    </p>
+
+                    <div class="engineer-bottleneck-metrics engineer-workspace-metrics">
+                      <div class="engineer-bottleneck-metric" id="engineerStatEvidence" data-tone="warning">
+                        <span class="engineer-bottleneck-metric__label">Saha kaydı</span>
+                        <strong class="engineer-bottleneck-metric__value" id="engineerStatEvidenceValue">0</strong>
+                      </div>
+                      <div class="engineer-bottleneck-metric" id="engineerStatReport" data-tone="success">
+                        <span class="engineer-bottleneck-metric__label">Rapor / düzeltme</span>
+                        <strong class="engineer-bottleneck-metric__value" id="engineerStatReportValue">0</strong>
+                      </div>
+                      <div class="engineer-bottleneck-metric" id="engineerStatMaterial" data-tone="warning">
+                        <span class="engineer-bottleneck-metric__label">Stok / İSG sinyali</span>
+                        <strong class="engineer-bottleneck-metric__value" id="engineerStatMaterialValue">0</strong>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="engineer-panel engineer-action-panel">
+                  <div class="engineer-panel__header engineer-action-panel__header">
+                    <div>
+                      <h2 class="engineer-panel__title">Karar Terminali</h2>
+                      <p class="engineer-panel__subtitle">Fotoğraf, bağlam, AI analizi ve etkisini sırayla inceleyin.</p>
+                    </div>
+                    <div class="karar-header-actions">
+                      <span id="kararTerminalBadge" class="karar-badge" style="display:none;">0 bekliyor</span>
+                      <button type="button" class="dashboard-rail-toggle" id="engineerRailToggle" onclick="engineerToggleSecretaryRail()">Teknik Sekreter</button>
+                    </div>
+                  </div>
+                  <div class="karar-toolbar">
+                    <div class="karar-filter-group" id="kararTerminalFilters">
+                      <button type="button" class="karar-filter-btn is-active" data-filter="pending" onclick="engineerSetDecisionFilter('pending')">Bekleyenler</button>
+                      <button type="button" class="karar-filter-btn" data-filter="history" onclick="engineerSetDecisionFilter('history')">Karar Geçmişi</button>
+                      <button type="button" class="karar-filter-btn" data-filter="all" onclick="engineerSetDecisionFilter('all')">Tümü</button>
+                    </div>
+                    <div class="karar-toolbar__note" id="kararTerminalFilterHint">Öncelik: görsel, bağlam, AI özeti, etki.</div>
+                  </div>
+                  <div class="karar-terminal">
+                    <div class="karar-terminal__list" id="kararTerminalList"></div>
+                    <div class="karar-terminal__detail" id="kararTerminalDetail"></div>
+                  </div>
+                </section>
               </div>
 
-              <!-- SAĞ: AI Uyarıları -->
-              <div id="aiAlertsPanel" style="flex:2;min-width:0;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:14px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
-                <div style="padding:16px 18px;border-bottom:1px solid #F1F5F9;flex-shrink:0;">
-                  <div style="display:flex;align-items:center;gap:8px;">
-                    <div style="font-size:14px;font-weight:700;color:#0F172A;">AI Uyarıları</div>
-                    <span id="kritikBadge" style="display:none;background:#FEF2F2;color:#DC2626;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid #FECACA;white-space:nowrap;">0 Kritik</span>
+              <aside class="engineer-assistant engineer-secretary-rail" id="engineerAssistantRail">
+                <div class="engineer-assistant__surface engineer-secretary-rail__surface">
+                  <div class="engineer-secretary-rail__top">
+                    <div class="engineer-secretary-rail__head">
+                      <div>
+                        <div class="engineer-assistant__eyebrow">Teknik Sekreter</div>
+                        <div class="engineer-secretary-rail__sub">Seçili kayıt için not, OCR, resmi dil ve düzeltme desteği</div>
+                      </div>
+                      <button type="button" class="dashboard-rail-close" onclick="engineerToggleSecretaryRail(false)">Kapat</button>
+                    </div>
                   </div>
-                  <div style="font-size:11px;color:#94A3B8;margin-top:2px;">Acil dikkat gerektiren</div>
-                </div>
-                <div id="aiAlertsContent" style="flex:1;overflow-y:auto;padding:8px 12px;display:flex;flex-direction:column;gap:6px;">
-                  <div style="color:#94A3B8;font-size:12px;line-height:1.7;text-align:center;padding:24px 8px;">
-                    Şu an aktif uyarı bulunmuyor.<br>Sistem tüm şantiyeleri izliyor.
+
+                  <div class="engineer-chip-row">
+                    <button type="button" class="engineer-chip" onclick="engineerAssistantUseSuggestion('Seçili kart için rapor metnini kısalt')">Taslağı Kısalt</button>
+                    <button type="button" class="engineer-chip" onclick="engineerAssistantUseSuggestion('Seçili kartın İSG risk notunu çıkar')">İSG Notu</button>
+                    <button type="button" class="engineer-chip" onclick="engineerAssistantUseSuggestion('Seçili kartı günlük rapora resmi dille işle')">Resmi Dille Yaz</button>
+                  </div>
+
+                  <div id="engineerAssistantResponse" class="engineer-assistant__response is-empty"></div>
+
+                  <div class="engineer-assistant__divider"></div>
+
+                  <div class="engineer-assistant__composer">
+                    <textarea id="engineerAssistantInput" class="engineer-assistant__input" placeholder="Seçili karta sesli not, düzeltme veya rapor komutu ekle..." rows="4"></textarea>
+                    <button type="button" class="engineer-assistant__send" id="engineerAssistantSendBtn" onclick="engineerAssistantSend()">Taslağa İşle</button>
+                  </div>
+
+                  <div class="engineer-quick-actions engineer-secretary-tools">
+                    <div class="engineer-quick-actions__title">Yazı İşleri Araçları</div>
+                    <button type="button" class="engineer-quick-action-btn" onclick="engineerSecretaryTool('voice')">Sesli Not Ekle</button>
+                    <button type="button" class="engineer-quick-action-btn" onclick="engineerSecretaryTool('ocr')">OCR Tara</button>
+                    <button type="button" class="engineer-quick-action-btn" onclick="navGit('gunluk')">Rapor Defterini Aç</button>
                   </div>
                 </div>
-                <div style="padding:12px 14px;border-top:1px solid #F1F5F9;flex-shrink:0;">
-                  <button onclick="navGit('gunluk')"
-                    style="background:none;border:none;color:#3B82F6;font-size:12px;font-weight:600;cursor:pointer;padding:0;transition:color 0.15s;"
-                    onmouseover="this.style.color='#2563EB'" onmouseout="this.style.color='#3B82F6'">
-                    Tüm Uyarıları Gör →
+              </aside>
+            </div>
+
+            <div id="contractorDashboard" class="engineer-dashboard contractor-dashboard fade-in" style="display:none;">
+              <div class="engineer-dashboard__main">
+                <div class="contractor-metric-grid">
+                  <button type="button" class="contractor-metric-card" id="contractorMetricApproved" data-tone="neutral">
+                    <span class="contractor-metric-card__label">Bugün onaylanan</span>
+                    <span class="contractor-metric-card__value" id="contractorMetricApprovedValue">0</span>
+                    <span class="contractor-metric-card__context" id="contractorMetricApprovedContext">Onay akışı sakin</span>
+                    <span class="contractor-metric-card__note" id="contractorMetricApprovedNote">Henüz bugün onaylanan kayıt görünmüyor.</span>
+                  </button>
+
+                  <button type="button" class="contractor-metric-card" id="contractorMetricCritical" data-tone="neutral">
+                    <span class="contractor-metric-card__label">Açık kritik risk</span>
+                    <span class="contractor-metric-card__value" id="contractorMetricCriticalValue">0</span>
+                    <span class="contractor-metric-card__context" id="contractorMetricCriticalContext">Kritik risk görünmüyor</span>
+                    <span class="contractor-metric-card__note" id="contractorMetricCriticalNote">Doğrulanmış kritik istisna görünmüyor.</span>
+                  </button>
+
+                  <button type="button" class="contractor-metric-card" id="contractorMetricWatchlist" data-tone="neutral">
+                    <span class="contractor-metric-card__label">Kritik stok sapması</span>
+                    <span class="contractor-metric-card__value" id="contractorMetricWatchlistValue">0</span>
+                    <span class="contractor-metric-card__context" id="contractorMetricWatchlistContext">Stok hattı sakin</span>
+                    <span class="contractor-metric-card__note" id="contractorMetricWatchlistNote">Belirgin malzeme oynaklığı görünmüyor.</span>
+                  </button>
+
+                  <button type="button" class="contractor-metric-card" id="contractorMetricSites" data-tone="neutral">
+                    <span class="contractor-metric-card__label">Aktif şantiye</span>
+                    <span class="contractor-metric-card__value" id="contractorMetricSitesValue">0</span>
+                    <span class="contractor-metric-card__context" id="contractorMetricSitesContext">Saha ağı izleniyor</span>
+                    <span class="contractor-metric-card__note" id="contractorMetricSitesNote">Aktif şantiyelerden onaylı sonuçlar burada toplanır.</span>
                   </button>
                 </div>
+
+                <div id="contractorStokUyariBanner" style="display:none;margin:12px 0 4px;background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;padding:10px 16px;display:none;align-items:center;gap:10px;">
+                  <span style="font-size:18px;">🔴</span>
+                  <span id="contractorStokUyariBannerText" style="font-size:13px;font-weight:700;color:#DC2626;flex:1;"></span>
+                </div>
+
+                <div class="contractor-content-grid">
+                  <section class="engineer-panel contractor-panel contractor-panel--light">
+                    <div class="engineer-panel__header contractor-panel__header">
+                      <div>
+                        <h2 class="engineer-panel__title contractor-panel__title">Bugün Onaylananlar</h2>
+                        <p class="engineer-panel__subtitle contractor-panel__subtitle">Mühendis kararı tamamlanmış sonuç akışı</p>
+                      </div>
+                    </div>
+                    <div id="contractorTrendBody" class="contractor-trend-body"></div>
+                  </section>
+
+                  <section class="engineer-panel contractor-panel contractor-panel--light">
+                    <div class="engineer-panel__header contractor-panel__header">
+                      <div>
+                        <h2 class="engineer-panel__title contractor-panel__title">Saha Özeti</h2>
+                        <p class="engineer-panel__subtitle contractor-panel__subtitle">Kısa, somut ve operasyon odaklı özet</p>
+                      </div>
+                    </div>
+                    <div id="contractorFieldSummaryGrid" class="contractor-field-grid"></div>
+                  </section>
+                </div>
+
+                <section class="engineer-panel contractor-panel contractor-panel--light" id="contractorFiyatAlertPanel" style="margin-top:18px;display:none;">
+                  <div class="engineer-panel__header contractor-panel__header">
+                    <div>
+                      <h2 class="engineer-panel__title contractor-panel__title">Fiyat Alertleri</h2>
+                      <p class="engineer-panel__subtitle contractor-panel__subtitle">Malzeme fiyat değişim uyarıları</p>
+                    </div>
+                    <span id="contractorFiyatAlertCount" style="font-size:11px;font-weight:700;background:#FEE2E2;color:#DC2626;padding:2px 8px;border-radius:6px;"></span>
+                  </div>
+                  <div id="contractorFiyatAlertBody" style="padding:0 0 4px;"></div>
+                </section>
+
               </div>
 
-            </div><!-- /2 kolon -->
+              <div id="contractorRailOverlay"
+                   class="contractor-rail-overlay"
+                   onclick="contractorToggleCommandRail(false)"
+                   aria-hidden="true"></div>
+
+              <aside class="engineer-assistant contractor-assistant contractor-command-rail" id="contractorAssistantRail">
+                <div class="engineer-assistant__surface contractor-command-rail__surface">
+                  <div class="contractor-command-rail__top">
+                    <div class="contractor-command-rail__head">
+                      <div>
+                        <div class="contractor-command-rail__eyebrow">AI Komuta Paneli</div>
+                        <div class="contractor-command-rail__sub">Varsayılan olarak onaylı sonuçlardan beslenir; ardından derin analiz açılır</div>
+                      </div>
+                      <button type="button" class="dashboard-rail-close dashboard-rail-close--light" onclick="contractorToggleCommandRail(false)">Kapat</button>
+                    </div>
+                  </div>
+
+                  <div class="contractor-command-rail__center">
+                    <div class="contractor-command-rail__status">
+                      <div class="contractor-command-rail__status-orb"></div>
+                      <div class="contractor-command-rail__status-text" id="contractorCommandModeLabel">Komut bekleniyor</div>
+                    </div>
+                    <div class="contractor-command-rail__hint" id="contractorCommandHint">Filtre, yönlendirme veya gelişmiş analiz isteyebilirsiniz.</div>
+                    <div id="contractorActionList" class="contractor-action-list"></div>
+                  </div>
+
+                  <div class="contractor-command-rail__composer">
+                    <div class="engineer-assistant__composer contractor-assistant__composer contractor-command-rail__composer-box">
+                      <textarea id="contractorAssistantInput" class="engineer-assistant__input contractor-assistant__input" placeholder="Örn: Bugün, İSG, Stok, Rapor aç veya risk özeti..." rows="3"></textarea>
+                      <button type="button" class="engineer-assistant__send contractor-assistant__send" id="contractorAssistantSendBtn" onclick="contractorAssistantSend()">Sor / Gönder</button>
+                    </div>
+
+                    <div id="contractorAssistantResponse" class="engineer-assistant__response contractor-assistant__response is-empty"></div>
+                  </div>
+
+                  <div class="contractor-command-rail__footer">
+                    <div class="engineer-quick-actions__title contractor-quick-actions__title">Hızlı Erişim</div>
+                    <div class="contractor-command-rail__footer-links">
+                      <button type="button" class="engineer-quick-action-btn contractor-quick-action-btn" onclick="pdfIndir()">Raporu İndir</button>
+                      <button type="button" class="engineer-quick-action-btn contractor-quick-action-btn" onclick="navGit('kamera')">Canlı Kamera</button>
+                      <button type="button" class="engineer-quick-action-btn contractor-quick-action-btn" onclick="navGit('santiye')">Şantiye Dizini</button>
+                    </div>
+                  </div>
+                </div>
+              </aside>
+
+              <!-- Müteahhit: mobile FAB — AI Komuta Paneli tetikleyici -->
+              <button type="button"
+                id="contractorFab"
+                class="contractor-fab"
+                onclick="contractorToggleCommandRail()"
+                aria-label="AI Paneli'ni aç">
+                <span class="contractor-fab__icon" aria-hidden="true">✨</span>
+              </button>
+            </div>
 
             <!-- Hidden JS compat: legacy IDs -->
             <span id="statKamera" style="display:none;">12</span>
@@ -748,7 +1034,7 @@ NEW_HTML_TEMPLATE = f"""
                   oninput="santiyePageFiltrele(this.value)"
                   style="flex:1;background:transparent;border:none;outline:none;color:#0F172A;font-size:14px;"/>
               </div>
-              <button onclick="santiyeEkleModalAc(null)"
+              <button id="btnYeniSantiyeHeader" onclick="santiyeEkleModalAc(null)"
                 style="background:#3B82F6;border:none;color:white;font-size:13px;font-weight:700;padding:10px 18px;border-radius:10px;cursor:pointer;display:flex;align-items:center;gap:7px;transition:background 0.15s;white-space:nowrap;flex-shrink:0;"
                 onmouseover="this.style.background='#2563EB'" onmouseout="this.style.background='#3B82F6'">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -775,6 +1061,21 @@ NEW_HTML_TEMPLATE = f"""
                 <div id="santiyePageGrid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;"></div>
               </div>
 
+              <div id="santiyeEkipSection" style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:20px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;">
+                  <div>
+                    <div style="font-size:15px;font-weight:800;color:#0F172A;">👥 Ekip Üyeleri</div>
+                    <div style="font-size:12px;color:#64748B;margin-top:3px;">Organizasyonunuzdaki aktif ekip ve bekleyen davetler</div>
+                  </div>
+                  <button id="btnMuhendisDavetEt" type="button" onclick="davetModalAc()"
+                    style="background:#0F172A;color:white;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">
+                    + Mühendis Davet Et
+                  </button>
+                </div>
+                <div id="ekipUyeleriListesi" style="display:flex;flex-direction:column;gap:8px;"></div>
+                <div id="bekleyenDavetListesi" style="display:flex;flex-direction:column;gap:8px;margin-top:12px;"></div>
+              </div>
+
             </div>
           </div><!-- /santiyePage -->
 
@@ -783,10 +1084,12 @@ NEW_HTML_TEMPLATE = f"""
 
             <!-- AI Command Bar -->
             <div style="background:#FFFFFF;border-bottom:1px solid #E2E8F0;padding:14px 20px;flex-shrink:0;z-index:49;">
-              <div style="display:flex;align-items:center;gap:10px;background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:12px;padding:10px 14px;transition:border-color 0.15s,box-shadow 0.15s;">
+              <div style="display:flex;align-items:center;gap:10px;background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:12px;padding:10px 14px;transition:border-color 0.15s,box-shadow 0.15s;position:relative;">
                 <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#6366f1" stroke-width="2" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" d="M5 3l1.5 4.5L11 9l-4.5 1.5L5 15l-1.5-4.5L-1 9l4.5-1.5zM19 3l1 3 3 1-3 1-1 3-1-3-3-1 3-1z"/></svg>
                 <input id="fiyatAiInput" type="text" placeholder="AI Asistan: Malzeme fiyat trendlerini sor, tahmin iste..."
                   onkeydown="if(event.key==='Enter') fiyatAiGonder()"
+                  onfocus="fiyatAiOnerileriGoster()"
+                  onblur="fiyatAiOnerileriGizle()"
                   style="flex:1;background:transparent;border:none;outline:none;color:#0F172A;font-size:14px;min-width:0;"/>
                 <div style="width:1px;height:18px;background:#E2E8F0;flex-shrink:0;"></div>
                 <button onclick="fiyatAiGonder()"
@@ -796,16 +1099,45 @@ NEW_HTML_TEMPLATE = f"""
                   Gönder
                 </button>
               </div>
-              <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
-                <button onclick="fiyatAiQuick('Çelik fiyat trendi ve tahminleri')"
-                  style="background:#F1F5F9;border:1px solid #E2E8F0;color:#475569;font-size:12px;font-weight:500;padding:5px 12px;border-radius:20px;cursor:pointer;transition:all 0.15s;"
-                  onmouseover="this.style.background='#E2E8F0'" onmouseout="this.style.background='#F1F5F9'">Çelik Fiyatları</button>
-                <button onclick="fiyatAiQuick('Beton fiyat trendi ve tahminleri')"
-                  style="background:#F1F5F9;border:1px solid #E2E8F0;color:#475569;font-size:12px;font-weight:500;padding:5px 12px;border-radius:20px;cursor:pointer;transition:all 0.15s;"
-                  onmouseover="this.style.background='#E2E8F0'" onmouseout="this.style.background='#F1F5F9'">Beton Fiyatları</button>
-                <button onclick="fiyatAiQuick('Hangi malzemeyi şimdi satın almalıyım?')"
+              <div id="fiyatAiOneriler" style="display:none;width:100%;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:10px 16px;box-shadow:0 4px 12px rgba(0,0,0,0.06);margin-top:6px;margin-bottom:6px;">
+                <div id="fiyatAiOneriButonlari" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+              </div>
+              <div style="display:none;gap:8px;margin-top:10px;flex-wrap:wrap;">
+                <div id="fiyatMalzemeTablar" style="display:contents;"></div>
+                <button onclick="fiyatGrafikleriGeriGetir();fiyatAiQuick('Hangi malzemeyi şimdi satın almalıyım')"
                   style="background:#F1F5F9;border:1px solid #E2E8F0;color:#475569;font-size:12px;font-weight:500;padding:5px 12px;border-radius:20px;cursor:pointer;transition:all 0.15s;"
                   onmouseover="this.style.background='#E2E8F0'" onmouseout="this.style.background='#F1F5F9'">Satın Alma Önerisi</button>
+                <button onclick="satinAlmaTabAc()" style="padding:6px 14px;border-radius:20px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:#CBD5E1;cursor:pointer;font-size:13px;white-space:nowrap;">Satın Almalar</button>
+                <button onclick="tedarikciTabAc()" style="padding:6px 14px;border-radius:20px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:#CBD5E1;cursor:pointer;font-size:13px;white-space:nowrap;">Tedarikçiler</button>
+                <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-shrink:0;">
+                  <button onclick="fiyatGirModalAc()" style="background:#10B981;color:#fff;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;">Fiyat Gir</button>
+                  <button onclick="ozelMalzemeModalAc()" style="background:transparent;color:#6366F1;border:1px solid #6366F1;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;">Malzeme Ekle</button>
+                  <button onclick="aiPiyasaGuncelle(event)" style="background:linear-gradient(135deg,#6366F1,#8B5CF6);color:#fff;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;">AI Güncelle</button>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:0 20px;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+                  <div style="display:flex;align-items:center;gap:4px;background:#F1F5F9;border-radius:10px;padding:3px;">
+                      <button id="toolbarGrafikler" onclick="toolbarSec('grafikler')" style="padding:7px 16px;border-radius:8px;border:none;font-size:13px;font-weight:500;cursor:pointer;transition:all 0.15s;background:#FFFFFF;color:#0F172A;box-shadow:0 1px 2px rgba(0,0,0,0.06);">
+                          Fiyat Grafikleri
+                      </button>
+                      <button id="toolbarSatinAlma" onclick="toolbarSec('satin-alma')" style="padding:7px 16px;border-radius:8px;border:none;font-size:13px;font-weight:500;cursor:pointer;transition:all 0.15s;background:transparent;color:#64748B;">
+                          Satın Almalar
+                      </button>
+                      <button id="toolbarTedarikciler" onclick="toolbarSec('tedarikciler')" style="padding:7px 16px;border-radius:8px;border:none;font-size:13px;font-weight:500;cursor:pointer;transition:all 0.15s;background:transparent;color:#64748B;">
+                          Tedarikçiler
+                      </button>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:6px;">
+                      <button onclick="fiyatGirModalAc()" style="padding:7px 14px;border-radius:8px;border:1px solid #E2E8F0;background:#FFFFFF;color:#334155;font-size:13px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='#10B981';this.style.color='#10B981'" onmouseout="this.style.borderColor='#E2E8F0';this.style.color='#334155'">
+                          Fiyat Gir
+                      </button>
+                      <button onclick="ozelMalzemeModalAc()" style="padding:7px 14px;border-radius:8px;border:1px solid #E2E8F0;background:#FFFFFF;color:#334155;font-size:13px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='#6366F1';this.style.color='#6366F1'" onmouseout="this.style.borderColor='#E2E8F0';this.style.color='#334155'">
+                          Malzeme Ekle
+                      </button>
+                      <button onclick="excelModalAc('fiyat')" style="display:flex;align-items:center;gap:6px;padding:8px 14px;background:#217346;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+                          📊 Excel
+                      </button>
+                  </div>
               </div>
               <div id="fiyatAiResult" style="display:none;margin-top:10px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:12px 14px;font-size:13px;color:#0F172A;"></div>
             </div>
@@ -813,232 +1145,938 @@ NEW_HTML_TEMPLATE = f"""
             <!-- Content -->
             <div style="flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:16px;">
 
-              <!-- 3 Chart Cards -->
-              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
+              <!-- Chart Cards — generated dynamically by fiyatPageYukle() -->
+              <div id="fiyatGrafiklerAlani" style="display:flex;flex-direction:column;gap:16px;"></div>
 
-                <!-- Çelik -->
-                <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:14px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
-                  <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;gap:8px;">
-                    <div>
-                      <div style="font-size:14px;font-weight:700;color:#0F172A;">Çelik Fiyatları</div>
-                      <div style="font-size:11px;color:#94A3B8;margin-top:2px;">Çelik Fiyatları: <span id="celikFiyatLabel" style="color:#EF4444;font-weight:600;">—</span></div>
-                    </div>
-                    <select id="celikPeriod" onchange="fiyatGrafikYukle('demir','celikGrafik','celikFiyatLabel',this.value)"
-                      style="font-size:11px;font-weight:600;color:#475569;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:7px;padding:4px 8px;cursor:pointer;outline:none;">
-                      <option value="30">Son 1 Ay</option>
-                      <option value="90" selected>Son 3 Ay</option>
-                      <option value="180">Son 6 Ay</option>
-                    </select>
-                  </div>
-                  <canvas id="celikGrafik" height="160"></canvas>
-                </div>
+              <!-- Marka Karşılaştırma — dinamik, _fpMarkaKarsilastirmaYukle() tarafından doldurulur -->
+              <div id="fpMarkaKarsilastirmaPanel" style="display:none;"></div>
 
-                <!-- Beton -->
-                <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:14px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
-                  <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;gap:8px;">
-                    <div>
-                      <div style="font-size:14px;font-weight:700;color:#0F172A;">Beton Fiyatları</div>
-                      <div style="font-size:11px;color:#94A3B8;margin-top:2px;">Beton Fiyatları: <span id="betonFiyatLabel" style="color:#EF4444;font-weight:600;">—</span></div>
-                    </div>
-                    <select id="betonPeriod" onchange="fiyatGrafikYukle('beton','betonGrafik','betonFiyatLabel',this.value)"
-                      style="font-size:11px;font-weight:600;color:#475569;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:7px;padding:4px 8px;cursor:pointer;outline:none;">
-                      <option value="30">Son 1 Ay</option>
-                      <option value="90" selected>Son 3 Ay</option>
-                      <option value="180">Son 6 Ay</option>
-                    </select>
-                  </div>
-                  <canvas id="betonGrafik" height="160"></canvas>
-                </div>
 
-                <!-- Kereste -->
-                <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:14px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
-                  <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;gap:8px;">
-                    <div>
-                      <div style="font-size:14px;font-weight:700;color:#0F172A;">Kereste Fiyatları</div>
-                      <div style="font-size:11px;color:#94A3B8;margin-top:2px;">Kereste Fiyatları: <span id="keresteFiyatLabel" style="color:#EF4444;font-weight:600;">—</span></div>
-                    </div>
-                    <select id="kerestePeriod" onchange="fiyatGrafikYukle('cimento','keresteGrafik','keresteFiyatLabel',this.value)"
-                      style="font-size:11px;font-weight:600;color:#475569;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:7px;padding:4px 8px;cursor:pointer;outline:none;">
-                      <option value="30">Son 1 Ay</option>
-                      <option value="90" selected>Son 3 Ay</option>
-                      <option value="180">Son 6 Ay</option>
-                    </select>
-                  </div>
-                  <canvas id="keresteGrafik" height="160"></canvas>
-                </div>
-
-              </div>
-
-              <!-- AI Insights -->
-              <div>
-                <div style="font-size:18px;font-weight:700;color:#0F172A;">AI Piyasa Tahminleri &amp; Satın Alma Önerileri</div>
-                <div style="font-size:12px;color:#94A3B8;margin-top:2px;margin-bottom:14px;">AI Piyasa Tahminleri &amp; Satın Alma Önerileri</div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-
-                  <!-- Piyasa Analizi -->
-                  <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:14px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                      <div style="font-size:15px;font-weight:700;color:#0F172A;">📊 Piyasa Analizi</div>
-                      <div style="width:32px;height:32px;background:#EFF6FF;border-radius:8px;display:flex;align-items:center;justify-content:center;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                      </div>
-                    </div>
-                    <div id="fiyatAnalizSubtitle" style="font-size:11px;color:#94A3B8;margin-bottom:14px;">Piyasa analizi yükleniyor...</div>
-                    <div id="fiyatAnalizList" style="display:flex;flex-direction:column;gap:8px;"></div>
-                  </div>
-
-                  <!-- Satın Alma Zamanı -->
-                  <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:14px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.05);display:flex;flex-direction:column;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                      <div style="font-size:15px;font-weight:700;color:#0F172A;">📦 Satın Alma Zamanı</div>
-                      <div style="width:32px;height:32px;background:#F0FDF4;border-radius:8px;display:flex;align-items:center;justify-content:center;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
-                      </div>
-                    </div>
-                    <div id="fiyatSatinSubtitle" style="font-size:11px;color:#94A3B8;margin-bottom:14px;">Öneri yükleniyor...</div>
-                    <div id="fiyatSatinList" style="display:flex;flex-direction:column;gap:8px;flex:1;"></div>
-                    <button onclick="fiyatAiQuick('Şu an hangi malzemeyi satın almalıyım? Detaylı öneri ver.')"
-                      style="margin-top:16px;width:100%;background:#3B82F6;border:none;color:white;padding:13px;border-radius:10px;cursor:pointer;font-weight:700;font-size:14px;transition:background 0.15s;font-family:inherit;"
-                      onmouseover="this.style.background='#2563EB'" onmouseout="this.style.background='#3B82F6'">Satın Al</button>
-                  </div>
-
-                </div>
-              </div>
 
             </div>
+
+            <div id="satinAlmaTab" style="display:none;width:100%;flex-direction:column;min-height:400px;padding:0 20px 20px;overflow-y:auto;"></div>
+            <div id="tedarikciTab" style="display:none;width:100%;flex-direction:column;min-height:400px;padding:0 20px 20px;overflow-y:auto;"></div>
           </div><!-- /fiyatPage -->
 
+          <!-- Malzeme Ekle Modal (Katalog + Özel) -->
+          <div id="ozelMalzemeModal" onclick="if(event.target===this)ozelMalzemeModalKapat()"
+            style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;align-items:center;justify-content:center;">
+            <div style="background:#FFFFFF;border-radius:16px;padding:24px;width:560px;max-width:94vw;max-height:88vh;overflow-y:auto;border:1px solid #E2E8F0;box-shadow:0 20px 60px rgba(0,0,0,0.2);box-sizing:border-box;">
+              <!-- Başlık -->
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+                <div style="font-size:16px;font-weight:700;color:#0F172A;">Malzeme Ekle</div>
+                <button onclick="ozelMalzemeModalKapat()"
+                  style="background:none;border:none;cursor:pointer;color:#64748B;font-size:22px;line-height:1;padding:0 4px;">&times;</button>
+              </div>
+              <!-- Sekme Seçici -->
+              <div style="display:flex;gap:6px;margin-bottom:18px;background:#F1F5F9;padding:4px;border-radius:10px;">
+                <button id="katalogTabBtn" onclick="malzemeTabSec('katalog')"
+                  style="flex:1;padding:8px;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;background:#FFFFFF;color:#6366F1;box-shadow:0 1px 3px rgba(0,0,0,0.1);font-family:inherit;transition:all 0.15s;">
+                  Katalogdan Seç</button>
+                <button id="ozelTabBtn" onclick="malzemeTabSec('ozel')"
+                  style="flex:1;padding:8px;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-weight:500;background:transparent;color:#64748B;font-family:inherit;transition:all 0.15s;">
+                  Özel Malzeme Ekle</button>
+              </div>
+              <!-- Katalog Görünümü -->
+              <div id="katalogView">
+                <div style="margin-bottom:12px;">
+                  <label style="font-size:12px;font-weight:600;color:#64748B;display:block;margin-bottom:5px;">Kategori</label>
+                  <select id="katalogKategoriSelect" onchange="katalogKategoriDegis()"
+                    style="width:100%;padding:10px 12px;background:#F8FAFC;border:1px solid #E2E8F0;color:#0F172A;border-radius:9px;font-size:14px;outline:none;box-sizing:border-box;font-family:inherit;cursor:pointer;">
+                  </select>
+                </div>
+                <div id="katalogMalzemeGrid"
+                  style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;max-height:300px;overflow-y:auto;margin-bottom:12px;padding:2px;">
+                </div>
+                <div id="katalogSecilen" style="font-size:12px;color:#6366F1;font-weight:600;min-height:18px;margin-bottom:10px;"></div>
+                <div id="katalogHata" style="display:none;color:#EF4444;font-size:12px;margin-bottom:8px;"></div>
+                <button onclick="katalogMalzemeKaydet()" id="katalogKaydetBtn"
+                  style="width:100%;padding:13px;background:#6366F1;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;font-family:inherit;transition:background 0.15s;"
+                  onmouseover="this.style.background='#4F46E5'" onmouseout="this.style.background='#6366F1'">
+                  Seçilenleri Ekle</button>
+              </div>
+              <!-- Özel Malzeme Görünümü -->
+              <div id="ozelView" style="display:none;flex-direction:column;gap:14px;">
+                <div>
+                  <label style="font-size:12px;font-weight:600;color:#64748B;display:block;margin-bottom:5px;">Malzeme Adı</label>
+                  <input id="ozelMalzemeAd" type="text" placeholder="örn: Mozaik Taşı"
+                    style="width:100%;padding:10px 12px;background:#F8FAFC;border:1px solid #E2E8F0;color:#0F172A;border-radius:9px;font-size:14px;outline:none;box-sizing:border-box;font-family:inherit;"
+                    onfocus="this.style.borderColor='#6366F1'" onblur="this.style.borderColor='#E2E8F0'"
+                    onkeydown="if(event.key==='Enter')ozelMalzemeKaydet()"/>
+                </div>
+                <div>
+                  <label style="font-size:12px;font-weight:600;color:#64748B;display:block;margin-bottom:5px;">Birim</label>
+                  <input id="ozelMalzemeBirim" type="text" placeholder="örn: ton, m³, adet"
+                    style="width:100%;padding:10px 12px;background:#F8FAFC;border:1px solid #E2E8F0;color:#0F172A;border-radius:9px;font-size:14px;outline:none;box-sizing:border-box;font-family:inherit;"
+                    onfocus="this.style.borderColor='#6366F1'" onblur="this.style.borderColor='#E2E8F0'"
+                    onkeydown="if(event.key==='Enter')ozelMalzemeKaydet()"/>
+                </div>
+                <div id="ozelMalzemeHata" style="display:none;color:#EF4444;font-size:12px;font-weight:500;"></div>
+                <button onclick="ozelMalzemeKaydet()" id="ozelMalzemeKaydetBtn"
+                  style="background:#6366F1;color:#fff;border:none;padding:13px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;font-family:inherit;transition:background 0.15s;"
+                  onmouseover="this.style.background='#4F46E5'" onmouseout="this.style.background='#6366F1'">
+                  Kaydet</button>
+              </div>
+            </div>
+          </div>
+
           <!-- ══════ STOK TAKİBİ SAYFASI ══════ -->
-          <div id="stokPage" style="display:none;flex:1;flex-direction:column;overflow:hidden;background:#F1F5F9;">
+          <div id="stokPage" style="display:none;
+  grid-template-columns:1fr 380px;
+  gap:16px; padding:16px 20px; height:100%;
+  background:#F9FAFB; overflow:hidden;
+  box-sizing:border-box;">
 
-            <!-- AI Command Bar -->
-            <div style="background:#FFFFFF;border-bottom:1px solid #E2E8F0;padding:14px 20px;flex-shrink:0;">
-              <div style="display:flex;align-items:center;gap:10px;background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:12px;padding:10px 14px;">
-                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#6366f1" stroke-width="2" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" d="M5 3l1.5 4.5L11 9l-4.5 1.5L5 15l-1.5-4.5L-1 9l4.5-1.5zM19 3l1 3 3 1-3 1-1 3-1-3-3-1 3-1z"/></svg>
-                <input id="stokAiInput" type="text" placeholder="AI Asistan: Stok durumu sor, malzeme analizi iste..."
-                  onkeydown="if(event.key==='Enter') stokAiGonder()"
-                  style="flex:1;background:transparent;border:none;outline:none;color:#0F172A;font-size:14px;min-width:0;"/>
-                <div style="width:1px;height:18px;background:#E2E8F0;flex-shrink:0;"></div>
-                <button onclick="stokAiGonder()"
-                  style="background:#3B82F6;border:none;cursor:pointer;color:white;padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;flex-shrink:0;display:flex;align-items:center;gap:6px;transition:background 0.15s;"
-                  onmouseover="this.style.background='#2563EB'" onmouseout="this.style.background='#3B82F6'">
-                  <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                  Gönder
-                </button>
-              </div>
-              <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
-                <button onclick="stokAiQuick('Toplam stok durumu ve kritik malzemeler neler?')"
-                  style="background:#F1F5F9;border:1px solid #E2E8F0;color:#475569;font-size:12px;font-weight:500;padding:5px 12px;border-radius:20px;cursor:pointer;transition:all 0.15s;"
-                  onmouseover="this.style.background='#E2E8F0'" onmouseout="this.style.background='#F1F5F9'">Stok Durumu</button>
-                <button onclick="stokAiQuick('Hangi malzemeler kritik seviyede?')"
-                  style="background:#F1F5F9;border:1px solid #E2E8F0;color:#475569;font-size:12px;font-weight:500;padding:5px 12px;border-radius:20px;cursor:pointer;transition:all 0.15s;"
-                  onmouseover="this.style.background='#E2E8F0'" onmouseout="this.style.background='#F1F5F9'">Kritik Stoklar</button>
-                <button onclick="stokAiQuick('Bu ay toplam malzeme maliyeti nedir?')"
-                  style="background:#F1F5F9;border:1px solid #E2E8F0;color:#475569;font-size:12px;font-weight:500;padding:5px 12px;border-radius:20px;cursor:pointer;transition:all 0.15s;"
-                  onmouseover="this.style.background='#E2E8F0'" onmouseout="this.style.background='#F1F5F9'">Maliyet Analizi</button>
-              </div>
-              <div id="stokAiResult" style="display:none;margin-top:10px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:12px 14px;font-size:13px;color:#0F172A;line-height:1.6;"></div>
+  <!-- LEFT: Stat + Liste + Hareketler -->
+  <div style="display:flex; flex-direction:column;
+    gap:16px; overflow-y:auto; min-height:0;">
+
+  <!-- AI Asistan Bari -->
+  <div id="stokAiBar" style="background:linear-gradient(135deg, rgba(227,122,69,0.08) 0%, rgba(227,122,69,0.03) 100%);
+    border:1px solid rgba(227,122,69,0.18);
+    border-radius:12px; padding:10px 14px;
+    display:flex; align-items:center; gap:10px;
+    flex-shrink:0; position:relative;">
+
+    <!-- AI Icon -->
+    <div style="width:32px; height:32px; border-radius:8px;
+      background:#E37A45;
+      display:flex; align-items:center; justify-content:center;
+      flex-shrink:0;">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+        <path d="M2 17l10 5 10-5"/>
+        <path d="M2 12l10 5 10-5"/>
+      </svg>
+    </div>
+
+    <!-- Input -->
+    <input id="stokAiBarInput" type="text"
+      placeholder="Stok hakkinda sor..."
+      onkeydown="if(event.key==='Enter')stokAiSor()"
+      style="flex:1; background:white;
+        border:1px solid rgba(227,122,69,0.2);
+        border-radius:8px; padding:8px 12px;
+        color:#111827; font-size:13px;
+        font-family:'Plus Jakarta Sans',sans-serif;
+        outline:none; box-sizing:border-box;">
+
+    <!-- Send button -->
+    <button onclick="stokAiSor()"
+      style="width:32px; height:32px; border-radius:8px;
+        background:#E37A45;
+        border:none;
+        display:flex; align-items:center; justify-content:center;
+        cursor:pointer; transition:background 0.15s;
+        flex-shrink:0;"
+      onmouseover="this.style.background='#d16935'"
+      onmouseout="this.style.background='#E37A45'">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+        <line x1="22" y1="2" x2="11" y2="13"/>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- AI Yanit alani (baslangicta gizli) -->
+  <div id="stokAiYanit" style="display:none; background:white;
+    border:1px solid #E5E7EB; border-radius:12px;
+    padding:14px 18px; flex-shrink:0;
+    box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+    <div style="display:flex; align-items:flex-start; gap:10px;">
+      <div style="width:24px; height:24px; border-radius:6px;
+        background:#FFF7ED; display:flex; align-items:center;
+        justify-content:center; flex-shrink:0; margin-top:1px;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#E37A45" stroke-width="2.5">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+          <path d="M2 17l10 5 10-5"/>
+          <path d="M2 12l10 5 10-5"/>
+        </svg>
+      </div>
+      <div id="stokAiYanitIcerik" style="flex:1; font-size:13px;
+        color:#374151; line-height:1.6;
+        font-family:'Plus Jakarta Sans',sans-serif;"></div>
+      <button onclick="document.getElementById('stokAiYanit').style.display='none'"
+        style="background:none; border:none; cursor:pointer;
+          color:#9CA3AF; padding:2px; flex-shrink:0;"
+        onmouseover="this.style.color='#6B7280'"
+        onmouseout="this.style.color='#9CA3AF'">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- STAT BAR — 4 kart -->
+  <div style="display:grid; grid-template-columns:repeat(4,1fr);
+    gap:10px; flex-shrink:0;">
+
+    <div style="background:white; border-radius:12px;
+      border:1px solid #E5E7EB;
+      box-shadow:0 1px 3px rgba(0,0,0,0.06);
+      padding:12px 14px;">
+      <div style="display:flex; align-items:center;
+        justify-content:space-between; margin-bottom:10px;">
+        <span style="font-size:10.5px; font-weight:700;
+          color:#6B7280; letter-spacing:.07em;
+          text-transform:uppercase;">Toplam Deger</span>
+        <div style="width:28px; height:28px; border-radius:8px;
+          background:#F3F4F6; display:flex; align-items:center;
+          justify-content:center;">
+          <svg width="14" height="14" viewBox="0 0 24 24"
+            fill="none" stroke="#6B7280" stroke-width="2">
+            <rect x="2" y="5" width="20" height="14" rx="2"/>
+            <line x1="2" y1="10" x2="22" y2="10"/>
+          </svg>
+        </div>
+      </div>
+      <div style="font-size:21px; font-weight:700;
+        color:#111827; font-family:'Plus Jakarta Sans',sans-serif;
+        margin-bottom:3px; line-height:1.1;"
+        id="statToplamDeger">—</div>
+      <div style="font-size:12px; color:#6B7280;"
+        id="statMalzemeSayisi">— malzeme</div>
+    </div>
+
+    <div style="background:white; border-radius:12px;
+      border:1px solid #E5E7EB;
+      box-shadow:0 1px 3px rgba(0,0,0,0.06);
+      padding:12px 14px;">
+      <div style="display:flex; align-items:center;
+        justify-content:space-between; margin-bottom:10px;">
+        <span style="font-size:10.5px; font-weight:700;
+          color:#6B7280; letter-spacing:.07em;
+          text-transform:uppercase;">Bu Hafta Giris</span>
+        <div style="width:28px; height:28px; border-radius:8px;
+          background:#F0FDF4; display:flex; align-items:center;
+          justify-content:center;">
+          <svg width="14" height="14" viewBox="0 0 24 24"
+            fill="none" stroke="#16A34A" stroke-width="2.5">
+            <path d="M12 19V5M5 12l7-7 7 7"/>
+          </svg>
+        </div>
+      </div>
+      <div style="font-size:21px; font-weight:700;
+        color:#16A34A; font-family:'Plus Jakarta Sans',sans-serif;
+        margin-bottom:3px; line-height:1.1;"
+        id="statHaftaGiris">—</div>
+      <div style="font-size:12px; color:#6B7280;"
+        id="statHaftaGirisSay">— sevkiyat</div>
+    </div>
+
+    <div style="background:white; border-radius:12px;
+      border:1px solid #E5E7EB;
+      box-shadow:0 1px 3px rgba(0,0,0,0.06);
+      padding:12px 14px;">
+      <div style="display:flex; align-items:center;
+        justify-content:space-between; margin-bottom:10px;">
+        <span style="font-size:10.5px; font-weight:700;
+          color:#6B7280; letter-spacing:.07em;
+          text-transform:uppercase;">Bu Hafta Cikis</span>
+        <div style="width:28px; height:28px; border-radius:8px;
+          background:#EFF6FF; display:flex; align-items:center;
+          justify-content:center;">
+          <svg width="14" height="14" viewBox="0 0 24 24"
+            fill="none" stroke="#2563EB" stroke-width="2.5">
+            <path d="M12 5v14M5 12l7 7 7-7"/>
+          </svg>
+        </div>
+      </div>
+      <div style="font-size:21px; font-weight:700;
+        color:#2563EB; font-family:'Plus Jakarta Sans',sans-serif;
+        margin-bottom:3px; line-height:1.1;"
+        id="statHaftaCikis">—</div>
+      <div style="font-size:12px; color:#6B7280;"
+        id="statHaftaCikisSay">— sarf</div>
+    </div>
+
+    <div style="background:white; border-radius:12px;
+      border:1px solid #FECACA;
+      box-shadow:0 1px 3px rgba(0,0,0,0.06);
+      padding:12px 14px;">
+      <div style="display:flex; align-items:center;
+        justify-content:space-between; margin-bottom:10px;">
+        <span style="font-size:10.5px; font-weight:700;
+          color:#6B7280; letter-spacing:.07em;
+          text-transform:uppercase;">Kritik</span>
+        <div style="width:28px; height:28px; border-radius:8px;
+          background:#FEF2F2; display:flex; align-items:center;
+          justify-content:center;">
+          <svg width="14" height="14" viewBox="0 0 24 24"
+            fill="none" stroke="#DC2626" stroke-width="2.5">
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </div>
+      </div>
+      <div style="font-size:21px; font-weight:700;
+        color:#DC2626; font-family:'Plus Jakarta Sans',sans-serif;
+        margin-bottom:3px; line-height:1.1;"
+        id="statKritik">—</div>
+      <div style="font-size:12px; color:#6B7280;"
+        id="statKritikAd">— malzeme</div>
+    </div>
+  </div>
+
+
+      <!-- Malzeme listesi karti -->
+      <div style="background:white; border-radius:12px;
+        border:1px solid #E5E7EB; overflow:hidden;
+        box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+
+        <!-- Toolbar -->
+        <div style="padding:12px 16px;
+          border-bottom:1px solid #F3F4F6;
+          display:flex; align-items:center; gap:10px;">
+          <div style="display:flex; align-items:center; gap:8px;
+            flex:1; background:#F9FAFB;
+            border:1px solid #E5E7EB;
+            border-radius:8px; padding:7px 12px;">
+            <svg width="14" height="14" viewBox="0 0 24 24"
+              fill="none" stroke="#9CA3AF" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.35-4.35"/>
+            </svg>
+            <input id="stokAramaInput" type="text"
+              placeholder="Malzeme ara..."
+              oninput="stokAramaYap(this.value)"
+              style="border:none; background:none;
+                font-size:13px; color:#374151;
+                outline:none; width:100%;
+                font-family:'Plus Jakarta Sans',sans-serif;">
+          </div>
+          <div style="display:flex; gap:4px;">
+            <button id="filterHepsi"
+              onclick="stokFiltrele('hepsi')"
+              style="padding:6px 14px; background:#111827;
+                color:white; border:none; border-radius:7px;
+                font-size:12px; font-weight:600;
+                cursor:pointer;
+                font-family:'Plus Jakarta Sans',sans-serif;">
+              Hepsi</button>
+            <button id="filterDusuk"
+              onclick="stokFiltrele('dusuk')"
+              style="padding:6px 14px; background:white;
+                border:1px solid #E5E7EB; border-radius:7px;
+                font-size:12px; color:#6B7280; cursor:pointer;
+                font-family:'Plus Jakarta Sans',sans-serif;">
+              Dusuk</button>
+            <button id="filterKritik"
+              onclick="stokFiltrele('kritik')"
+              style="padding:6px 14px; background:white;
+                border:1px solid #E5E7EB; border-radius:7px;
+                font-size:12px; color:#6B7280; cursor:pointer;
+                font-family:'Plus Jakarta Sans',sans-serif;">
+              Kritik</button>
+          </div>
+          <button onclick="excelModalAc('stok')"
+            title="Excel'e aktar"
+            style="width:34px; height:34px;
+              background:white;
+              border:1px solid #E5E7EB; border-radius:7px;
+              display:flex; align-items:center; justify-content:center;
+              cursor:pointer; transition:background 0.12s;
+              flex-shrink:0;"
+            onmouseover="this.style.background='#F9FAFB'"
+            onmouseout="this.style.background='white'">
+            <svg width="14" height="14" viewBox="0 0 24 24"
+              fill="none" stroke="#6B7280" stroke-width="2">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Tablo baslik -->
+        <div style="display:grid;
+          grid-template-columns:2fr 100px 90px 70px 100px 100px 88px;
+          padding:8px 16px; background:#F9FAFB;
+          border-bottom:1px solid #F3F4F6;">
+          <span style="font-size:11px; font-weight:600;
+            color:#9CA3AF; letter-spacing:.05em;">MALZEME</span>
+          <span style="font-size:11px; font-weight:600;
+            color:#9CA3AF; letter-spacing:.05em;">STOK</span>
+          <span style="font-size:11px; font-weight:600;
+            color:#9CA3AF; letter-spacing:.05em;">TREND (7G)</span>
+          <span style="font-size:11px; font-weight:600;
+            color:#9CA3AF; letter-spacing:.05em;">MIN</span>
+          <span style="font-size:11px; font-weight:600;
+            color:#9CA3AF; letter-spacing:.05em;">BIRIM FIYAT</span>
+          <span style="font-size:11px; font-weight:600;
+            color:#9CA3AF; letter-spacing:.05em;">DEGER</span>
+          <span style="font-size:11px; font-weight:600;
+            color:#9CA3AF; letter-spacing:.05em;">DURUM</span>
+        </div>
+
+        <!-- Satirlar -->
+        <div id="stokListeSatirlar" style="max-height:calc(100vh - 320px); overflow-y:auto;">
+          <div style="padding:40px; text-align:center;
+            color:#9CA3AF; font-size:13px;">
+            Yukleniyor...</div>
+        </div>
+      </div>
+
+      <!-- Son Hareketler -->
+      <div style="background:white; border-radius:12px;
+        border:1px solid #E5E7EB; overflow:hidden;
+        box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+        <div style="padding:14px 18px;
+          border-bottom:1px solid #F3F4F6;
+          display:flex; align-items:center; gap:10px;">
+          <div style="flex:1;">
+            <div style="font-size:14px; font-weight:600;
+              color:#111827;">Son Hareketler</div>
+            <div style="font-size:11.5px; color:#6B7280;
+              margin-top:2px;">Bu hafta</div>
+          </div>
+          <button onclick="stokTumHareketler()"
+            style="font-size:12px; color:#6B7280;
+              background:none; border:none; cursor:pointer;
+              font-weight:500; display:flex;
+              align-items:center; gap:4px;
+              font-family:'Plus Jakarta Sans',sans-serif;">
+            Hepsi
+            <svg width="14" height="14" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" stroke-width="2">
+              <path d="m9 18 6-6-6-6"/>
+            </svg>
+          </button>
+        </div>
+        <div id="stokGecmisListe" style="max-height:280px; overflow-y:auto;">
+          <div style="padding:24px; text-align:center;
+            color:#9CA3AF; font-size:13px;">
+            Henuz hareket kaydi yok.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SAG: Form paneli -->
+    <div style="background:white; overflow-y:auto;
+      display:flex; flex-direction:column;
+      border-left:1px solid #F3F4F6;
+      border-radius:12px 0 0 12px;
+      box-shadow:-2px 0 8px rgba(0,0,0,0.04);">
+
+      <!-- Malzeme Detay Paneli (malzeme satırına tıklanınca gösterilir) -->
+      <div id="malzemeDetayPanel" style="display:none; flex-direction:column;
+        height:100%; overflow-y:auto; flex:1;">
+
+        <!-- Geri butonu -->
+        <div style="display:flex; align-items:center; gap:10px;
+          padding:14px 16px 0; flex-shrink:0;">
+          <button onclick="malzemeDetayKapat()"
+            style="display:flex; align-items:center; gap:6px;
+              background:none; border:none; cursor:pointer;
+              color:#6B7280; font-size:12px; font-weight:600;
+              padding:6px 10px; border-radius:8px;
+              font-family:'Plus Jakarta Sans',sans-serif;
+              transition:background .15s;"
+            onmouseover="this.style.background='#F3F4F6'"
+            onmouseout="this.style.background='none'">
+            <svg width="14" height="14" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M19 12H5M12 5l-7 7 7 7"/>
+            </svg>
+            Geri
+          </button>
+        </div>
+
+        <!-- Malzeme adı ve tedarikçi -->
+        <div style="padding:12px 16px 0; flex-shrink:0;">
+          <div id="detayMalzemeAd" style="font-size:16px; font-weight:800;
+            color:#111827; font-family:'Plus Jakarta Sans',sans-serif;
+            line-height:1.3;"></div>
+          <div id="detayTedarikci" style="font-size:12px; color:#9CA3AF;
+            margin-top:3px; font-family:'Plus Jakarta Sans',sans-serif;"></div>
+        </div>
+
+        <!-- Durum badge -->
+        <div id="detayDurumBadge" style="padding:8px 16px 0; flex-shrink:0;"></div>
+
+        <!-- İstatistik kartlar (2x2 grid) -->
+        <div style="display:grid; grid-template-columns:1fr 1fr;
+          gap:8px; padding:12px 16px; flex-shrink:0;">
+          <div style="background:#F9FAFB; border-radius:10px;
+            padding:10px 12px; border:1px solid #F3F4F6;">
+            <div style="font-size:10px; color:#9CA3AF; font-weight:600;
+              text-transform:uppercase; letter-spacing:.06em;
+              font-family:'Plus Jakarta Sans',sans-serif; margin-bottom:4px;">
+              Mevcut Stok</div>
+            <div id="detayStok" style="font-size:18px; font-weight:800;
+              color:#111827; font-family:'Plus Jakarta Sans',sans-serif;"></div>
+          </div>
+          <div style="background:#F9FAFB; border-radius:10px;
+            padding:10px 12px; border:1px solid #F3F4F6;">
+            <div style="font-size:10px; color:#9CA3AF; font-weight:600;
+              text-transform:uppercase; letter-spacing:.06em;
+              font-family:'Plus Jakarta Sans',sans-serif; margin-bottom:4px;">
+              Stok Değeri</div>
+            <div id="detayDeger" style="font-size:18px; font-weight:800;
+              color:#111827; font-family:'Plus Jakarta Sans',sans-serif;"></div>
+          </div>
+          <div style="background:#F9FAFB; border-radius:10px;
+            padding:10px 12px; border:1px solid #F3F4F6;">
+            <div style="font-size:10px; color:#9CA3AF; font-weight:600;
+              text-transform:uppercase; letter-spacing:.06em;
+              font-family:'Plus Jakarta Sans',sans-serif; margin-bottom:4px;">
+              Son Fiyat</div>
+            <div id="detayFiyat" style="font-size:18px; font-weight:800;
+              color:#111827; font-family:'Plus Jakarta Sans',sans-serif;"></div>
+          </div>
+          <div style="background:#F9FAFB; border-radius:10px;
+            padding:10px 12px; border:1px solid #F3F4F6;">
+            <div style="font-size:10px; color:#9CA3AF; font-weight:600;
+              text-transform:uppercase; letter-spacing:.06em;
+              font-family:'Plus Jakarta Sans',sans-serif; margin-bottom:4px;">
+              Min. Eşik</div>
+            <div id="detayMin" style="font-size:18px; font-weight:800;
+              color:#111827; font-family:'Plus Jakarta Sans',sans-serif;"></div>
+          </div>
+        </div>
+
+        <!-- Trend grafik -->
+        <div style="padding:0 16px; flex-shrink:0;">
+          <div style="font-size:10px; color:#9CA3AF; font-weight:600;
+            text-transform:uppercase; letter-spacing:.06em;
+            font-family:'Plus Jakarta Sans',sans-serif; margin-bottom:6px;">
+            7 Günlük Trend</div>
+          <div style="background:#F9FAFB; border-radius:10px;
+            border:1px solid #F3F4F6; overflow:hidden;">
+            <canvas id="detayTrendCanvas"
+              style="width:100%; height:80px; display:block;"></canvas>
+          </div>
+        </div>
+
+        <!-- Kısayol butonlar -->
+        <div style="display:grid; grid-template-columns:1fr 1fr;
+          gap:8px; padding:12px 16px; flex-shrink:0;">
+          <button id="detayStokEkleBtn"
+            style="padding:9px 0; border-radius:8px;
+              background:#E15A1F; color:white; border:none;
+              font-size:12px; font-weight:700; cursor:pointer;
+              font-family:'Plus Jakarta Sans',sans-serif;
+              display:flex; align-items:center; justify-content:center; gap:6px;">
+            <svg width="12" height="12" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+            Stok Ekle
+          </button>
+          <button id="detaySarfBtn"
+            style="padding:9px 0; border-radius:8px;
+              background:#2563EB; color:white; border:none;
+              font-size:12px; font-weight:700; cursor:pointer;
+              font-family:'Plus Jakarta Sans',sans-serif;
+              display:flex; align-items:center; justify-content:center; gap:6px;">
+            <svg width="12" height="12" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" stroke-width="2.5">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+            Sarf Yap
+          </button>
+        </div>
+
+        <!-- Hareketler listesi -->
+        <div style="padding:0 16px 16px; flex:1; min-height:0;">
+          <div style="font-size:10px; color:#9CA3AF; font-weight:600;
+            text-transform:uppercase; letter-spacing:.06em;
+            font-family:'Plus Jakarta Sans',sans-serif; margin-bottom:6px;">
+            Son Hareketler</div>
+          <div id="detayHareketler"
+            style="background:#F9FAFB; border-radius:10px;
+              border:1px solid #F3F4F6; overflow-y:auto;
+              max-height:220px; padding:0 12px;">
+            <div style="padding:20px; text-align:center;
+              color:#9CA3AF; font-size:12px;">Yükleniyor...</div>
+          </div>
+        </div>
+      </div><!-- /malzemeDetayPanel -->
+
+      <!-- Tab butonlari -->
+      <div style="display:grid; grid-template-columns:1fr 1fr;
+        border-bottom:1px solid #F3F4F6; flex-shrink:0;">
+        <button id="tabGiris" onclick="stokTabDegis('giris')"
+          style="padding:14px 16px; background:#E15A1F;
+            color:white; border:none; font-size:13px;
+            font-weight:600; cursor:pointer;
+            display:flex; align-items:center;
+            justify-content:center; gap:8px;
+            font-family:'Plus Jakarta Sans',sans-serif;">
+          <svg width="14" height="14" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          Malzeme Girisi
+        </button>
+        <button id="tabSarf" onclick="stokTabDegis('sarf')"
+          style="padding:14px 16px;
+            background:#F9FAFB; color:#6B7280;
+            border:none; border-left:1px solid #F3F4F6;
+            font-size:13px; font-weight:600; cursor:pointer;
+            display:flex; align-items:center;
+            justify-content:center; gap:8px;
+            font-family:'Plus Jakarta Sans',sans-serif;">
+          <svg width="14" height="14" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" stroke-width="2.5">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+          Sarf Kaydi
+        </button>
+      </div>
+
+      <!-- Giris formu -->
+      <div id="stokGirisForm"
+        style="padding:18px 20px 24px;
+          display:flex; flex-direction:column; gap:12px;">
+
+        <div>
+          <div style="font-size:10.5px; color:#6B7280;
+            letter-spacing:.06em; text-transform:uppercase;
+            font-weight:600; margin-bottom:5px;">Malzeme</div>
+          <input id="stokMalzemeInput" type="text"
+            list="katalogMalzemeListesi"
+            placeholder="Malzeme ara / sec..."
+            oninput="stokMalzemeSecildi('giris')"
+            style="width:100%; height:34px; padding:0 12px;
+              border:1px solid #E5E7EB; border-radius:7px;
+              font-size:13px; font-family:'Plus Jakarta Sans',sans-serif;
+              outline:none; box-sizing:border-box;
+              background:white; color:#111827;">
+        </div>
+
+        <div style="display:grid;
+          grid-template-columns:1fr 110px; gap:8px;">
+          <div>
+            <div style="font-size:10.5px; color:#6B7280;
+              letter-spacing:.06em; text-transform:uppercase;
+              font-weight:600; margin-bottom:5px;">Miktar</div>
+            <input id="stokMiktar" type="number"
+              placeholder="0" min="0" step="0.01"
+              style="width:100%; height:34px; padding:0 12px;
+                border:1px solid #E5E7EB; border-radius:7px;
+                font-size:13px; font-family:'Plus Jakarta Sans',sans-serif;
+                outline:none; box-sizing:border-box;
+                background:white; color:#111827;">
+          </div>
+          <div>
+            <div style="font-size:10.5px; color:#6B7280;
+              letter-spacing:.06em; text-transform:uppercase;
+              font-weight:600; margin-bottom:5px;">Birim</div>
+            <input id="stokBirim" type="text"
+              placeholder="torba"
+              style="width:100%; height:34px; padding:0 12px;
+                border:1px solid #E5E7EB; border-radius:7px;
+                font-size:13px; font-family:'Plus Jakarta Sans',sans-serif;
+                outline:none; box-sizing:border-box;
+                background:#F9FAFB; color:#6B7280;">
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:10.5px; color:#6B7280;
+            letter-spacing:.06em; text-transform:uppercase;
+            font-weight:600; margin-bottom:5px;">
+            Tedarikci (opsiyonel)</div>
+          <input id="stokTedarikci" type="text"
+            placeholder="Akcansa, Vitra, Kale..."
+            style="width:100%; height:34px; padding:0 12px;
+              border:1px solid #E5E7EB; border-radius:7px;
+              font-size:13px; font-family:'Plus Jakarta Sans',sans-serif;
+              outline:none; box-sizing:border-box;
+              background:white; color:#111827;">
+        </div>
+
+        <div style="display:grid;
+          grid-template-columns:1fr 130px; gap:8px;">
+          <div>
+            <div style="font-size:10.5px; color:#6B7280;
+              letter-spacing:.06em; text-transform:uppercase;
+              font-weight:600; margin-bottom:5px;">Birim Fiyat</div>
+            <div style="position:relative;">
+              <input id="stokFiyat" type="number"
+                placeholder="0,00" min="0" step="0.01"
+                style="width:100%; height:34px;
+                  padding:0 12px 0 28px;
+                  border:1px solid #E5E7EB; border-radius:7px;
+                  font-size:13px;
+                  font-family:'Plus Jakarta Sans',sans-serif;
+                  outline:none; box-sizing:border-box;
+                  background:white; color:#111827;">
+              <span style="position:absolute; right:10px;
+                top:50%; transform:translateY(-50%);
+                font-size:12px; color:#9CA3AF;">&#8378;</span>
             </div>
+          </div>
+          <div>
+            <div style="font-size:10.5px; color:#6B7280;
+              letter-spacing:.06em; text-transform:uppercase;
+              font-weight:600; margin-bottom:5px;">Irsaliye No</div>
+            <input id="stokIrsaliyeNo" type="text"
+              placeholder="&mdash;"
+              style="width:100%; height:34px; padding:0 12px;
+                border:1px solid #E5E7EB; border-radius:7px;
+                font-size:13px;
+                font-family:'Plus Jakarta Sans',sans-serif;
+                outline:none; box-sizing:border-box;
+                background:white; color:#111827;">
+          </div>
+        </div>
 
-            <!-- İçerik -->
-            <div style="flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:14px;">
+        <div>
+          <div style="font-size:10.5px; color:#6B7280;
+            letter-spacing:.06em; text-transform:uppercase;
+            font-weight:600; margin-bottom:5px;">
+            Notlar (opsiyonel)</div>
+          <textarea id="stokNotlar"
+            placeholder="Aciklama..." rows="3"
+            style="width:100%; padding:8px 12px;
+              border:1px solid #E5E7EB; border-radius:7px;
+              font-size:13px; font-family:'Plus Jakarta Sans',sans-serif;
+              outline:none; box-sizing:border-box;
+              resize:none; background:white;
+              color:#111827;"></textarea>
+        </div>
 
-              <!-- Uyarılar -->
-              <div id="stokUyarilar"></div>
+        <button onclick="stokKaydet()"
+          style="width:100%; height:40px;
+            background:#E15A1F; color:white;
+            border:none; border-radius:8px;
+            font-size:13px; font-weight:600;
+            cursor:pointer; margin-top:4px;
+            display:flex; align-items:center;
+            justify-content:center; gap:8px;
+            font-family:'Plus Jakarta Sans',sans-serif;">
+          <svg width="14" height="14" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          Stok Girisi Kaydet
+        </button>
+        <div id="stokMsg" style="font-size:12px;
+          text-align:center; min-height:16px;
+          color:#6B7280;"></div>
 
-              <!-- Şantiye Filtre -->
-              <div style="display:flex;align-items:center;gap:10px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                <select id="stokSantiye" onchange="stokSantiyeDegisti()"
-                  style="background:#FFFFFF;border:1.5px solid #E2E8F0;color:#0F172A;padding:8px 14px;border-radius:9px;font-size:13px;font-weight:600;outline:none;cursor:pointer;min-width:200px;">
-                  <option value="">Tüm Şantiyeler</option>
-                </select>
-              </div>
+        <!-- Divider -->
+        <div style="height:1px; background:#F3F4F6;
+          margin:4px 0;"></div>
 
-              <!-- Stok Kartları -->
-              <div>
-                <div style="font-size:12px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Malzeme Stok Durumu</div>
-                <div id="stokKartlar" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;"></div>
-              </div>
+        <!-- Kritik esik -->
+        <div>
+          <div style="font-size:11px; font-weight:600;
+            color:#6B7280; letter-spacing:.06em;
+            text-transform:uppercase; margin-bottom:8px;">
+            Kritik Stok Esigi</div>
+          <div style="display:flex; gap:6px;">
+            <select id="esikMalzeme"
+              style="flex:1; height:32px; padding:0 10px;
+                border:1px solid #E5E7EB; border-radius:6px;
+                font-size:12px; outline:none;
+                font-family:'Plus Jakarta Sans',sans-serif;
+                background:white; color:#111827;">
+              <option value="">Malzeme seç...</option>
+            </select>
+            <input id="esikMinMiktar" type="number"
+              placeholder="Min" min="0"
+              style="width:60px; height:32px; padding:0 10px;
+                border:1px solid #E5E7EB; border-radius:6px;
+                font-size:12px; outline:none; text-align:right;
+                font-family:'JetBrains Mono',monospace;
+                background:white; color:#111827;">
+            <button onclick="esikKaydet()"
+              style="height:32px; padding:0 14px;
+                background:#111827; color:white;
+                border:none; border-radius:6px;
+                font-size:12px; font-weight:600;
+                cursor:pointer;
+                font-family:'Plus Jakarta Sans',sans-serif;">
+              Kaydet
+            </button>
+          </div>
+          <div style="font-size:11px; color:#9CA3AF;
+            margin-top:8px; line-height:1.5;">
+            Bu miktarin altina dusunce otomatik uyari
+            olusturulur ve AI siparis oner.
+          </div>
+        </div>
+      </div>
 
-              <!-- Alt 2 Bölüm -->
-              <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;min-height:320px;">
+      <!-- Sarf formu -->
+      <div id="stokSarfForm"
+        style="display:none; padding:18px 20px 24px;
+          flex-direction:column; gap:12px;">
 
-                <!-- Hareket Geçmişi -->
-                <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:14px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
-                  <div style="padding:14px 16px;border-bottom:1px solid #F1F5F9;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
-                    <div style="font-size:13px;font-weight:700;color:#0F172A;">📋 Hareket Geçmişi</div>
-                    <select id="stokGecmisMalzeme" onchange="stokGecmisYukle()"
-                      style="background:#F8FAFC;border:1px solid #E2E8F0;color:#475569;padding:5px 10px;border-radius:7px;font-size:12px;font-weight:600;outline:none;cursor:pointer;">
-                      <option value="demir">Demir</option>
-                      <option value="cimento">Çimento</option>
-                      <option value="beton">Beton</option>
-                      <option value="tugla">Tuğla</option>
-                      <option value="kum">Kum</option>
-                    </select>
-                  </div>
-                  <div id="stokGecmisListe" style="flex:1;overflow-y:auto;padding:8px 12px;"></div>
-                </div>
+        <div>
+          <div style="font-size:10.5px; color:#6B7280;
+            letter-spacing:.06em; text-transform:uppercase;
+            font-weight:600; margin-bottom:5px;">Malzeme</div>
+          <input id="sarfMalzemeInput" type="text"
+            list="katalogMalzemeListesi"
+            placeholder="Malzeme ara / sec..."
+            oninput="stokMalzemeSecildi('sarf')"
+            style="width:100%; height:34px; padding:0 12px;
+              border:1px solid #E5E7EB; border-radius:7px;
+              font-size:13px; font-family:'Plus Jakarta Sans',sans-serif;
+              outline:none; box-sizing:border-box;
+              background:white; color:#111827;">
+        </div>
 
-                <!-- Malzeme Girişi / Çıkışı -->
-                <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
-                  <div style="font-size:13px;font-weight:700;color:#0F172A;display:flex;align-items:center;gap:6px;">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    Malzeme Girişi / Çıkışı
-                  </div>
+        <div style="display:grid;
+          grid-template-columns:1fr 110px; gap:8px;">
+          <div>
+            <div style="font-size:10.5px; color:#6B7280;
+              letter-spacing:.06em; text-transform:uppercase;
+              font-weight:600; margin-bottom:5px;">Miktar</div>
+            <input id="sarfMiktar" type="number"
+              placeholder="0" min="0" step="0.01"
+              style="width:100%; height:34px; padding:0 12px;
+                border:1px solid #E5E7EB; border-radius:7px;
+                font-size:13px; font-family:'Plus Jakarta Sans',sans-serif;
+                outline:none; box-sizing:border-box;
+                background:white; color:#111827;">
+          </div>
+          <div>
+            <div style="font-size:10.5px; color:#6B7280;
+              letter-spacing:.06em; text-transform:uppercase;
+              font-weight:600; margin-bottom:5px;">Birim</div>
+            <input id="sarfBirim" type="text"
+              placeholder="torba"
+              style="width:100%; height:34px; padding:0 12px;
+                border:1px solid #E5E7EB; border-radius:7px;
+                font-size:13px; font-family:'Plus Jakarta Sans',sans-serif;
+                outline:none; box-sizing:border-box;
+                background:#F9FAFB; color:#6B7280;">
+          </div>
+        </div>
 
-                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                    <select id="stokMalzeme"
-                      style="background:#F8FAFC;border:1.5px solid #E2E8F0;color:#0F172A;padding:9px 12px;border-radius:9px;font-size:13px;outline:none;cursor:pointer;">
-                      <option value="demir">🔩 Demir</option>
-                      <option value="cimento">🏭 Çimento</option>
-                      <option value="beton">🧱 Beton</option>
-                      <option value="tugla">🏠 Tuğla</option>
-                      <option value="kum">⛱️ Kum</option>
-                    </select>
-                    <select id="stokTip"
-                      style="background:#F8FAFC;border:1.5px solid #E2E8F0;color:#0F172A;padding:9px 12px;border-radius:9px;font-size:13px;outline:none;cursor:pointer;">
-                      <option value="giris">📥 Giriş</option>
-                      <option value="cikis">📤 Çıkış</option>
-                    </select>
-                  </div>
+        <div>
+          <div style="font-size:10.5px; color:#6B7280;
+            letter-spacing:.06em; text-transform:uppercase;
+            font-weight:600; margin-bottom:5px;">Is Kalemi</div>
+          <select id="sarfIsKalemi"
+            style="width:100%; height:34px; padding:0 10px;
+              border:1px solid #E5E7EB; border-radius:7px;
+              font-size:13px; font-family:'Plus Jakarta Sans',sans-serif;
+              outline:none; background:white; color:#111827;">
+            <option value="">Secin...</option>
+          </select>
+        </div>
 
-                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                    <input type="number" id="stokMiktar" placeholder="Miktar"
-                      style="background:#F8FAFC;border:1.5px solid #E2E8F0;color:#0F172A;padding:9px 12px;border-radius:9px;font-size:13px;outline:none;transition:border-color 0.15s;box-sizing:border-box;"
-                      onfocus="this.style.borderColor='#3B82F6'" onblur="this.style.borderColor='#E2E8F0'">
-                    <select id="stokBirim"
-                      style="background:#F8FAFC;border:1.5px solid #E2E8F0;color:#0F172A;padding:9px 12px;border-radius:9px;font-size:13px;outline:none;cursor:pointer;">
-                      <option value="ton">Ton</option>
-                      <option value="m³">m³</option>
-                      <option value="adet">Adet</option>
-                      <option value="çuval">Çuval</option>
-                    </select>
-                  </div>
+        <div>
+          <div style="font-size:10.5px; color:#6B7280;
+            letter-spacing:.06em; text-transform:uppercase;
+            font-weight:600; margin-bottom:5px;">
+            Konum / Bolum</div>
+          <input id="sarfAciklama" type="text"
+            placeholder="B Blok - Zemin..."
+            style="width:100%; height:34px; padding:0 12px;
+              border:1px solid #E5E7EB; border-radius:7px;
+              font-size:13px; font-family:'Plus Jakarta Sans',sans-serif;
+              outline:none; box-sizing:border-box;
+              background:white; color:#111827;">
+        </div>
 
-                  <input type="text" id="stokTedarikci" placeholder="Tedarikçi (opsiyonel)"
-                    style="width:100%;background:#F8FAFC;border:1.5px solid #E2E8F0;color:#0F172A;padding:9px 12px;border-radius:9px;font-size:13px;outline:none;transition:border-color 0.15s;box-sizing:border-box;"
-                    onfocus="this.style.borderColor='#3B82F6'" onblur="this.style.borderColor='#E2E8F0'">
+        <div>
+          <div style="font-size:10.5px; color:#6B7280;
+            letter-spacing:.06em; text-transform:uppercase;
+            font-weight:600; margin-bottom:5px;">Notlar</div>
+          <textarea id="sarfNotlar"
+            placeholder="Ek aciklama..." rows="3"
+            style="width:100%; padding:8px 12px;
+              border:1px solid #E5E7EB; border-radius:7px;
+              font-size:13px; font-family:'Plus Jakarta Sans',sans-serif;
+              outline:none; box-sizing:border-box;
+              resize:none; background:white;
+              color:#111827;"></textarea>
+        </div>
 
-                  <input type="number" id="stokFiyat" placeholder="Birim Fiyat ₺ (opsiyonel)"
-                    style="width:100%;background:#F8FAFC;border:1.5px solid #E2E8F0;color:#0F172A;padding:9px 12px;border-radius:9px;font-size:13px;outline:none;transition:border-color 0.15s;box-sizing:border-box;"
-                    onfocus="this.style.borderColor='#3B82F6'" onblur="this.style.borderColor='#E2E8F0'">
+        <button onclick="sarfKaydet()"
+          style="width:100%; height:40px;
+            background:#E15A1F; color:white;
+            border:none; border-radius:8px;
+            font-size:13px; font-weight:600;
+            cursor:pointer; margin-top:4px;
+            display:flex; align-items:center;
+            justify-content:center; gap:8px;
+            font-family:'Plus Jakarta Sans',sans-serif;">
+          <svg width="14" height="14" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" stroke-width="2.5">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+          Sarf Kaydini Kaydet
+        </button>
+        <div id="sarfMsg" style="font-size:12px;
+          text-align:center; min-height:16px;
+          color:#6B7280;"></div>
+      </div>
 
-                  <input type="text" id="stokNotlar" placeholder="Notlar (opsiyonel)"
-                    style="width:100%;background:#F8FAFC;border:1.5px solid #E2E8F0;color:#0F172A;padding:9px 12px;border-radius:9px;font-size:13px;outline:none;transition:border-color 0.15s;box-sizing:border-box;"
-                    onfocus="this.style.borderColor='#3B82F6'" onblur="this.style.borderColor='#E2E8F0'">
+      <!-- Gizli elemanlar -->
+      <select id="stokSantiye" style="display:none;"></select>
+      <datalist id="katalogMalzemeListesi"></datalist>
+    </div>
 
-                  <button onclick="stokKaydet()"
-                    style="width:100%;background:#3B82F6;border:none;color:white;padding:12px;border-radius:10px;cursor:pointer;font-weight:700;font-size:14px;transition:background 0.15s;font-family:inherit;margin-top:2px;"
-                    onmouseover="this.style.background='#2563EB'" onmouseout="this.style.background='#3B82F6'">
-                    💾 Kaydet
-                  </button>
-                  <div id="stokMsg" style="font-size:12px;text-align:center;min-height:16px;"></div>
-                </div>
-
-              </div>
-            </div>
+  <!-- Gizli AI elemanlar -->
+  <div style="display:none;">
+    <input id="stokAiInput" type="text">
+    <div id="stokAiResult"></div>
+    <div id="stokUyarilar"></div>
+  </div>
           </div><!-- /stokPage -->
+
+          <!-- ══════ SAHA KAYITLARI SAYFASI ══════ -->
+          <div id="sahaKayitlariPage" style="display:none;flex:1;flex-direction:column;overflow:auto;background:#F1F5F9;">
+            <div style="background:#FFFFFF;border-bottom:1px solid #E2E8F0;padding:18px 24px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+              <div>
+                <div style="font-size:22px;font-weight:800;color:#0F172A;line-height:1.2;">Saha Kayıtları</div>
+                <div style="font-size:13px;color:#64748B;margin-top:4px;">Fotoğraf/video tabanlı saha kayıtlarını oluşturun, inceleyin ve mühendis kararıyla kesinleştirin.</div>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button type="button" onclick="kpManuelEkleAc()" style="background:#0F172A;color:white;border:none;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:800;cursor:pointer;">+ Yeni Saha Kaydı</button>
+                <button type="button" onclick="navGit('kamera')" style="background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:800;cursor:pointer;">Kamera Analizlerinden Kayıt Oluştur</button>
+              </div>
+            </div>
+
+            <div style="padding:18px 24px;display:grid;gap:16px;">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">
+                <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:14px;"><div style="font-size:11px;color:#64748B;font-weight:800;text-transform:uppercase;">Toplam</div><div id="sahaStatToplam" style="font-size:26px;font-weight:800;color:#0F172A;margin-top:4px;">0</div></div>
+                <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:14px;"><div style="font-size:11px;color:#64748B;font-weight:800;text-transform:uppercase;">Bekleyen</div><div id="sahaStatPending" style="font-size:26px;font-weight:800;color:#D97706;margin-top:4px;">0</div></div>
+                <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:14px;"><div style="font-size:11px;color:#64748B;font-weight:800;text-transform:uppercase;">İncelemede</div><div id="sahaStatInReview" style="font-size:26px;font-weight:800;color:#2563EB;margin-top:4px;">0</div></div>
+                <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:14px;"><div style="font-size:11px;color:#64748B;font-weight:800;text-transform:uppercase;">Onaylanan</div><div id="sahaStatApproved" style="font-size:26px;font-weight:800;color:#16A34A;margin-top:4px;">0</div></div>
+                <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:14px;"><div style="font-size:11px;color:#64748B;font-weight:800;text-transform:uppercase;">Reddedilen</div><div id="sahaStatRejected" style="font-size:26px;font-weight:800;color:#DC2626;margin-top:4px;">0</div></div>
+              </div>
+
+              <div id="kpManuelForm" style="display:none;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:16px;"></div>
+
+              <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:14px;display:grid;gap:12px;">
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">
+                  <select id="sahaFilterSantiye" onchange="kpManuelYukle()" style="padding:9px 10px;border:1.5px solid #E2E8F0;border-radius:10px;background:#F8FAFC;font-size:12px;color:#0F172A;"><option value="">Şantiye</option></select>
+                  <select id="sahaFilterDurum" onchange="kpManuelYukle()" style="padding:9px 10px;border:1.5px solid #E2E8F0;border-radius:10px;background:#F8FAFC;font-size:12px;color:#0F172A;"><option value="">Durum</option><option value="pending">Bekleyen</option><option value="in_review">İncelemede</option><option value="approved">Onaylanan</option><option value="rejected">Reddedilen</option></select>
+                  <select id="sahaFilterTip" onchange="kpManuelYukle()" style="padding:9px 10px;border:1.5px solid #E2E8F0;border-radius:10px;background:#F8FAFC;font-size:12px;color:#0F172A;"><option value="">Tip</option><option value="safety">Güvenlik</option><option value="quality">Kalite</option><option value="progress">İlerleme</option><option value="material">Malzeme</option><option value="general">Genel</option></select>
+                  <select id="sahaFilterKaynak" onchange="kpManuelYukle()" style="padding:9px 10px;border:1.5px solid #E2E8F0;border-radius:10px;background:#F8FAFC;font-size:12px;color:#0F172A;"><option value="">Kaynak</option><option value="manual">Manuel</option><option value="upload">Yükleme</option><option value="camera">Kamera</option><option value="ai_camera">AI Kamera</option></select>
+                  <input id="sahaFilterKonum" type="text" placeholder="Konum" oninput="kpSahaFiltreGecikmeli()" style="padding:9px 10px;border:1.5px solid #E2E8F0;border-radius:10px;background:#F8FAFC;font-size:12px;color:#0F172A;">
+                  <input id="sahaFilterBaslangic" type="date" onchange="kpManuelYukle()" style="padding:9px 10px;border:1.5px solid #E2E8F0;border-radius:10px;background:#F8FAFC;font-size:12px;color:#0F172A;">
+                  <input id="sahaFilterBitis" type="date" onchange="kpManuelYukle()" style="padding:9px 10px;border:1.5px solid #E2E8F0;border-radius:10px;background:#F8FAFC;font-size:12px;color:#0F172A;">
+                  <input id="sahaFilterArama" type="text" placeholder="Arama" oninput="kpSahaFiltreGecikmeli()" style="padding:9px 10px;border:1.5px solid #E2E8F0;border-radius:10px;background:#F8FAFC;font-size:12px;color:#0F172A;">
+                </div>
+                <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                  <div style="font-size:12px;color:#64748B;">Onaylanmamış AI/kamera çıktıları taslak öneridir; doğrulanmış gerçek sayılmaz.</div>
+                  <div style="display:flex;gap:8px;">
+                    <button id="sahaViewList" type="button" onclick="kpSahaGorunumSec('list')" style="padding:8px 12px;border-radius:10px;border:1.5px solid #0F172A;background:#0F172A;color:white;font-size:12px;font-weight:800;cursor:pointer;">Liste</button>
+                    <button id="sahaViewGallery" type="button" onclick="kpSahaGorunumSec('gallery')" style="padding:8px 12px;border-radius:10px;border:1.5px solid #E2E8F0;background:white;color:#64748B;font-size:12px;font-weight:800;cursor:pointer;">Galeri</button>
+                  </div>
+                </div>
+              </div>
+
+              <div id="kpManuelKartlar" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;"></div>
+              <div id="kpManuelEmpty" style="display:none;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;padding:44px;text-align:center;color:#94A3B8;font-size:13px;">Henüz saha kaydı bulunmuyor.</div>
+            </div>
+          </div><!-- /sahaKayitlariPage -->
 
           <!-- ══════ KAMERA ANALİZİ SAYFASI ══════ -->
           <div id="kameraPage" style="display:none;flex:1;flex-direction:column;overflow:hidden;background:#F1F5F9;">
@@ -1048,7 +2086,7 @@ NEW_HTML_TEMPLATE = f"""
               <!-- Proje Çubuğu -->
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
                 <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-                  <div id="kpProjeAnchor" onclick="kpProjeDropdownAc()" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 10px;border-radius:8px;border:1px solid #E2E8F0;background:#F8FAFC;transition:all 0.15s;" onmouseover="this.style.background='#F1F5F9'" onmouseout="this.style.background='#F8FAFC'">
+                  <div id="kpProjeAnchor" onclick="kpProjeDropdownAc()" style="display:none;align-items:center;gap:6px;cursor:pointer;padding:4px 10px;border-radius:8px;border:1px solid #E2E8F0;background:#F8FAFC;transition:all 0.15s;" onmouseover="this.style.background='#F1F5F9'" onmouseout="this.style.background='#F8FAFC'">
                     <span style="font-size:11px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:0.05em;">Aktif Proje:</span>
                     <span id="kpAktifProjeName" style="font-size:13px;font-weight:700;color:#0F172A;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Şantiye seçin...</span>
                     <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="#94A3B8" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
@@ -1060,7 +2098,7 @@ NEW_HTML_TEMPLATE = f"""
                   </span>
                 </div>
                 <div style="display:flex;gap:8px;flex-shrink:0;">
-                  <button onclick="yeniKameraEkleAc()" style="display:flex;align-items:center;gap:6px;background:#0F172A;border:none;color:white;font-size:13px;font-weight:700;padding:9px 16px;border-radius:10px;cursor:pointer;transition:background 0.15s;white-space:nowrap;"
+                  <button id="btnYeniKameraEkle" onclick="yeniKameraEkleAc()" style="display:flex;align-items:center;gap:6px;background:#0F172A;border:none;color:white;font-size:13px;font-weight:700;padding:9px 16px;border-radius:10px;cursor:pointer;transition:background 0.15s;white-space:nowrap;"
                     onmouseover="this.style.background='#1E293B'" onmouseout="this.style.background='#0F172A'">
                     <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
                     Yeni Kamera Ekle
@@ -1070,7 +2108,7 @@ NEW_HTML_TEMPLATE = f"""
                     <button onclick="kameraFotoInputAc()" style="display:flex;align-items:center;gap:6px;background:#F97316;border:none;color:white;font-size:13px;font-weight:700;padding:9px 14px;border-radius:10px 0 0 10px;cursor:pointer;transition:background 0.15s;white-space:nowrap;"
                       onmouseover="this.style.background='#ea6010'" onmouseout="this.style.background='#F97316'">
                       <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                      + Fotoğraf / Kanıt Ekle
+                      + Fotoğraf / Saha Kaydı
                     </button>
                     <button onclick="kpFotoDropdownToggle()" style="display:flex;align-items:center;justify-content:center;background:#F97316;border:none;border-left:1px solid rgba(255,255,255,0.25);color:white;padding:9px 10px;border-radius:0 10px 10px 0;cursor:pointer;transition:background 0.15s;"
                       onmouseover="this.style.background='#ea6010'" onmouseout="this.style.background='#F97316'">
@@ -1084,7 +2122,7 @@ NEW_HTML_TEMPLATE = f"""
                       </button>
                     </div>
                   </div>
-                  <input type="file" id="kameraPageFileInput" accept="image/*" style="display:none;" onchange="kameraPageDosyaAnalizEt(event)">
+                  <input type="file" id="kameraPageFileInput" accept="image/*,video/*" style="display:none;" onchange="kameraPageDosyaAnalizEt(event)">
                 </div>
               </div>
               <!-- Başlık + Açıklama -->
@@ -1095,7 +2133,7 @@ NEW_HTML_TEMPLATE = f"""
             </div>
 
             <!-- ══ FİLTRE ÇUBUĞU ══ -->
-            <div style="background:#FFFFFF;border-bottom:1px solid #E2E8F0;padding:10px 24px;flex-shrink:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <div class="kamera-page-toolbar" style="background:#FFFFFF;border-bottom:1px solid #E2E8F0;padding:10px 24px;flex-shrink:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
               <div style="flex:1;min-width:180px;display:flex;align-items:center;gap:8px;background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:10px;padding:8px 12px;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 <input id="kameraArama" type="text" placeholder="Kamera veya olay türüne göre ara..."
@@ -1111,105 +2149,100 @@ NEW_HTML_TEMPLATE = f"""
             </div>
 
             <!-- ══ İKİ SÜTUNLU İÇERİK ══ -->
-            <div style="flex:1;overflow:hidden;display:flex;">
+            <div class="kamera-layout" style="flex:1;overflow:visible;display:grid;">
 
               <!-- SOL ANA ALAN -->
-              <div id="kameraPageMain" style="flex:1;overflow-y:auto;padding:20px 20px 40px 24px;display:flex;flex-direction:column;gap:20px;">
+              <div id="kameraPageMain" class="kamera-main" style="flex:1;overflow:visible;padding:20px 20px 40px 24px;display:flex;flex-direction:column;gap:20px;">
 
                 <!-- ─── Canlı Kamera İzleme ─── -->
-                <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
+                <div class="kamera-section" style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
                   <div style="padding:14px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #E2E8F0;">
                     <div style="display:flex;align-items:center;gap:8px;">
                       <span style="display:inline-block;width:8px;height:8px;background:#EF4444;border-radius:50%;animation:kpPulse 1.5s infinite;"></span>
                       <span style="font-size:14px;font-weight:700;color:#0F172A;">Canlı Kamera İzleme</span>
+                      <span id="kpHiddenCamBadge" style="display:none;font-size:10px;font-weight:700;background:#F1F5F9;color:#64748B;padding:2px 7px;border-radius:10px;"></span>
                     </div>
-                    <div style="display:flex;gap:6px;">
-                      <button id="kpGridBtn" onclick="kpKameraGoruntuleme('grid')" title="Izgara görünümü" style="background:#0F172A;border:none;padding:6px 8px;border-radius:7px;cursor:pointer;display:flex;align-items:center;">
-                        <svg width="14" height="14" fill="white" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                    <div style="display:flex;gap:5px;align-items:center;">
+                      <!-- 2 Ana Kamera (default) -->
+                      <button id="kpViewBtn-primary2" onclick="kpKameraGoruntuleme('primary2')" title="2 Ana Kamera" style="background:#0F172A;border:none;padding:5px 9px;border-radius:7px;cursor:pointer;display:flex;align-items:center;gap:3px;">
+                        <svg width="12" height="12" fill="white" viewBox="0 0 24 24"><rect x="2" y="3" width="9" height="18" rx="1.5"/><rect x="13" y="3" width="9" height="18" rx="1.5"/></svg>
+                        <span style="font-size:10px;font-weight:700;color:white;letter-spacing:0.02em;">2</span>
                       </button>
-                      <button id="kpListBtn" onclick="kpKameraGoruntuleme('list')" title="Liste görünümü" style="background:#F1F5F9;border:none;padding:6px 8px;border-radius:7px;cursor:pointer;display:flex;align-items:center;">
-                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#475569" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                      <!-- 4 Izgara -->
+                      <button id="kpViewBtn-grid4" onclick="kpKameraGoruntuleme('grid4')" title="4 Izgara Görünümü" style="background:#F1F5F9;border:none;padding:5px 9px;border-radius:7px;cursor:pointer;display:flex;align-items:center;gap:3px;">
+                        <svg width="12" height="12" fill="#475569" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                        <span style="font-size:10px;font-weight:700;color:#475569;letter-spacing:0.02em;">4</span>
                       </button>
-                      <button onclick="kpKameraFullscreen()" title="Tam ekran" style="background:#F1F5F9;border:none;padding:6px 8px;border-radius:7px;cursor:pointer;display:flex;align-items:center;">
+                      <!-- Tüm Kameralar -->
+                      <button id="kpViewBtn-all" onclick="kpKameraGoruntuleme('all')" title="Tüm Kameralar" style="background:#F1F5F9;border:none;padding:5px 9px;border-radius:7px;cursor:pointer;display:flex;align-items:center;gap:3px;">
+                        <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="#475569" stroke-width="2.2"><rect x="3" y="3" width="7" height="5" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="3" y="10" width="7" height="4" rx="1"/><rect x="14" y="10" width="7" height="4" rx="1"/><line x1="3" y1="18" x2="10" y2="18" stroke-linecap="round"/><line x1="14" y1="18" x2="21" y2="18" stroke-linecap="round"/></svg>
+                        <span style="font-size:10px;font-weight:700;color:#475569;letter-spacing:0.02em;">Tümü</span>
+                      </button>
+                      <!-- Tam Ekran -->
+                      <button onclick="kpKameraFullscreen()" title="Tam ekran" style="background:#F1F5F9;border:none;padding:6px 8px;border-radius:7px;cursor:pointer;display:flex;align-items:center;margin-left:2px;">
                         <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#475569" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
                       </button>
                     </div>
                   </div>
                   <!-- Kamera Grid -->
-                  <div id="kpCameraGrid" style="padding:12px 16px 16px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;"></div>
+                  <div id="kpCameraGrid" style="padding:12px 16px 16px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;"></div>
                   <div id="kpCameraEmpty" style="display:none;"></div>
                 </div>
 
-                <!-- ─── AI Fotoğraf Kanıtları ─── -->
-                <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
-                  <div style="padding:14px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #E2E8F0;">
-                    <div style="display:flex;align-items:center;gap:8px;">
-                      <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#6366f1" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                      <span style="font-size:14px;font-weight:700;color:#0F172A;">AI Anlık Fotoğraf Kanıtları</span>
-                      <span id="kpAiBadge" style="background:#EFF6FF;color:#2563EB;font-size:11px;font-weight:700;padding:2px 8px;border-radius:12px;">0</span>
+                <!-- ─── AI Fotoğraf Analizleri ─── -->
+                <div class="kamera-section" style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:22px;overflow:hidden;box-shadow:0 18px 38px rgba(15,23,42,0.06);">
+                  <div style="padding:18px 20px 14px;display:flex;align-items:center;justify-content:space-between;gap:14px;">
+                    <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+                      <div style="width:28px;height:28px;border-radius:10px;background:#EFF6FF;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#2563EB" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                      </div>
+                      <span style="font-size:14px;font-weight:800;color:#0F172A;letter-spacing:-0.01em;">AI Anlık Fotoğraf Analizleri</span>
+                      <span id="kpAiBadge" style="background:#EFF6FF;color:#2563EB;font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;">0</span>
                     </div>
-                    <div style="display:flex;gap:6px;align-items:center;">
-                      <button id="kpSortBtn" onclick="kpSortToggle()" style="font-size:12px;font-weight:700;color:#64748B;background:#F8FAFC;border:1px solid #E2E8F0;padding:5px 12px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:4px;">↓ En Yeni</button>
-                      <button onclick="kameraPageYukle()" style="font-size:12px;font-weight:700;color:#64748B;background:#F8FAFC;border:1px solid #E2E8F0;padding:5px 12px;border-radius:8px;cursor:pointer;text-transform:uppercase;letter-spacing:0.03em;">Yenile</button>
+                    <div style="display:flex;gap:10px;align-items:center;flex-shrink:0;">
+                      <button onclick="kpArsivAc()" style="font-size:12px;font-weight:800;color:#0F172A;background:transparent;border:none;padding:0;cursor:pointer;text-transform:uppercase;letter-spacing:0.04em;">Tümünü Arşivle</button>
+                      <button onclick="kameraPageYukle()" style="width:34px;height:34px;border-radius:10px;border:1px solid #E2E8F0;background:#FFFFFF;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#64748B;box-shadow:0 8px 18px rgba(15,23,42,0.05);" title="Yenile">
+                        <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path d="M20 11a8 8 0 1 0 2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+                      </button>
+                      <button id="kpSortBtn" onclick="kpSortToggle()" style="font-size:11px;font-weight:800;color:#64748B;background:#F8FAFC;border:1px solid #E2E8F0;padding:7px 10px;border-radius:10px;cursor:pointer;display:flex;align-items:center;gap:4px;">↓ En Yeni</button>
                     </div>
                   </div>
                   <!-- Analiz Yükleniyor -->
                   <div id="kpAnalysisLoading" style="display:none;padding:24px;text-align:center;">
                     <div style="width:36px;height:36px;border:3px solid #E2E8F0;border-top-color:#6366f1;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 10px;"></div>
-                    <div style="font-size:13px;font-weight:600;color:#0F172A;">AI analiz yapıyor...</div>
-                    <div style="font-size:12px;color:#64748B;margin-top:3px;">Fotoğraf işleniyor, lütfen bekleyin</div>
+                    <div id="kpAnalysisLoadingText" style="font-size:13px;font-weight:600;color:#0F172A;">AI analiz yapıyor...</div>
+                    <div id="kpAnalysisLoadingSubtext" style="font-size:12px;color:#64748B;margin-top:3px;">Fotoğraf işleniyor, lütfen bekleyin</div>
                   </div>
-                  <div id="kpAiKartlar" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;padding:16px 18px;"></div>
+                  <div id="kpAiKartlar" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;padding:4px 20px 20px;"></div>
                   <div id="kpAiEmpty" style="padding:40px;text-align:center;cursor:pointer;transition:all 0.15s;"
                     onclick="kameraFotoInputAc()"
                     onmouseover="this.style.background='#FFF7ED'" onmouseout="this.style.background='transparent'">
                     <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="#CBD5E1" stroke-width="1.5" style="margin:0 auto 10px;display:block;"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
                     <div style="font-size:13px;font-weight:700;color:#475569;">Fotoğraf yükle ve AI ile analiz et</div>
-                    <div style="font-size:12px;color:#94A3B8;margin-top:4px;">Sağ üstteki "+ Fotoğraf / Kanıt Ekle" butonunu kullanın</div>
+                    <div style="font-size:12px;color:#94A3B8;margin-top:4px;">Sağ üstteki "+ Fotoğraf / Saha Kaydı" butonunu kullanın</div>
                   </div>
                 </div>
 
-                <!-- ─── Manuel Kanıtlar ─── -->
-                <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
-                  <div style="padding:14px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #E2E8F0;">
+                <!-- Saha Kaydı Köprüsü -->
+                <div class="kamera-section" style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
+                  <div style="padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-bottom:1px solid #E2E8F0;">
                     <div style="display:flex;align-items:center;gap:8px;">
                       <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#0F172A" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                      <span style="font-size:14px;font-weight:700;color:#0F172A;">Manuel Kanıtlar</span>
-                      <span id="kpManuelBadge" style="background:#F1F5F9;color:#475569;font-size:11px;font-weight:700;padding:2px 8px;border-radius:12px;">0</span>
+                      <span style="font-size:14px;font-weight:700;color:#0F172A;">Saha Kayıtları</span>
                     </div>
-                    <div style="display:flex;gap:8px;">
-                      <button onclick="kpManuelEkleAc()" style="font-size:12px;font-weight:700;color:#F97316;background:#FFF7ED;border:1px solid #FED7AA;padding:5px 12px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:4px;">
-                        <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                        Ekle
-                      </button>
-                      <button style="font-size:12px;font-weight:700;color:#64748B;background:#F8FAFC;border:1px solid #E2E8F0;padding:5px 12px;border-radius:8px;cursor:pointer;text-transform:uppercase;letter-spacing:0.03em;">Tümünü Arşivle</button>
-                    </div>
+                    <button type="button" onclick="navGit('saha-kayitlari')" style="font-size:12px;font-weight:800;color:#0F172A;background:#F8FAFC;border:1px solid #E2E8F0;padding:8px 12px;border-radius:9px;cursor:pointer;">Tüm Saha Kayıtlarını Gör</button>
                   </div>
-                  <!-- Manuel Kayıt Formu -->
-                  <div id="kpManuelForm" style="display:none;padding:14px 18px;border-bottom:1px solid #E2E8F0;">
-                    <div style="font-size:13px;font-weight:700;color:#0F172A;margin-bottom:10px;">Manuel Kanıt Kaydet</div>
-                    <select id="kpManuelTip" style="width:100%;padding:9px 12px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;color:#0F172A;background:#F8FAFC;margin-bottom:8px;outline:none;">
-                      <option value="gozlem">Saha Gözlemi</option>
-                      <option value="ihbar">İhbar / Şikayet</option>
-                      <option value="denetim">Denetim Notu</option>
-                      <option value="kaza">Kaza / Olay</option>
-                    </select>
-                    <textarea id="kpManuelNot" placeholder="Gözlem notunu girin..." style="width:100%;padding:9px 12px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;color:#0F172A;background:#F8FAFC;resize:vertical;min-height:70px;font-family:inherit;outline:none;margin-bottom:8px;box-sizing:border-box;"></textarea>
-                    <div style="display:flex;gap:8px;">
-                      <button onclick="kpManuelKaydet()" style="flex:1;background:#0F172A;border:none;color:white;font-size:13px;font-weight:700;padding:9px;border-radius:8px;cursor:pointer;">Kaydet</button>
-                      <button onclick="document.getElementById('kpManuelForm').style.display='none'" style="padding:9px 14px;background:#F1F5F9;border:none;color:#475569;font-size:13px;font-weight:600;border-radius:8px;cursor:pointer;">İptal</button>
-                    </div>
+                  <div style="padding:16px 18px;color:#64748B;font-size:13px;line-height:1.55;">
+                    Kamera analizinden oluşturulan kayıtlar bekleyen durumuyla Saha Kayıtları sayfasına düşer. Mühendis onaylamadan ana akışta kesinleşmiş olay olarak gösterilmez.
                   </div>
-                  <div id="kpManuelKartlar" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;padding:16px 18px;"></div>
-                  <div id="kpManuelEmpty" style="display:none;padding:36px;text-align:center;color:#94A3B8;font-size:13px;">Henüz manuel kanıt kaydedilmemiş.</div>
                 </div>
 
               </div><!-- /kameraPageMain -->
 
               <!-- ══ SAĞ PANEL WRAPPER ══ -->
-              <div style="width:300px;flex-shrink:0;overflow-y:auto;padding:16px 16px 24px 8px;display:flex;flex-direction:column;gap:12px;background:#F1F5F9;">
+              <div class="kamera-sidebar" style="width:300px;flex-shrink:0;overflow:visible;padding:16px 16px 24px 8px;display:flex;flex-direction:column;gap:12px;background:#F1F5F9;">
 
-                <!-- ── Yapay Zeka Tespit Arışı KARTI ── -->
+                <!-- ── Yapay Zeka Tespitleri KARTI ── -->
                 <div style="background:#0F172A;border-radius:16px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.18);flex-shrink:0;">
 
                   <!-- Başlık -->
@@ -1269,15 +2302,15 @@ NEW_HTML_TEMPLATE = f"""
                       </div>
                     </div>
 
-                    <!-- MANUEL KANITLAR (AI) -->
+                    <!-- AI ANALIZLERI -->
                     <div style="background:#1E293B;border-radius:12px;padding:12px 12px 10px;">
-                      <div style="font-size:9px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;">MANUEL KANITLAR</div>
+                      <div style="font-size:9px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;">AI ANALİZLERİ</div>
                       <div id="kpStatAi" style="font-size:26px;font-weight:800;color:#FFFFFF;line-height:1;letter-spacing:-0.5px;">0</div>
                     </div>
 
-                    <!-- MANUEL KANITLAR -->
+                    <!-- SAHA KAYITLARI -->
                     <div style="background:#1E293B;border-radius:12px;padding:12px 12px 10px;">
-                      <div style="font-size:9px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;">MANUEL KANITLAR</div>
+                      <div style="font-size:9px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;">SAHA KAYITLARI</div>
                       <div id="kpStatManuel" style="font-size:26px;font-weight:800;color:#FFFFFF;line-height:1;letter-spacing:-0.5px;">0</div>
                     </div>
 
@@ -1292,7 +2325,7 @@ NEW_HTML_TEMPLATE = f"""
                     <div style="height:4px;background:#334155;border-radius:2px;overflow:hidden;">
                       <div id="kpLimitBar" style="height:100%;background:#F97316;border-radius:2px;transition:width 0.4s;width:0%;"></div>
                     </div>
-                    <div style="font-size:10px;color:#475569;margin-top:5px;">Pro/Max planla sınırsız analiz yapın</div>
+                    <div style="font-size:10px;color:#475569;margin-top:5px;">Profesyonel planla sınırsız analiz yapın</div>
                   </div>
                 </div><!-- /analiz özeti kartı -->
 
@@ -1421,6 +2454,10 @@ NEW_HTML_TEMPLATE = f"""
                     <div style="font-size:10px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Kamera Analizi</div>
                   </div>
                   <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:8px 14px;text-align:center;">
+                    <div id="arsivStatKarar" style="font-size:18px;font-weight:800;color:#0F172A;">—</div>
+                    <div style="font-size:10px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Karar Geçmişi</div>
+                  </div>
+                  <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:8px 14px;text-align:center;">
                     <div id="arsivStatToplam" style="font-size:18px;font-weight:800;color:#F97316;">—</div>
                     <div style="font-size:10px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Toplam</div>
                   </div>
@@ -1428,13 +2465,15 @@ NEW_HTML_TEMPLATE = f"""
               </div>
               <!-- Filtre + Arama -->
               <div style="display:flex;gap:10px;margin-top:14px;align-items:center;flex-wrap:wrap;">
-                <div style="display:flex;gap:6px;">
+                <div style="display:flex;gap:6px;flex-wrap:wrap;">
                   <button id="arsivTabTumu" onclick="arsivTabSec('tumu')"
                     style="font-size:12px;font-weight:700;padding:6px 14px;border-radius:8px;border:1.5px solid #0F172A;background:#0F172A;color:white;cursor:pointer;transition:all 0.15s;">Tümü</button>
                   <button id="arsivTabRapor" onclick="arsivTabSec('rapor')"
                     style="font-size:12px;font-weight:700;padding:6px 14px;border-radius:8px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;transition:all 0.15s;">AI Raporları</button>
                   <button id="arsivTabKamera" onclick="arsivTabSec('kamera')"
                     style="font-size:12px;font-weight:700;padding:6px 14px;border-radius:8px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;transition:all 0.15s;">Kamera Analizleri</button>
+                  <button id="arsivTabKarar" onclick="arsivTabSec('karar')"
+                    style="font-size:12px;font-weight:700;padding:6px 14px;border-radius:8px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;transition:all 0.15s;">Karar Geçmişi</button>
                 </div>
                 <div style="position:relative;flex:1;min-width:180px;max-width:320px;">
                   <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#94A3B8" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -1448,12 +2487,64 @@ NEW_HTML_TEMPLATE = f"""
             <div style="flex:1;overflow-y:auto;padding:20px 24px;">
               <div id="arsivIcerik">
                 <div style="text-align:center;padding:60px 20px;color:#94A3B8;">
-                  <div style="font-size:32px;margin-bottom:8px;">📁</div>
+                  <div style="font-size:32px;margin-bottom:8px;">🔒</div>
                   <div style="font-size:14px;font-weight:600;">Yükleniyor...</div>
                 </div>
               </div>
             </div>
           </div><!-- /arsivPage -->
+
+          <!-- Hiyerarsi Sayfasi -->
+          <div id="hiyerarsiPage" style="display:none;flex:1;flex-direction:column;overflow:hidden;background:#F1F5F9;"></div>
+
+          <!-- Hakedis Sayfasi -->
+          <div id="hakedisPage" style="display:none;flex:1;flex-direction:column;overflow:hidden;background:#F1F5F9;">
+            <!-- Header -->
+            <div style="background:#FFFFFF;border-bottom:1px solid #E2E8F0;padding:16px 24px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+              <div style="font-size:18px;font-weight:800;color:#0F172A;">📋 Hakediş Yönetimi</div>
+              <button id="hakedisNewBtn" onclick="hakedisYeniModalAc()" style="background:#0F172A;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;">+ Yeni Hakediş</button>
+            </div>
+            <!-- Body: sol liste + sağ detay -->
+            <div style="flex:1;display:flex;overflow:hidden;">
+              <!-- Sol: liste -->
+              <div id="hakedisListPanel" style="width:320px;min-width:280px;border-right:1px solid #E2E8F0;background:#F8FAFC;display:flex;flex-direction:column;overflow:hidden;">
+                <!-- Aktif şantiye adı -->
+                <div style="padding:10px 16px;border-bottom:1px solid #E2E8F0;flex-shrink:0;">
+                  <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Şantiye</div>
+                  <div id="hakedisAktifSantiyeAd" style="font-size:13px;font-weight:700;color:#0F172A;margin-top:2px;">—</div>
+                </div>
+                <!-- Liste -->
+                <div id="hakedisListeContainer" style="flex:1;overflow-y:auto;padding:12px 12px;display:flex;flex-direction:column;gap:8px;">
+                  <div style="color:#94A3B8;font-size:13px;text-align:center;padding:24px 0;">Header'dan şantiye seçin</div>
+                </div>
+              </div>
+              <!-- Sağ: detay -->
+              <div id="hakedisDetayPanel" style="flex:1;display:flex;flex-direction:column;overflow:hidden;background:#F1F5F9;">
+                <div id="hakedisDetayIcerik" style="flex:1;overflow-y:auto;padding:24px;">
+                  <div style="color:#94A3B8;font-size:14px;text-align:center;padding:60px 0;">Listeden bir hakediş seçin</div>
+                </div>
+              </div>
+            </div>
+          </div><!-- /hakedisPage -->
+
+          <!-- Hakedis Yeni Modal -->
+          <div id="hakedisModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:3000;align-items:center;justify-content:center;">
+            <div style="background:#fff;border-radius:14px;padding:28px 24px;width:340px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+              <div style="font-size:16px;font-weight:800;color:#0F172A;margin-bottom:18px;">Yeni Hakediş Oluştur</div>
+              <div style="margin-bottom:12px;">
+                <label style="font-size:12px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Dönem Başlangıç</label>
+                <input type="date" id="hakedisDonemBaslangic" style="width:100%;padding:10px 14px;border:1px solid #CBD5E1;border-radius:8px;font-size:14px;box-sizing:border-box;">
+              </div>
+              <div style="margin-bottom:20px;">
+                <label style="font-size:12px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Dönem Bitiş</label>
+                <input type="date" id="hakedisDonemBitis" style="width:100%;padding:10px 14px;border:1px solid #CBD5E1;border-radius:8px;font-size:14px;box-sizing:border-box;">
+              </div>
+              <div style="display:flex;gap:10px;">
+                <button onclick="hakedisOlustur()" style="flex:1;background:#0F172A;color:#fff;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;">Oluştur</button>
+                <button onclick="hakedisModalKapat()" style="flex:1;background:#F1F5F9;color:#64748B;border:1px solid #E2E8F0;border-radius:8px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;">İptal</button>
+              </div>
+            </div>
+          </div><!-- /hakedisModal -->
 
         </div><!-- /mainArea -->
 
@@ -1502,7 +2593,7 @@ NEW_HTML_TEMPLATE = f"""
   <!-- Header -->
   <div style="background:#0D1117; padding:18px 20px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
     <div>
-      <div style="font-size:16px; font-weight:700; color:#F1F5F9;">🏗️ Mühendislik Paneli</div>
+      <div style="font-size:16px; font-weight:700; color:#F1F5F9;"> Mühendislik Paneli</div>
       <div style="font-size:11px; color:#64748B; margin-top:2px;">Profesyonel saha hesapları</div>
     </div>
     <button onclick="toggleSidebar()"
@@ -1655,12 +2746,12 @@ NEW_HTML_TEMPLATE = f"""
   </div>
 </div>
 
-<!-- PRO MODAL -->
-<div id="proModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center;">
+<!-- PROFESYONEL MODAL -->
+<div id="profesyonelModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center;">
     <div style="background:#1a1a2e; border:1px solid #e67e22; border-radius:20px; padding:35px; max-width:460px; width:90%; position:relative;">
-        <button onclick="proModalKapat()" style="position:absolute; top:15px; right:18px; background:none; border:none; color:#aaa; font-size:1.5rem; cursor:pointer;">✖</button>
-        <h2 style="color:#e67e22; margin:0 0 6px 0; font-size:1.4rem;">⚡ BuildingAI Pro</h2>
-        <p style="color:#aaa; margin:0 0 20px 0; font-size:0.9rem;">Tüm özelliklere sınırsız erişim için Pro plana geçin.</p>
+        <button onclick="profesyonelModalKapat()" style="position:absolute; top:15px; right:18px; background:none; border:none; color:#aaa; font-size:1.5rem; cursor:pointer;">✖</button>
+        <h2 style="color:#e67e22; margin:0 0 6px 0; font-size:1.4rem;">⚡ BuildingAI Profesyonel</h2>
+        <p style="color:#aaa; margin:0 0 20px 0; font-size:0.9rem;">Tüm özelliklere sınırsız erişim için Profesyonel plana geçin.</p>
         <div style="background:rgba(230,126,34,0.08); border:1px solid rgba(230,126,34,0.3); border-radius:14px; padding:18px; margin-bottom:20px;">
             <div style="font-size:2rem; font-weight:800; color:white; margin-bottom:4px;">$10 <span style="font-size:0.9rem; color:#aaa; font-weight:400;">/ay</span></div>
             <ul style="color:#ccc; font-size:0.88rem; margin:10px 0 0 0; padding-left:18px; line-height:1.8;">
@@ -1692,8 +2783,7 @@ NEW_HTML_TEMPLATE = f"""
       <div style="color:var(--primary); font-weight:700; font-size:0.85rem; margin-bottom:12px;">📈 Fiyat Geçmişi</div>
       <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
         <select id="grafMalzeme" onchange="grafikYukle()" style="background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:8px 12px; border-radius:8px; outline:none; font-size:0.85rem;">
-          <option value="demir">Demir</option><option value="cimento">Çimento</option>
-          <option value="beton">Beton</option><option value="tugla">Tuğla</option><option value="kum">Kum</option>
+          <option value="beton">Beton</option><option value="demir">Demir</option><option value="celik_hasir">Çelik Hasır</option><option value="cimento">Çimento</option><option value="kum">Kum</option><option value="tugla">Tuğla</option><option value="gazbeton">Gazbeton</option>
         </select>
         <select id="grafGun" onchange="grafikYukle()" style="background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:8px 12px; border-radius:8px; outline:none; font-size:0.85rem;">
           <option value="90" selected>Son 90 Gün</option><option value="365">Son 365 Gün</option>
@@ -1705,9 +2795,8 @@ NEW_HTML_TEMPLATE = f"""
     <div style="background:rgba(255,255,255,0.04); border-radius:14px; padding:16px;">
       <div style="color:var(--primary); font-weight:700; font-size:0.85rem; margin-bottom:12px;">➕ Fiyat Gir / Güncelle</div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
-        <select id="fiyatMalzeme" style="background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:10px; border-radius:8px; outline:none;">
-          <option value="demir">Demir (ton)</option><option value="cimento">Çimento (çuval)</option>
-          <option value="beton">Beton (m³)</option><option value="tugla">Tuğla (adet)</option><option value="kum">Kum (ton)</option>
+        <select id="fiyatMalzemeSelect" style="background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:10px; border-radius:8px; outline:none;">
+          <option value="beton">Beton (m³)</option><option value="demir">Demir (ton)</option><option value="celik_hasir">Çelik Hasır (ton)</option><option value="cimento">Çimento (çuval)</option><option value="kum">Kum (ton)</option><option value="tugla">Tuğla (adet)</option><option value="gazbeton">Gazbeton (m³)</option>
         </select>
         <input type="number" id="fiyatDeger" placeholder="Fiyat (₺)" style="background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:10px; border-radius:8px; outline:none;">
       </div>
@@ -1727,23 +2816,25 @@ NEW_HTML_TEMPLATE = f"""
   <div style="background:rgba(8,16,32,0.97);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px); border:1px solid rgba(249,115,22,0.3); border-radius:24px; padding:28px; width:92%; max-width:680px; max-height:90vh; overflow-y:auto;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
       <h3 style="color:var(--primary); margin:0; font-size:1.2rem;">📦 Malzeme Stok Takibi</h3>
-      <button onclick="stokModalKapat()" style="background:none; border:none; color:white; font-size:1.5rem; cursor:pointer;">×</button>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button onclick="qrBaslat()" style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.4);color:#60A5FA;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:0.82rem;font-weight:600;">📷 QR Tara</button>
+        <button onclick="stokModalKapat()" style="background:none; border:none; color:white; font-size:1.5rem; cursor:pointer;">×</button>
+      </div>
     </div>
-    <div id="stokUyarilar" style="margin-bottom:16px;"></div>
-    <div id="stokKartlar" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px;"></div>
+    <div id="stokUyarilarM" style="margin-bottom:16px;"></div>
+    <div id="stokKartlarM" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px;"></div>
     <div style="background:rgba(255,255,255,0.04); border-radius:14px; padding:16px; margin-bottom:20px;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
         <div style="color:var(--primary); font-weight:700; font-size:0.85rem;">📋 Hareket Geçmişi</div>
-        <select id="stokGecmisMalzeme" onchange="stokGecmisYukle()" style="background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:6px 10px; border-radius:8px; outline:none; font-size:0.8rem;">
-          <option value="demir">Demir</option><option value="cimento">Çimento</option>
-          <option value="beton">Beton</option><option value="tugla">Tuğla</option><option value="kum">Kum</option>
+        <select id="stokGecmisMalzemeM" onchange="stokGecmisModalYukle()" style="background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:6px 10px; border-radius:8px; outline:none; font-size:0.8rem;">
+          <option value="">Tüm Malzemeler</option>
         </select>
       </div>
-      <div id="stokGecmisListe" style="max-height:200px; overflow-y:auto;"></div>
+      <div id="stokGecmisListeM" style="max-height:200px; overflow-y:auto;"></div>
     </div>
     <div style="background:rgba(255,255,255,0.04); border-radius:14px; padding:16px;">
       <div style="color:var(--primary); font-weight:700; font-size:0.85rem; margin-bottom:12px;">➕ Malzeme Girişi / Çıkışı</div>
-      <select id="stokSantiye" required onchange="stokSantiyeDegisti()" style="width:100%; background:rgba(255,255,255,0.05); border:1px solid rgba(249,115,22,0.4); color:white; padding:10px; border-radius:8px; outline:none; margin-bottom:10px;">
+      <select id="stokSantiyeM" required onchange="stokSantiyeModalDegisti()" style="width:100%; background:rgba(255,255,255,0.05); border:1px solid rgba(249,115,22,0.4); color:white; padding:10px; border-radius:8px; outline:none; margin-bottom:10px;">
         <option value="">📍 Şantiye Seçin... (zorunlu)</option>
       </select>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
@@ -1765,9 +2856,20 @@ NEW_HTML_TEMPLATE = f"""
       <input type="text" id="stokTedarikci" placeholder="Tedarikçi (opsiyonel)" style="width:100%; background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:10px; border-radius:8px; outline:none; margin-bottom:10px; box-sizing:border-box;">
       <input type="number" id="stokFiyat" placeholder="Birim Fiyat ₺ (opsiyonel)" style="width:100%; background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:10px; border-radius:8px; outline:none; margin-bottom:10px; box-sizing:border-box;">
       <input type="text" id="stokNotlar" placeholder="Notlar (opsiyonel)" style="width:100%; background:rgba(255,255,255,0.05); border:1px solid #444; color:white; padding:10px; border-radius:8px; outline:none; margin-bottom:10px; box-sizing:border-box;">
-      <button onclick="stokKaydet()" style="width:100%; padding:12px; background:var(--primary); color:white; border:none; border-radius:10px; cursor:pointer; font-weight:700;">💾 Kaydet</button>
-      <div id="stokMsg" style="margin-top:8px; font-size:0.85rem; text-align:center;"></div>
+      <button onclick="stokKaydetModal()" style="width:100%; padding:12px; background:var(--primary); color:white; border:none; border-radius:10px; cursor:pointer; font-weight:700;">💾 Kaydet</button>
+      <div id="stokMsgM" style="margin-top:8px; font-size:0.85rem; text-align:center;"></div>
     </div>
+  </div>
+</div>
+
+<!-- QR TARAMA PANELİ -->
+<div id="qrModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:10000; align-items:center; justify-content:center; flex-direction:column; gap:16px;">
+  <div style="background:rgba(8,16,32,0.98);border:1px solid rgba(59,130,246,0.4);border-radius:20px;padding:24px;width:92%;max-width:420px;display:flex;flex-direction:column;align-items:center;gap:14px;">
+    <div style="color:#60A5FA;font-weight:700;font-size:1rem;">📷 QR Kod Tarama</div>
+    <video id="qrVideo" autoplay playsinline style="width:100%;border-radius:8px;background:#000;"></video>
+    <canvas id="qrCanvas" style="display:none;"></canvas>
+    <p id="qrDurum" style="color:#CBD5E1;font-size:0.85rem;margin:0;text-align:center;">Kamera başlatılıyor...</p>
+    <button onclick="qrIptal()" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#FCA5A5;padding:8px 24px;border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:600;">❌ Kapat</button>
   </div>
 </div>
 
@@ -1849,7 +2951,7 @@ NEW_HTML_TEMPLATE = f"""
     <div style="background:rgba(255,255,255,0.03); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); border-bottom:1px solid rgba(255,255,255,0.08); border-radius:16px 16px 0 0; padding:18px 28px; display:flex; align-items:center; justify-content:space-between;">
       <div style="display:flex; align-items:center; gap:12px;">
         <div style="width:44px;height:44px;background:rgba(249,115,22,0.15);border:1px solid rgba(249,115,22,0.35);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:24px;">
-          🏗️
+          
         </div>
         <div style="display:flex; flex-direction:column; gap:4px;">
           <div style="font-size:22px; font-weight:700; color:#F1F5F9; line-height:1;">Şantiyelerim</div>
@@ -1857,7 +2959,7 @@ NEW_HTML_TEMPLATE = f"""
         </div>
       </div>
       <div style="display:flex; gap:10px; align-items:center;">
-        <button onclick="santiyeEkleModalAc(null)"
+        <button id="btnYeniSantiyeModal" onclick="santiyeEkleModalAc(null)"
           style="background:linear-gradient(135deg,#6366f1,#14b8a6); color:white; border:none; border-radius:10px; padding:10px 20px; font-weight:600; font-size:14px; cursor:pointer; transition:all 0.2s ease; font-family:inherit;"
           onmouseover="this.style.opacity='0.85';this.style.transform='translateY(-1px)'"
           onmouseout="this.style.opacity='1';this.style.transform='translateY(0)'">
@@ -1938,10 +3040,12 @@ NEW_HTML_TEMPLATE = f"""
     <div style="background:#FFFFFF; padding:10px 14px; border-bottom:1px solid #E2E8F0;">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
         <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-          <span style="font-size:0.6rem; color:#94A3B8; font-weight:800; text-transform:uppercase; letter-spacing:0.5px;">ŞANTİYE SEÇİN:</span>
-          <select id="guvenlikSantiye" onchange="guvenlikSantiyeDegisti()" style="border:1px solid #CBD5E1; border-radius:8px; padding:4px 8px; font-size:0.78rem; color:#0F172A; background:#F8FAFC; outline:none; max-width:155px;">
-            <option value="">Seçin...</option>
-          </select>
+          <div style="display:none;">
+            <span style="font-size:0.6rem; color:#94A3B8; font-weight:800; text-transform:uppercase; letter-spacing:0.5px;">ŞANTİYE SEÇİN:</span>
+            <select id="guvenlikSantiye" onchange="guvenlikSantiyeDegisti()" style="border:1px solid #CBD5E1; border-radius:8px; padding:4px 8px; font-size:0.78rem; color:#0F172A; background:#F8FAFC; outline:none; max-width:155px;">
+              <option value="">Seçin...</option>
+            </select>
+          </div>
           <span id="guvenlikDurumBadge" style="background:#DCFCE7; color:#16A34A; border:1px solid #BBF7D0; border-radius:20px; padding:2px 9px; font-size:0.68rem; font-weight:700;">Şantiye Durumu: Aktif</span>
         </div>
         <div style="text-align:right; font-size:0.7rem; color:#64748B; line-height:1.7;">
@@ -2133,7 +3237,7 @@ NEW_HTML_TEMPLATE = f"""
         <div style="display:flex; gap:6px;">
           <input id="acilPersonelAd" type="text" placeholder="Ad Soyad (Görev)" style="flex:1; border:1px solid #CBD5E1; border-radius:8px; padding:7px 8px; font-size:0.78rem; outline:none; background:#F8FAFC; color:#0F172A; min-width:0;">
           <input id="acilPersonelTel" type="tel" placeholder="Telefon" style="width:100px; border:1px solid #CBD5E1; border-radius:8px; padding:7px 8px; font-size:0.78rem; outline:none; background:#F8FAFC; color:#0F172A; flex-shrink:0;">
-          <button onclick="acilPersonelEkle()" style="background:#0D1117; color:white; border:none; border-radius:8px; padding:7px 10px; cursor:pointer; font-size:0.78rem; font-weight:700; white-space:nowrap; flex-shrink:0;">+ Ekle</button>
+          <button id="btnAcilPersonelEkle" onclick="acilPersonelEkle()" style="background:#0D1117; color:white; border:none; border-radius:8px; padding:7px 10px; cursor:pointer; font-size:0.78rem; font-weight:700; white-space:nowrap; flex-shrink:0;">+ Ekle</button>
         </div>
       </div>
       <button onclick="guvenlikRaporuKaydet()" style="width:100%; padding:14px; background:#0D1117; color:white; border:none; border-radius:12px; cursor:pointer; font-weight:700; font-size:0.88rem;">Günlük İSG Kontrol Raporunu Kaydet 💾</button>
@@ -2252,10 +3356,101 @@ NEW_HTML_TEMPLATE = f"""
           onfocus="this.style.borderColor='#3B82F6'" onblur="this.style.borderColor='#E2E8F0'">
       </div>
 
+      <!-- İL -->
+      <div>
+        <div style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:#64748B; margin-bottom:6px;">İl</div>
+        <select id="santiyeFormIl"
+          style="width:100%; background:#FFFFFF; border:1.5px solid #E2E8F0; border-radius:9px; color:#0F172A; padding:10px 13px; font-size:14px; outline:none; transition:border-color 0.15s; font-family:inherit; box-sizing:border-box; cursor:pointer; appearance:auto;"
+          onfocus="this.style.borderColor='#3B82F6'" onblur="this.style.borderColor='#E2E8F0'">
+          <option value="">-- İl Seçin --</option>
+          <option value="Adana">Adana</option>
+          <option value="Adıyaman">Adıyaman</option>
+          <option value="Afyonkarahisar">Afyonkarahisar</option>
+          <option value="Ağrı">Ağrı</option>
+          <option value="Amasya">Amasya</option>
+          <option value="Ankara">Ankara</option>
+          <option value="Antalya">Antalya</option>
+          <option value="Artvin">Artvin</option>
+          <option value="Aydın">Aydın</option>
+          <option value="Balıkesir">Balıkesir</option>
+          <option value="Bilecik">Bilecik</option>
+          <option value="Bingöl">Bingöl</option>
+          <option value="Bitlis">Bitlis</option>
+          <option value="Bolu">Bolu</option>
+          <option value="Burdur">Burdur</option>
+          <option value="Bursa">Bursa</option>
+          <option value="Çanakkale">Çanakkale</option>
+          <option value="Çankırı">Çankırı</option>
+          <option value="Çorum">Çorum</option>
+          <option value="Denizli">Denizli</option>
+          <option value="Diyarbakır">Diyarbakır</option>
+          <option value="Edirne">Edirne</option>
+          <option value="Elazığ">Elazığ</option>
+          <option value="Erzincan">Erzincan</option>
+          <option value="Erzurum">Erzurum</option>
+          <option value="Eskişehir">Eskişehir</option>
+          <option value="Gaziantep">Gaziantep</option>
+          <option value="Giresun">Giresun</option>
+          <option value="Gümüşhane">Gümüşhane</option>
+          <option value="Hakkari">Hakkari</option>
+          <option value="Hatay">Hatay</option>
+          <option value="Isparta">Isparta</option>
+          <option value="Mersin">Mersin</option>
+          <option value="İstanbul">İstanbul</option>
+          <option value="İzmir">İzmir</option>
+          <option value="Kars">Kars</option>
+          <option value="Kastamonu">Kastamonu</option>
+          <option value="Kayseri">Kayseri</option>
+          <option value="Kırklareli">Kırklareli</option>
+          <option value="Kırşehir">Kırşehir</option>
+          <option value="Kocaeli">Kocaeli</option>
+          <option value="Konya">Konya</option>
+          <option value="Kütahya">Kütahya</option>
+          <option value="Malatya">Malatya</option>
+          <option value="Manisa">Manisa</option>
+          <option value="Kahramanmaraş">Kahramanmaraş</option>
+          <option value="Mardin">Mardin</option>
+          <option value="Muğla">Muğla</option>
+          <option value="Muş">Muş</option>
+          <option value="Nevşehir">Nevşehir</option>
+          <option value="Niğde">Niğde</option>
+          <option value="Ordu">Ordu</option>
+          <option value="Rize">Rize</option>
+          <option value="Sakarya">Sakarya</option>
+          <option value="Samsun">Samsun</option>
+          <option value="Siirt">Siirt</option>
+          <option value="Sinop">Sinop</option>
+          <option value="Sivas">Sivas</option>
+          <option value="Tekirdağ">Tekirdağ</option>
+          <option value="Tokat">Tokat</option>
+          <option value="Trabzon">Trabzon</option>
+          <option value="Tunceli">Tunceli</option>
+          <option value="Şanlıurfa">Şanlıurfa</option>
+          <option value="Uşak">Uşak</option>
+          <option value="Van">Van</option>
+          <option value="Yozgat">Yozgat</option>
+          <option value="Zonguldak">Zonguldak</option>
+          <option value="Aksaray">Aksaray</option>
+          <option value="Bayburt">Bayburt</option>
+          <option value="Karaman">Karaman</option>
+          <option value="Kırıkkale">Kırıkkale</option>
+          <option value="Batman">Batman</option>
+          <option value="Şırnak">Şırnak</option>
+          <option value="Bartın">Bartın</option>
+          <option value="Ardahan">Ardahan</option>
+          <option value="Iğdır">Iğdır</option>
+          <option value="Yalova">Yalova</option>
+          <option value="Karabük">Karabük</option>
+          <option value="Kilis">Kilis</option>
+          <option value="Osmaniye">Osmaniye</option>
+          <option value="Düzce">Düzce</option>
+        </select>
+      </div>
+
       <!-- KONUM -->
       <div>
-        <div style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:#64748B; margin-bottom:6px;">Konum</div>
-        <input type="text" id="santiyeFormKonum" placeholder="örn: Sivas, Merkez"
+        <div style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:#64748B; margin-bottom:6px;">Konum <span style="font-weight:400;color:#94A3B8;text-transform:none;letter-spacing:0;">(mahalle/ilçe)</span></div>
+        <input type="text" id="santiyeFormKonum" placeholder="örn: Merkez, Kızılırmak Mah."
           style="width:100%; background:#FFFFFF; border:1.5px solid #E2E8F0; border-radius:9px; color:#0F172A; padding:10px 13px; font-size:14px; outline:none; transition:border-color 0.15s; font-family:inherit; box-sizing:border-box;"
           onfocus="this.style.borderColor='#3B82F6'" onblur="this.style.borderColor='#E2E8F0'">
       </div>
@@ -2352,7 +3547,7 @@ NEW_HTML_TEMPLATE = f"""
             <div style="font-size:11px; color:#EF4444; margin-top:2px;">Bu işlem geri alınamaz.</div>
           </div>
           <button onclick="santiyeSilOnay()" id="santiyeSilBtn"
-            style="background:#DC2626; border:none; color:#FFFFFF; padding:8px 16px; border-radius:7px; cursor:pointer; font-weight:700; font-size:12px; font-family:inherit; transition:background 0.15s; white-space:nowrap;"
+            style="background:#DC2626; border:none; color:#FFFFFF; padding:8px 16px; border-radius:7px; cursor:pointer; font-weight:700; font-size:12px; font-family:inherit; transition:background 0.15s; white-space:nowrap; display:none;"
             onmouseover="this.style.background='#B91C1C'" onmouseout="this.style.background='#DC2626'">
             🗑 Şantiyeyi Sil
           </button>
@@ -2380,6 +3575,7 @@ NEW_HTML_TEMPLATE = f"""
 
 {JS_SCRIPT}
 <script src="/static/manual_evidence.js"></script>
+<script src="/static/manual_archive.js"></script>
 <script>
 if ('serviceWorker' in navigator) {{
   window.addEventListener('load', () => {{
@@ -2389,6 +3585,74 @@ if ('serviceWorker' in navigator) {{
   }});
 }}
 </script>
+<div id="excelModal" style="display:none; position:fixed;
+  inset:0; background:rgba(0,0,0,0.4);
+  backdrop-filter:blur(4px);
+  z-index:9999;
+  justify-content:center; align-items:center;"
+  onclick="if(event.target===this)excelModalKapat()">
+  <div style="background:white; border-radius:16px;
+    width:520px; max-height:85vh; overflow:hidden;
+    box-shadow:0 20px 60px rgba(0,0,0,0.15);
+    display:flex; flex-direction:column;">
+    <!-- Header -->
+    <div style="padding:20px 24px 0; flex-shrink:0;">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="width:36px; height:36px; border-radius:10px;
+            background:#F0FDF4; display:flex; align-items:center;
+            justify-content:center;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+              stroke="#16A34A" stroke-width="2">
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
+            </svg>
+          </div>
+          <div>
+            <div style="font-size:16px; font-weight:700; color:#111827;
+              font-family:'Plus Jakarta Sans',sans-serif;">Excel İşlemleri</div>
+            <div style="font-size:12px; color:#9CA3AF;">Stok verileri export / import</div>
+          </div>
+        </div>
+        <button onclick="excelModalKapat()"
+          style="width:32px; height:32px; border-radius:8px;
+            background:#F9FAFB; border:none; cursor:pointer;
+            display:flex; align-items:center; justify-content:center;"
+          onmouseover="this.style.background='#F3F4F6'"
+          onmouseout="this.style.background='#F9FAFB'">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="#6B7280" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <!-- Tab butonları -->
+      <div style="display:flex; gap:0; margin-top:16px;
+        border-bottom:2px solid #F3F4F6;">
+        <button id="excelTabExport" onclick="excelTabDegis('export')"
+          style="padding:10px 20px; font-size:13px; font-weight:600;
+            color:#E15A1F; border:none; background:none; cursor:pointer;
+            border-bottom:2px solid #E15A1F; margin-bottom:-2px;
+            font-family:'Plus Jakarta Sans',sans-serif;">
+          Dışa Aktar</button>
+        <button id="excelTabImport" onclick="excelTabDegis('import')"
+          style="padding:10px 20px; font-size:13px; font-weight:600;
+            color:#9CA3AF; border:none; background:none; cursor:pointer;
+            border-bottom:2px solid transparent; margin-bottom:-2px;
+            font-family:'Plus Jakarta Sans',sans-serif;">
+          İçe Aktar</button>
+      </div>
+    </div>
+    <!-- İçerik alanı (scroll) -->
+    <div id="excelModalIcerik" style="padding:20px 24px;
+      overflow-y:auto; flex:1;">
+    </div>
+  </div>
+</div>
 </body>
 </html>
 """

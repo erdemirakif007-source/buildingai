@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { ChevronDown, Cloud, UserCircle2, Building2 } from 'lucide-react'
+import { ChevronDown, Cloud, UserCircle2 } from 'lucide-react'
 
 const CITIES = [
   'Adana','Ankara','Antalya','Bursa','Diyarbakır','Erzurum',
@@ -29,14 +29,11 @@ export default function Header() {
     ">
       {/* ── Logo ── */}
       <div className="flex items-center gap-2.5 select-none">
-        <div className="
-          w-[34px] h-[34px] rounded-xl
-          bg-gradient-to-br from-orange-500 to-red-600
-          flex items-center justify-center
-          shadow-lg shadow-orange-600/30
-        ">
-          <Building2 size={17} className="text-white" strokeWidth={2.2} />
-        </div>
+        <img
+          src="/static/buildingai-logo.svg"
+          alt="BuildingAI"
+          className="w-[38px] h-[38px] object-contain"
+        />
         <span className="text-[15px] font-bold tracking-tight text-white">
           BuildingAI<span className="text-[#FF6200]">Pro</span>
         </span>
