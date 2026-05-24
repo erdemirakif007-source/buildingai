@@ -726,9 +726,15 @@ async def bim_element_ilerleme_guncelle(
         raise HTTPException(status_code=404, detail="BIM modeli bulunamadı.")
 
     # ── 3. İş kalemi ────────────────────────────────────────────────────────
-    is_kalemi = db.query(models.IsKalemi).filter(
-        models.IsKalemi.id == eslestirme.is_kalemi_id
-    ).first()
+    try:
+        is_kalemi = db.query(models.IsKalemi).filter(
+            models.IsKalemi.id == eslestirme.is_kalemi_id
+        ).with_for_update().first()
+    except Exception:
+        # SQLite FOR UPDATE desteklemiyor; PostgreSQL'de kilitler çalışır
+        is_kalemi = db.query(models.IsKalemi).filter(
+            models.IsKalemi.id == eslestirme.is_kalemi_id
+        ).first()
     if not is_kalemi:
         raise HTTPException(status_code=404, detail="İş kalemi bulunamadı.")
 
