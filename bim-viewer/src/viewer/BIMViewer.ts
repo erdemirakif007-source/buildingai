@@ -1087,9 +1087,27 @@ export class BIMViewer {
     this._currentFile = file.name;
 
     try {
-      await this._engine.loadIFC(file);
+      const { modelId } = await this._engine.loadIFC(file);
+      // Backend model ID varsa fragment'ı arka planda cache'le (non-blocking)
+      if (this._compactModelId !== null) {
+        void this._cacheFragmentAsync(modelId, this._compactModelId);
+      }
     } catch {
       // Hata engine.onError callback'i üzerinden iletildi
+    }
+  }
+
+  /** IFC parse sonrası üretilen fragment binary'yi backend'e yükler.
+   *  Sessiz: hata olursa model zaten sahnede, sadece cache eksik kalır. */
+  private async _cacheFragmentAsync(modelId: string, backendModelId: number): Promise<void> {
+    if (!this._engine) return;
+    try {
+      const buffer = await this._engine.exportFragment(modelId);
+      const api = getBIMApiClient();
+      await api.uploadFragment(backendModelId, buffer);
+      console.log(`[BIMViewer] Fragment cache'lendi: model_${backendModelId}`);
+    } catch (err) {
+      console.warn('[BIMViewer] Fragment cache yüklenemedi (kritik değil):', err);
     }
   }
 
