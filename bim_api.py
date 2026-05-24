@@ -40,6 +40,14 @@ import auth
 import database
 import models
 
+# ai_client lazy import — app.py başlatıldıktan sonra erişilebilir
+def _get_ai_client():
+    try:
+        from app import ai_client  # noqa: PLC0415
+        return ai_client
+    except Exception:
+        return None
+
 logger = logging.getLogger("buildingai.bim")
 
 
@@ -709,6 +717,200 @@ async def bim_mapping_sil(
         model_id, eslestirme_id, user.email,
     )
     return {"status": "ok", "eslestirme_id": eslestirme_id}
+
+
+# ── POST /api/bim/ai/eslestirme-oner ─────────────────────────────────────────
+
+# Basit in-memory rate limiter: {user_id: [timestamp, ...]}
+import time as _time
+from collections import defaultdict as _defaultdict
+_ai_suggest_calls: dict = _defaultdict(list)
+_AI_RATE_LIMIT = 10     # dakikada max istek sayısı
+_AI_RATE_WINDOW = 60.0  # saniye
+
+
+class AiElementBilgi(BaseModel):
+    ifc_type: str
+    name: str
+    object_type: Optional[str] = None
+    predefined_type: Optional[str] = None
+    storey: Optional[str] = None
+    properties: Optional[dict] = None
+
+
+class AiEslestirmeOnerBody(BaseModel):
+    santiye_id: int
+    element: AiElementBilgi
+
+
+@bim_router.post(
+    "/ai/eslestirme-oner",
+    summary="IFC elementi için AI destekli iş kalemi önerisi (ÇŞB kataloğu + Gemini)",
+)
+async def bim_ai_eslestirme_oner(
+    request: Request,
+    body: AiEslestirmeOnerBody,
+    db: Session = Depends(database.get_db),
+):
+    """
+    Verilen IFC element bilgisine göre ÇŞB kataloğundan en uygun
+    iş kalemlerini Gemini ile önerir; ayrıca DB'den malzeme reçetesini ekler.
+    """
+    user = _bim_kullanici_dogrula(request, db)
+    _bim_santiye_yetkisi_kontrol(user, body.santiye_id, db)
+
+    # ── Rate limit kontrolü ──────────────────────────────────────────────────
+    now = _time.time()
+    pencere = _AI_RATE_WINDOW
+    _ai_suggest_calls[user.id] = [
+        t for t in _ai_suggest_calls[user.id] if now - t < pencere
+    ]
+    if len(_ai_suggest_calls[user.id]) >= _AI_RATE_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail="Dakikada 10 AI önerisi limitine ulaşıldı. Biraz bekleyin.",
+        )
+    _ai_suggest_calls[user.id].append(now)
+
+    # ── Adım 1: Katalog listesini çek ────────────────────────────────────────
+    katalog_listesi = (
+        db.query(models.CsbIsKalemiKatalog)
+        .filter(models.CsbIsKalemiKatalog.aktif == 1)
+        .all()
+    )
+    katalog_text = "\n".join(
+        f"ID:{k.id} | Poz:{k.poz_no} | {k.grup} > {k.alt_grup or '-'} | {k.ad} | Birim:{k.birim}"
+        for k in katalog_listesi
+    )
+
+    # ── Adım 2: Gemini prompt ────────────────────────────────────────────────
+    el = body.element
+    props_json = json.dumps(el.properties or {}, ensure_ascii=False)
+    prompt = f"""Sen bir inşaat mühendisi yapay zeka asistanısın.
+
+Aşağıdaki IFC BIM elementini incele ve en uygun ÇŞB iş kalemlerini öner.
+
+## IFC Element Bilgileri
+- Tip: {el.ifc_type}
+- İsim: {el.name}
+- Obje Tipi: {el.object_type or '-'}
+- Ön Tanımlı Tip: {el.predefined_type or '-'}
+- Kat: {el.storey or '-'}
+- Özellikler: {props_json}
+
+## Mevcut ÇŞB İş Kalemi Kataloğu
+{katalog_text}
+
+## Görev
+Bu element için en uygun 1-3 iş kalemini öner. Her öneri için:
+1. Katalog ID'si (yukarıdaki listeden)
+2. Eşleşme güven skoru (0-100)
+3. Kısa gerekçe (1 cümle, Türkçe)
+4. Elementten çıkarılabilecek metraj değeri ve birimi (properties'den)
+
+SADECE aşağıdaki JSON formatında yanıt ver, başka hiçbir şey yazma:
+{{
+  "oneriler": [
+    {{
+      "katalog_id": 5,
+      "poz_no": "16.003/1",
+      "guven_skoru": 92,
+      "gerekce": "C25/30 kolon elementi, beton dökümü iş kalemiyle eşleşiyor",
+      "metraj": 2.88,
+      "metraj_birimi": "m³",
+      "metraj_kaynagi": "Qto_ColumnBaseQuantities.GrossVolume"
+    }}
+  ]
+}}"""
+
+    # ── Adım 3: Gemini çağrısı ────────────────────────────────────────────────
+    ai = _get_ai_client()
+    if ai is None:
+        raise HTTPException(
+            status_code=503,
+            detail="AI servisi şu an kullanılamıyor. GEMINI_API_KEY ayarını kontrol edin.",
+        )
+
+    try:
+        response = ai.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
+        response_text = response.text
+    except Exception as exc:
+        logger.error("Gemini AI öneri hatası: %s", exc)
+        raise HTTPException(
+            status_code=502,
+            detail=f"AI servisi yanıt vermedi: {str(exc)[:200]}",
+        )
+
+    # ── Adım 4: JSON parse ────────────────────────────────────────────────────
+    try:
+        # Gemini bazen ```json ... ``` wrapper ekler
+        clean = response_text.strip()
+        if clean.startswith("```"):
+            clean = clean.split("```", 2)[1]
+            if clean.startswith("json"):
+                clean = clean[4:]
+            clean = clean.rsplit("```", 1)[0]
+        parsed = json.loads(clean.strip())
+        oneriler_raw: list = parsed.get("oneriler", [])
+    except Exception:
+        logger.warning("Gemini yanıtı parse edilemedi: %s", response_text[:300])
+        return {
+            "status": "error",
+            "error": "AI yanıtı işlenemedi",
+            "raw": response_text[:500],
+        }
+
+    # ── Adım 5: DB'den katalog detayı + malzeme reçetesi ekle ─────────────────
+    katalog_map = {k.id: k for k in katalog_listesi}
+    oneriler_zengin = []
+
+    for oneri in oneriler_raw:
+        kid = oneri.get("katalog_id")
+        katalog = katalog_map.get(kid)
+        if katalog is None:
+            # Gemini yanlış ID verdiyse poz_no ile tekrar ara
+            poz = oneri.get("poz_no", "")
+            katalog = next((k for k in katalog_listesi if k.poz_no == poz), None)
+
+        recete = []
+        if katalog:
+            csb_malzemeler = (
+                db.query(models.CsbIsKalemiMalzeme)
+                .filter(models.CsbIsKalemiMalzeme.is_kalemi_katalog_id == katalog.id)
+                .all()
+            )
+            for cm in csb_malzemeler:
+                malzeme = db.query(models.MalzemeKatalog).filter(
+                    models.MalzemeKatalog.id == cm.malzeme_katalog_id
+                ).first()
+                recete.append({
+                    "malzeme":              malzeme.ad if malzeme else f"#{cm.malzeme_katalog_id}",
+                    "miktar_birim_basina":  cm.miktar,
+                    "birim":                cm.birim,
+                    "zorunlu":              bool(cm.zorunlu),
+                })
+
+        oneriler_zengin.append({
+            "katalog_id":     katalog.id   if katalog else kid,
+            "poz_no":         katalog.poz_no if katalog else oneri.get("poz_no"),
+            "ad":             katalog.ad   if katalog else oneri.get("poz_no"),
+            "birim":          katalog.birim if katalog else None,
+            "guven_skoru":    oneri.get("guven_skoru", 0),
+            "gerekce":        oneri.get("gerekce", ""),
+            "metraj":         oneri.get("metraj"),
+            "metraj_birimi":  oneri.get("metraj_birimi"),
+            "metraj_kaynagi": oneri.get("metraj_kaynagi"),
+            "malzeme_recetesi": recete,
+        })
+
+    logger.info(
+        "BIM AI öneri: santiye=%d element=%s tip=%s oneri_sayisi=%d user=%s",
+        body.santiye_id, el.name, el.ifc_type, len(oneriler_zengin), user.email,
+    )
+    return {"status": "ok", "oneriler": oneriler_zengin}
 
 
 # ── POST /api/bim/model/{model_id}/element/{eslestirme_id}/ilerleme ───────────
