@@ -800,7 +800,11 @@ export class BIMViewer {
 
     // Mock Veri Uygula
     document.getElementById('bv-item-apply-mock')?.addEventListener('click', () => {
-      void this._applyMockProgressData();
+      if (this._compactModelId !== null) {
+        void this._refreshProgressColors(this._compactModelId);
+      } else {
+        void this._applyMockProgressData();
+      }
     });
 
     // Renkleri Temizle
@@ -1933,10 +1937,7 @@ export class BIMViewer {
     }
   }
 
-  /**
-   * Mock ilerleme verisi üretir ve modele uygular.
-   * Gerçek API entegrasyonu Aşama 4'te yapılacak.
-   */
+  // DEPRECATED: Gerçek API entegrasyonu yapıldı; artık yalnızca _compactModelId yokken fallback olarak kullanılır.
   private async _applyMockProgressData(): Promise<void> {
     if (!this._progressColoring) return;
 
