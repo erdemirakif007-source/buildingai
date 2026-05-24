@@ -1213,14 +1213,13 @@ export class MappingPanel {
             : undefined) ?? ''
         ) || window.location.origin;
 
-        const res = await fetch(`${baseUrl}/api/is-kalemleri`, {
+        const res = await fetch(`${baseUrl}/api/v2/santiye/${this._santiyeId}/is-kalemleri`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            santiye_id: this._santiyeId,
             katalog_id: oneri.katalog_id,
             poz_no:     oneri.poz_no,
             tanim:      oneri.ad,
