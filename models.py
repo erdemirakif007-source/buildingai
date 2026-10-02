@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, UniqueConstraint, Float
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, UniqueConstraint, Float, Numeric, CheckConstraint
 from sqlalchemy.orm import relationship
 from database import Base
 import datetime
@@ -521,17 +521,21 @@ class IsKalemiMalzeme(Base):
     """İş kalemi ↔ malzeme_katalog bağlantı tablosu."""
     __tablename__ = "is_kalemi_malzeme"
     __table_args__ = (
-        UniqueConstraint("is_kalemi_id", "malzeme_katalog_id", name="uq_ik_malzeme"),
+        UniqueConstraint("is_kalemi_id", "malzeme_id", name="uq_ik_malzeme"),
     )
     id                 = Column(Integer, primary_key=True, index=True)
     is_kalemi_id       = Column(Integer, ForeignKey("is_kalemleri.id", ondelete="CASCADE"), nullable=False, index=True)
-    malzeme_katalog_id = Column(Integer, ForeignKey("malzeme_katalog.id", ondelete="CASCADE"), nullable=False, index=True)
+    # Keep the Python/API attribute while matching the already-migrated column.
+    malzeme_katalog_id = Column("malzeme_id", Integer, ForeignKey("malzemeler.id"), nullable=False, index=True)
     miktar             = Column(Float, nullable=False, default=1.0)
     birim              = Column(String, nullable=True)
+    zorunlu            = Column(Integer, nullable=False, default=0)
+    notlar             = Column(Text, nullable=True)
+    kaynak             = Column(String, nullable=False, default="manuel")
     created_at         = Column(DateTime, default=dt.utcnow)
 
     is_kalemi  = relationship("IsKalemi", back_populates="malzemeler")
-    malzeme    = relationship("MalzemeKatalog")
+    malzeme    = relationship("BirlesikMalzeme")
 
 
 # Santiye modeline binalar relationship'i eklenir (mevcut sınıf tanımı değiştirilmez)
@@ -601,6 +605,22 @@ class CsbIsKalemiKatalog(Base):
     is_kalemleri = relationship("IsKalemi", back_populates="katalog")
 
 
+class BirlesikMalzeme(Base):
+    """Existing migrations/merge_malzeme_v2.py catalog, previously unmapped."""
+    __tablename__ = "malzemeler"
+    __table_args__ = (UniqueConstraint("kategori", "ad"),)
+    id = Column(Integer, primary_key=True)
+    kategori = Column(String, nullable=False)
+    alt_kategori = Column(String)
+    ad = Column(String, nullable=False)
+    birim = Column(String, nullable=False)
+    scrape_tipi = Column(String, nullable=False)
+    aktif = Column(Integer, nullable=False, default=1)
+    olusturma_tarihi = Column(String, nullable=False, default=lambda: dt.utcnow().isoformat())
+    poz_no = Column(String)
+    aciklama = Column(Text)
+
+
 class CsbIsKalemiMalzeme(Base):
     """CSB iş kalemi kataloğu ↔ birleşik malzemeler tablosu ilişkisi."""
     __tablename__ = "csb_is_kalemi_malzeme"
@@ -666,3 +686,140 @@ class HakedisKalemi(Base):
 
     hakedis              = relationship("Hakedis", back_populates="kalemler")
     is_kalemi            = relationship("IsKalemi")
+
+
+# Dalga 2 records are additive: older building, progress and payment rows stay intact.
+class WorkArea(Base):
+    __tablename__ = "work_areas"
+    id = Column(Integer, primary_key=True)
+    santiye_id = Column(Integer, ForeignKey("santiyeler.id"), nullable=False, index=True)
+    parent_id = Column(Integer, ForeignKey("work_areas.id"), nullable=True)
+    name = Column(String, nullable=False)
+    kind = Column(String, nullable=False, default="bolge")
+    created_at = Column(DateTime, default=dt.utcnow, nullable=False)
+
+
+class Contract(Base):
+    __tablename__ = "contracts"
+    id = Column(Integer, primary_key=True)
+    santiye_id = Column(Integer, ForeignKey("santiyeler.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    reference = Column(String, nullable=True)
+    direction = Column(String, nullable=False)  # employer | subcontractor
+    counterparty = Column(String, nullable=False)
+    start_date = Column(String, nullable=True)
+    end_date = Column(String, nullable=True)
+    currency = Column(String, nullable=False, default="TRY")
+    pricing_type = Column(String, nullable=False, default="unit_price")
+    created_at = Column(DateTime, default=dt.utcnow, nullable=False)
+
+
+class ContractLine(Base):
+    __tablename__ = "contract_lines"
+    __table_args__ = (UniqueConstraint("contract_id", "work_item_id"),)
+    id = Column(Integer, primary_key=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id"), nullable=False, index=True)
+    work_item_id = Column(Integer, ForeignKey("is_kalemleri.id"), nullable=False, index=True)
+    code = Column(String, nullable=False)
+    description = Column(String, nullable=False)
+    unit = Column(String, nullable=False)
+    quantity = Column(Numeric(18, 3), nullable=False)
+    unit_price_kurus = Column(Integer, nullable=False)
+    revision_of_id = Column(Integer, ForeignKey("contract_lines.id"), nullable=True)
+
+
+class FieldMeasurement(Base):
+    __tablename__ = "field_measurements"
+    __table_args__ = (
+        UniqueConstraint("santiye_id", "request_key"),
+        CheckConstraint("accepted_quantity >= 0 AND allocated_quantity >= 0 AND allocated_quantity <= accepted_quantity"),
+    )
+    id = Column(Integer, primary_key=True)
+    santiye_id = Column(Integer, ForeignKey("santiyeler.id"), nullable=False, index=True)
+    area_id = Column(Integer, ForeignKey("work_areas.id"), nullable=True)
+    contract_line_id = Column(Integer, ForeignKey("contract_lines.id"), nullable=True, index=True)
+    work_item_id = Column(Integer, ForeignKey("is_kalemleri.id"), nullable=True)
+    work_date = Column(String, nullable=True)
+    reported_quantity = Column(Numeric(18, 3), nullable=True)
+    unit = Column(String, nullable=True)
+    basis = Column(Text, nullable=True)
+    status = Column(String, nullable=False, default="draft")
+    accepted_quantity = Column(Numeric(18, 3), nullable=False, default=0)
+    allocated_quantity = Column(Numeric(18, 3), nullable=False, default=0)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    review_reason = Column(Text, nullable=True)
+    request_key = Column(String, nullable=True)
+    created_at = Column(DateTime, default=dt.utcnow, nullable=False)
+
+
+class MeasurementEvidence(Base):
+    __tablename__ = "measurement_evidence"
+    __table_args__ = (UniqueConstraint("measurement_id", "archive_record_id"),)
+    id = Column(Integer, primary_key=True)
+    measurement_id = Column(Integer, ForeignKey("field_measurements.id"), nullable=False, index=True)
+    archive_record_id = Column(Integer, ForeignKey("archive_records.id"), nullable=False)
+
+
+class MeasurementDecision(Base):
+    __tablename__ = "measurement_decisions"
+    id = Column(Integer, primary_key=True)
+    measurement_id = Column(Integer, ForeignKey("field_measurements.id"), nullable=False, index=True)
+    actor_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    previous_status = Column(String, nullable=False)
+    new_status = Column(String, nullable=False)
+    reason = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=dt.utcnow, nullable=False)
+
+
+class PaymentContract(Base):
+    __tablename__ = "payment_contracts"
+    payment_id = Column(Integer, ForeignKey("hakedisler.id"), primary_key=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id"), nullable=False, index=True)
+
+
+class PaymentAllocation(Base):
+    __tablename__ = "payment_allocations"
+    __table_args__ = (UniqueConstraint("payment_id", "measurement_id"),)
+    id = Column(Integer, primary_key=True)
+    payment_id = Column(Integer, ForeignKey("hakedisler.id"), nullable=False, index=True)
+    measurement_id = Column(Integer, ForeignKey("field_measurements.id"), nullable=False, index=True)
+    quantity = Column(Numeric(18, 3), nullable=False)
+    amount_kurus = Column(Integer, nullable=False)
+
+
+class PaymentDecision(Base):
+    __tablename__ = "payment_decisions"
+    id = Column(Integer, primary_key=True)
+    payment_id = Column(Integer, ForeignKey("hakedisler.id"), nullable=False, index=True)
+    actor_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    previous_status = Column(String, nullable=False)
+    new_status = Column(String, nullable=False)
+    reason = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=dt.utcnow, nullable=False)
+
+
+class InventoryMovement(Base):
+    __tablename__ = "inventory_movements"
+    __table_args__ = (
+        UniqueConstraint("request_key"),
+        CheckConstraint("quantity > 0"),
+    )
+    id = Column(Integer, primary_key=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+    site_id = Column(Integer, ForeignKey("santiyeler.id"), nullable=False, index=True)
+    destination_site_id = Column(Integer, ForeignKey("santiyeler.id"), nullable=True)
+    material_key = Column(String, nullable=False, index=True)
+    variant = Column(String, nullable=False, default="")
+    unit = Column(String, nullable=False)
+    kind = Column(String, nullable=False)  # receipt | issue | transfer | return | correction_in | correction_out
+    quantity = Column(Numeric(18, 3), nullable=False)
+    work_item_id = Column(Integer, ForeignKey("is_kalemleri.id"), nullable=True)
+    request_key = Column(String, nullable=False)
+    price_kurus = Column(Integer, nullable=True)
+    price_currency = Column(String, nullable=True)
+    price_source = Column(String, nullable=True)
+    price_scope = Column(String, nullable=True)
+    note = Column(Text, nullable=True)
+    actor_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=dt.utcnow, nullable=False)

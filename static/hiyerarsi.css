@@ -1,0 +1,1421 @@
+/* hiyerarsi.css â€” Metraj Yönetimi Sayfası Stilleri */
+
+/* â”€â”€ Sayfa Layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.hiy-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* â”€â”€ Sol AÄŸaç Paneli â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.hiy-tree-panel {
+  width: 300px;
+  min-width: 260px;
+  background: #fff;
+  border-right: 1px solid #E2E8F0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.hiy-tree-header {
+  padding: 14px 12px;
+  border-bottom: 1px solid #E2E8F0;
+  flex-shrink: 0;
+}
+
+.hiy-tree-site-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0F172A;
+  margin-bottom: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hiy-tree-scroll {
+  overflow-y: auto;
+  flex: 1;
+  padding: 6px 0;
+}
+
+/* â”€â”€ AÄŸaç Satırları â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.hiy-tree-row {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: 8px;
+  margin: 1px 5px;
+  gap: 7px;
+  position: relative;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.hiy-tree-row:hover {
+  background: #F8FAFC;
+}
+
+.hiy-tree-row.selected {
+  background: rgba(249, 115, 22, 0.10);
+  border-radius: 0 8px 8px 0;
+}
+
+.hiy-tree-row.selected::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #F97316;
+  border-radius: 0 2px 2px 0;
+}
+
+.hiy-tree-row.selected .hiy-tree-label {
+  color: #C2410C;
+  font-weight: 700;
+}
+
+.hiy-tree-toggle {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #94A3B8;
+  font-size: 10px;
+  line-height: 1;
+  cursor: inherit;
+  user-select: none;
+}
+
+.hiy-tree-toggle.open {
+  color: #F97316;
+}
+
+.hiy-tree-toggle-empty {
+  visibility: hidden;
+}
+
+.hiy-tree-label {
+  font-size: 13px;
+  color: #0F172A;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.hiy-tree-icon {
+  width: 18px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.hiy-tree-badge {
+  font-size: 10px;
+  color: #64748B;
+  flex-shrink: 0;
+  background: #F1F5F9;
+  min-width: 20px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.hiy-tree-actions {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+  align-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.hiy-tree-row:hover .hiy-tree-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.hiy-tree-action-btn {
+  min-width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748B;
+  transition: background 0.12s;
+  padding: 0;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font, sans-serif);
+}
+
+.hiy-tree-action-btn:hover {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+.hiy-tree-action-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #DC2626;
+}
+
+.hiy-tree-add-inline {
+  padding: 3px 7px;
+  border: 1px solid #F97316;
+  border-radius: 5px;
+  background: transparent;
+  color: #F97316;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font, sans-serif);
+  transition: all 0.12s;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.hiy-tree-add-inline:hover {
+  background: #F97316;
+  color: #fff;
+}
+
+/* â”€â”€ AÄŸaç Collapse (CSS transition) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.hiy-tree-children {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.25s ease;
+}
+
+.hiy-tree-children.open {
+  max-height: 3000px;
+}
+
+/* â”€â”€ Girinti Seviyeleri â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.hiy-level-bina .hiy-tree-label {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.hiy-level-kat {
+  padding-left: 20px;
+}
+
+.hiy-level-mahal {
+  padding-left: 40px;
+}
+
+.hiy-level-mahal .hiy-tree-label {
+  font-size: 12.5px;
+}
+
+/* â”€â”€ SaÄŸ içerik Paneli â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.hiy-content-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #F1F5F9;
+  min-width: 0;
+}
+
+.hiy-content-header {
+  background: #fff;
+  border-bottom: 1px solid #E2E8F0;
+  padding: 14px 20px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hiy-breadcrumb {
+  font-size: 12px;
+  color: #64748B;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.hiy-breadcrumb-sep {
+  color: #CBD5E1;
+}
+
+.hiy-breadcrumb-item {
+  cursor: pointer;
+  transition: color 0.12s;
+}
+
+.hiy-breadcrumb-item:hover {
+  color: #F97316;
+}
+
+.hiy-breadcrumb-item.current {
+  color: #0F172A;
+  font-weight: 600;
+  cursor: default;
+}
+
+.hiy-content-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hiy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: 9px;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.15s;
+  font-family: var(--font, sans-serif);
+  white-space: nowrap;
+}
+
+.hiy-btn-primary {
+  background: #F97316;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.25);
+}
+
+.hiy-btn-primary:hover {
+  background: #EA6C0A;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(249, 115, 22, 0.35);
+}
+
+.hiy-btn-secondary {
+  background: #fff;
+  color: #374151;
+  border: 1px solid #E2E8F0;
+}
+
+.hiy-btn-secondary:hover {
+  background: #F8FAFC;
+  border-color: #CBD5E1;
+}
+
+.hiy-content-scroll {
+  overflow-y: auto;
+  flex: 1;
+  padding: 18px 20px;
+}
+
+.hiy-content-scroll.gorsel-mod {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* â”€â”€ Boş Durum â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.hiy-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 50px 20px;
+  text-align: center;
+  gap: 12px;
+}
+
+.hiy-empty-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0F172A;
+}
+
+.hiy-empty-desc {
+  font-size: 13px;
+  color: #64748B;
+  max-width: 300px;
+  line-height: 1.6;
+}
+
+/* â”€â”€ iş Kalemleri Tablosu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.hiy-table-wrap {
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #E2E8F0;
+  overflow: hidden;
+}
+
+.hiy-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.hiy-table thead {
+  background: #F8FAFC;
+  border-bottom: 1px solid #E2E8F0;
+}
+
+.hiy-table th {
+  padding: 9px 12px;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748B;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.hiy-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #F1F5F9;
+  color: #0F172A;
+  vertical-align: middle;
+}
+
+.hiy-table tr:last-child td {
+  border-bottom: none;
+}
+
+.hiy-table tr:hover td {
+  background: #FAFBFC;
+}
+
+.hiy-row-actions {
+  display: flex;
+  gap: 5px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.hiy-table tr:hover .hiy-row-actions {
+  opacity: 1;
+}
+
+.hiy-icon-btn {
+  min-width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748B;
+  transition: background 0.12s;
+  padding: 0;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font, sans-serif);
+}
+
+.hiy-icon-btn:hover {
+  background: #F1F5F9;
+}
+
+.hiy-icon-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #DC2626;
+}
+
+/* â”€â”€ Durum Rozetleri â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.hiy-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.hiy-badge-planli {
+  background: #F1F5F9;
+  color: #64748B;
+}
+
+.hiy-badge-devam {
+  background: rgba(99, 102, 241, 0.1);
+  color: #6366F1;
+}
+
+.hiy-badge-tamamlandi {
+  background: rgba(34, 197, 94, 0.1);
+  color: #16A34A;
+}
+
+.hiy-badge-iptal {
+  background: rgba(239, 68, 68, 0.1);
+  color: #DC2626;
+}
+
+/* â”€â”€ ilerleme Ã‡ubuÄŸu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.hiy-progress-wrap {
+  width: 72px;
+  height: 5px;
+  background: #E2E8F0;
+  border-radius: 9999px;
+  overflow: hidden;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 5px;
+}
+
+.hiy-progress-bar {
+  height: 100%;
+  background: #F97316;
+  border-radius: 9999px;
+  transition: width 0.4s ease;
+}
+
+.hiy-progress-pct {
+  font-size: 11px;
+  color: #64748B;
+  font-weight: 600;
+}
+
+/* â”€â”€ Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.hiy-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 5000;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.hiy-modal-overlay.active {
+  display: flex;
+  opacity: 1;
+}
+
+.hiy-modal {
+  background: #fff;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 460px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.32);
+  transform: translateY(24px) scale(0.97);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+.hiy-modal-overlay.active .hiy-modal {
+  transform: translateY(0) scale(1);
+}
+
+.hiy-modal-header {
+  background: #0D1117;
+  padding: 15px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.hiy-modal-title {
+  color: #F1F5F9;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.hiy-modal-close {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #94A3B8;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s;
+}
+
+.hiy-modal-close:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.hiy-modal-body {
+  padding: 18px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.hiy-field-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 5px;
+  margin-top: 13px;
+}
+
+.hiy-field-label:first-child {
+  margin-top: 0;
+}
+
+.hiy-field-input,
+.hiy-field-select {
+  width: 100%;
+  background: #F8FAFC;
+  border: 1.5px solid #E2E8F0;
+  border-radius: 10px;
+  padding: 10px 13px;
+  color: #0F172A;
+  font-size: 0.9rem;
+  outline: none;
+  transition: all 0.18s ease;
+  box-sizing: border-box;
+  font-family: var(--font, sans-serif);
+}
+
+.hiy-field-input:focus,
+.hiy-field-select:focus {
+  border-color: #F97316;
+  background: #FFF7ED;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
+}
+
+.hiy-total-preview {
+  margin-top: 10px;
+  padding: 11px 13px;
+  background: #F8FAFC;
+  border: 1.5px solid #E2E8F0;
+  border-radius: 10px;
+  font-size: 12px;
+  color: #64748B;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.hiy-total-preview strong {
+  color: #0F172A;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.hiy-modal-footer {
+  display: flex;
+  gap: 10px;
+  padding: 14px 20px;
+  background: #F8FAFC;
+  border-top: 1px solid #E2E8F0;
+  flex-shrink: 0;
+}
+
+.hiy-modal-btn {
+  flex: 1;
+  padding: 11px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.88rem;
+  transition: all 0.15s ease;
+  font-family: var(--font, sans-serif);
+}
+
+.hiy-modal-btn-confirm {
+  background: #F97316;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
+}
+
+.hiy-modal-btn-confirm:hover {
+  background: #EA6C0A;
+  transform: translateY(-1px);
+}
+
+.hiy-modal-btn-confirm:disabled {
+  background: #94A3B8;
+  box-shadow: none;
+  transform: none;
+  cursor: not-allowed;
+}
+
+.hiy-modal-btn-cancel {
+  background: #F1F5F9;
+  color: #64748B;
+  border: 1px solid #E2E8F0;
+}
+
+.hiy-modal-btn-cancel:hover {
+  background: #E2E8F0;
+}
+
+/* â”€â”€ Spinner / Yükleniyor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.hiy-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(249, 115, 22, 0.18);
+  border-top-color: #F97316;
+  border-radius: 50%;
+  animation: hiySpinAnim 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes hiySpinAnim {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.hiy-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 20px;
+  gap: 14px;
+  color: #94A3B8;
+  font-size: 13px;
+}
+
+/* â”€â”€ Excel Import Sonucu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.hiy-excel-result {
+  padding: 13px;
+  border-radius: 10px;
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.hiy-excel-result.success {
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.22);
+  color: #166534;
+}
+
+.hiy-excel-result.partial {
+  background: rgba(249, 115, 22, 0.08);
+  border: 1px solid rgba(249, 115, 22, 0.22);
+  color: #9A3412;
+}
+
+.hiy-excel-errors {
+  margin-top: 8px;
+  max-height: 120px;
+  overflow-y: auto;
+  font-size: 11px;
+}
+
+.hiy-excel-error-row {
+  padding: 3px 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  color: #DC2626;
+}
+
+/* â”€â”€ ilerleme Geçmişi â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.hiy-ilerleme-list {
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-top: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.hiy-ilerleme-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-bottom: 1px solid #F1F5F9;
+  font-size: 12px;
+}
+
+.hiy-ilerleme-row:last-child {
+  border-bottom: none;
+}
+
+.hiy-ilerleme-yuzde {
+  font-weight: 700;
+  color: #F97316;
+  min-width: 32px;
+}
+
+.hiy-ilerleme-tarih {
+  color: #64748B;
+  white-space: nowrap;
+}
+
+.hiy-ilerleme-notlar {
+  flex: 1;
+  color: #94A3B8;
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* â”€â”€ Mobil Overlay + Toggle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.hiy-mobile-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1999;
+}
+
+.hiy-mobile-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 15px;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+
+.hiy-mobile-toggle:hover {
+  background: #F8FAFC;
+}
+
+/* â”€â”€ Responsive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+@media (max-width: 768px) {
+  .hiy-tree-panel {
+    position: fixed;
+    left: -100%;
+    top: 0;
+    bottom: 0;
+    z-index: 2000;
+    transition: left 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.18);
+    width: 280px;
+  }
+
+  .hiy-tree-panel.mobile-open {
+    left: 0;
+  }
+
+  .hiy-mobile-overlay {
+    display: none;
+  }
+
+  .hiy-mobile-overlay.visible {
+    display: block;
+  }
+
+  .hiy-mobile-toggle {
+    display: flex;
+  }
+
+  .hiy-content-scroll {
+    padding: 12px;
+  }
+
+  .hiy-content-header {
+    padding: 10px 14px;
+  }
+
+  .hiy-table-wrap {
+    overflow-x: auto;
+  }
+}
+
+/* ── Malzeme Fiyatları Paneli ────────────────────────────────── */
+.hiy-mal-panel {
+  margin-top: 20px;
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.06);
+}
+
+.hiy-mal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 16px;
+  border-bottom: 1px solid #E2E8F0;
+  background: #F8FAFC;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.hiy-mal-baslik {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0F172A;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.hiy-mal-header-btns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ── Küçük Butonlar (hiy-btn-sm) ──────────────────────────── */
+.hiy-btn-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.hiy-btn-sm:active {
+  transform: translateY(1px);
+}
+
+.hiy-btn-sm.hiy-btn-primary {
+  background: #F97316;
+  color: #fff;
+  box-shadow: 0 1px 6px rgba(249, 115, 22, 0.28);
+}
+
+.hiy-btn-sm.hiy-btn-primary:hover {
+  background: #EA6C0A;
+  box-shadow: 0 2px 10px rgba(249, 115, 22, 0.38);
+}
+
+.hiy-btn-sm.hiy-btn-secondary {
+  background: #F1F5F9;
+  color: #475569;
+  border: 1px solid #E2E8F0;
+}
+
+.hiy-btn-sm.hiy-btn-secondary:hover {
+  background: #E2E8F0;
+  color: #1E293B;
+}
+
+/* ── Boş Durum ──────────────────────────────────────────────── */
+.hiy-mal-bos {
+  padding: 28px 20px;
+  text-align: center;
+  font-size: 13px;
+  color: #64748B;
+  line-height: 1.6;
+}
+
+.hiy-mal-bos a {
+  color: #F97316;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.hiy-mal-bos a:hover {
+  text-decoration: underline;
+}
+
+/* ── Tablo İçi Malzeme Hücreleri ─────────────────────────── */
+.hiy-mal-ad {
+  color: #0F172A;
+  font-weight: 500;
+  cursor: default;
+}
+
+/* Miktar: tıklanınca edit moduna geçen değer */
+.hiy-mal-miktar-val {
+  cursor: pointer;
+  color: #1E293B;
+  border-bottom: 1px dashed #CBD5E1;
+  padding-bottom: 1px;
+  transition: color 0.12s, border-color 0.12s;
+  display: inline-block;
+}
+
+.hiy-mal-miktar-val:hover {
+  color: #F97316;
+  border-color: #F97316;
+}
+
+.hiy-mal-miktar-inp {
+  width: 72px;
+  padding: 3px 6px;
+  font-size: 13px;
+  border: 1px solid #F97316;
+  border-radius: 6px;
+  outline: none;
+  text-align: right;
+  color: #0F172A;
+  background: #FFF7ED;
+}
+
+/* ── Fiyat Tipi Göstergesi ──────────────────────────────── */
+.hiy-mal-piyasa {
+  font-style: italic;
+  color: #94A3B8;
+  font-size: 12px;
+}
+
+/* ── Fark Badge'leri ─────────────────────────────────────── */
+.hiy-mal-fark-kirmizi,
+.hiy-mal-fark-yesil,
+.hiy-mal-fark-gri {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.hiy-mal-fark-kirmizi {
+  background: rgba(220, 38, 38, 0.10);
+  color: #DC2626;
+  border: 1px solid rgba(220, 38, 38, 0.20);
+}
+
+.hiy-mal-fark-yesil {
+  background: rgba(22, 163, 74, 0.10);
+  color: #16A34A;
+  border: 1px solid rgba(22, 163, 74, 0.20);
+}
+
+.hiy-mal-fark-gri {
+  background: #F1F5F9;
+  color: #94A3B8;
+  border: 1px solid #E2E8F0;
+}
+
+/* ── Özet Bar ────────────────────────────────────────────── */
+.hiy-mal-ozet {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 24px;
+  padding: 10px 16px;
+  border-top: 1px solid #E2E8F0;
+  background: #F8FAFC;
+  font-size: 12px;
+  color: #64748B;
+  flex-wrap: wrap;
+}
+
+.hiy-mal-ozet strong {
+  color: #0F172A;
+  font-weight: 700;
+}
+
+/* ── Modal: Katalog Listesi ──────────────────────────────── */
+.hiy-mal-liste-kap {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  padding: 4px 0;
+  margin-bottom: 10px;
+  background: #fff;
+}
+
+.hiy-mal-liste-satir {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  border-radius: 0;
+  font-size: 13px;
+  transition: background 0.12s;
+  border-bottom: 1px solid #F1F5F9;
+}
+
+.hiy-mal-liste-satir:last-child {
+  border-bottom: none;
+}
+
+.hiy-mal-liste-satir:hover {
+  background: #FFF7ED;
+}
+
+.hiy-mal-liste-satir input[type="radio"],
+.hiy-mal-liste-satir input[type="checkbox"] {
+  flex-shrink: 0;
+  accent-color: #F97316;
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+.hiy-mal-liste-ad {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.hiy-mal-liste-birim {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* Önerilen modal koyu arka planda — renkleri override et */
+.hiy-oner-satir-icerik .hiy-mal-liste-ad {
+  color: #e2e8f0;
+}
+
+.hiy-oner-satir-icerik .hiy-mal-liste-birim {
+  color: #94a3b8;
+}
+
+/* ── Responsive: Malzeme Panel ───────────────────────────── */
+@media (max-width: 768px) {
+  .hiy-mal-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .hiy-mal-header-btns {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .hiy-btn-sm {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .hiy-mal-ozet {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+}
+/* ── Tanım Autocomplete ─────────────────────────────────────── */
+.hiy-ac-wrap {
+  position: relative;
+}
+
+.hiy-ac-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 999;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+}
+
+.hiy-ac-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #263142;
+  outline: none;
+  transition: background 0.1s;
+}
+.hiy-ac-item:last-child { border-bottom: none; }
+.hiy-ac-item:hover,
+.hiy-ac-item:focus {
+  background: #273549;
+}
+
+.hiy-ac-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.hiy-ac-poz {
+  font-family: monospace;
+  font-size: 10px;
+  color: #f97316;
+  white-space: nowrap;
+}
+
+.hiy-ac-ad {
+  font-size: 13px;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hiy-ac-birim {
+  font-size: 11px;
+  color: #64748b;
+  background: #0f172a;
+  border-radius: 4px;
+  padding: 1px 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.hiy-ac-loading,
+.hiy-ac-empty {
+  padding: 12px 14px;
+  font-size: 12px;
+  color: #64748b;
+  text-align: center;
+}
+
+.hiy-ac-serbest-row {
+  padding: 9px 12px;
+  font-size: 12px;
+  color: #94a3b8;
+  cursor: pointer;
+  border-top: 1px solid #263142;
+  transition: background 0.1s;
+}
+.hiy-ac-serbest-row:hover { background: #1a2840; color: #e2e8f0; }
+
+.hiy-ac-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 20px;
+  margin: 3px 0 6px;
+}
+
+.hiy-ac-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #60a5fa;
+  background: #1e3050;
+  border: 1px solid #2d4a7a;
+  border-radius: 12px;
+  padding: 2px 8px;
+}
+
+.hiy-ac-serbest-link {
+  font-size: 11px;
+  color: #64748b;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.hiy-ac-serbest-link:hover { color: #94a3b8; text-decoration: underline; }
+
+/* ── Önerilen Malzemeler Modal ──────────────────────────────── */
+.hiy-oner-baslik {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #1e293b;
+}
+
+.hiy-oner-kaynak-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.hiy-oner-kaynak-badge.katalog {
+  background: #1e3050;
+  color: #60a5fa;
+  border: 1px solid #2d4a7a;
+}
+.hiy-oner-kaynak-badge.keyword {
+  background: #1a2e1a;
+  color: #4ade80;
+  border: 1px solid #166534;
+}
+
+.hiy-oner-satir {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  transition: background 0.1s;
+  border: 1px solid #1e293b;
+  background: #0d1526;
+}
+.hiy-oner-satir:hover {
+  background: #1a2540;
+  border-color: #2d3f5e;
+}
+.hiy-oner-satir.zorunlu {
+  background: #0c1a30;
+  border-color: #1e3a5f;
+  cursor: not-allowed;
+}
+
+.hiy-oner-satir input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
+.hiy-oner-satir.zorunlu input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.hiy-oner-satir-icerik {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.hiy-oner-poz {
+  font-family: monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fdba74;
+  background: rgba(249, 115, 22, 0.18);
+  border: 1px solid rgba(249, 115, 22, 0.3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.hiy-oner-miktar {
+  font-size: 11px;
+  color: #cbd5e1;
+  white-space: nowrap;
+}
+
+.hiy-oner-zorunlu-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #ffffff;
+  background: #ea580c;
+  border: none;
+  padding: 2px 7px;
+  border-radius: 8px;
+}
+
+.hiy-oner-satir.ekli {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.hiy-oner-satir.ekli input[type="checkbox"] {
+  cursor: default;
+}
+
+.hiy-oner-ekli-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  background: #1e293b;
+  border: 1px solid #334155;
+  padding: 2px 7px;
+  border-radius: 8px;
+}
+
+.hiy-oner-neden {
+  width: 100%;
+  font-size: 11px;
+  color: #64748b;
+}
+
+/* ── BIM Compact Kutu (Görsel varyasyon) ─────────────────────── */
+
+@keyframes hiyCepheBimPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+@keyframes hiySpinAnim {
+  to { transform: rotate(360deg); }
+}
+
+.hiy-bim-drop-zone {
+  width: 100%;
+  max-width: 300px;
+  padding: 30px 20px;
+  border: 2px dashed #334155;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.hiy-bim-drop-zone:hover,
+.hiy-bim-drop-zone.hiy-bim-drop-active {
+  border-color: #3B82F6;
+  background: rgba(59, 130, 246, 0.06);
+}
+
+.hiy-bim-drop-zone.hiy-bim-drop-active {
+  border-style: solid;
+}
+
+.hiy-bim-drop-zone svg {
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.hiy-bim-drop-zone:hover svg,
+.hiy-bim-drop-zone.hiy-bim-drop-active svg {
+  opacity: 1;
+  stroke: #60A5FA;
+}

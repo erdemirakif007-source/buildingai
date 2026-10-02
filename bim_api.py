@@ -33,12 +33,13 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import auth
 import database
 import models
+from access_control import require_site, require_hierarchy
 
 # ai_client lazy import — app.py başlatıldıktan sonra erişilebilir
 def _get_ai_client():
@@ -53,19 +54,8 @@ logger = logging.getLogger("buildingai.bim")
 
 # ── Yetki yardımcısı ──────────────────────────────────────────────────────────
 
-def _bim_santiye_yetkisi_kontrol(user: models.User, santiye_id: int, db: Session) -> None:
-    """
-    Kullanıcının verilen şantiyeye (aynı organization) erişim hakkı olup olmadığını
-    kontrol eder. Hak yoksa HTTPException 403 fırlatır.
-    """
-    if not user.organization_id:
-        raise HTTPException(status_code=403, detail="Kullanıcının organizasyonu tanımlanmamış.")
-    santiye = db.query(models.Santiye).filter(
-        models.Santiye.id == santiye_id,
-        models.Santiye.organization_id == user.organization_id,
-    ).first()
-    if not santiye:
-        raise HTTPException(status_code=403, detail="Bu şantiyeye erişim yetkiniz yok.")
+def _bim_santiye_yetkisi_kontrol(user, santiye_id, db):
+    require_site(user, santiye_id, db)
 
 # ── Depolama ayarları ───────────────────────────────────────────────────────
 BIM_UPLOAD_ROOT = Path("uploads/bim")
@@ -80,27 +70,8 @@ bim_router = APIRouter(prefix="/api/bim", tags=["BIM Viewer"])
 # ── Auth yardımcısı ─────────────────────────────────────────────────────────
 
 def _bim_kullanici_dogrula(request: Request, db: Session) -> models.User:
-    """
-    Authorization header'dan (Bearer <token>) ya da query param 'token'
-    üzerinden kullanıcıyı doğrular. HTTPException 401 fırlatır.
-    """
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header.replace("Bearer ", "").strip() if auth_header else ""
-    if not token:
-        token = request.query_params.get("token", "")
-    if not token:
-        raise HTTPException(status_code=401, detail="Yetkilendirme başlığı eksik.")
-    try:
-        payload = auth.verify_token(token)
-        email = payload.get("email")
-        user = db.query(models.User).filter(models.User.email == email).first()
-        if not user:
-            raise HTTPException(status_code=401, detail="Kullanıcı bulunamadı.")
-        return user
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=401, detail="Token geçersiz.")
+    from app import kullanici_dogrula, _request_token
+    return kullanici_dogrula(_request_token(request), db)
 
 
 # ── Pydantic şemaları ────────────────────────────────────────────────────────
@@ -196,7 +167,11 @@ async def bim_upload(
     ve bim_modeller tablosuna kayıt ekler.
     """
     user = _bim_kullanici_dogrula(request, db)
-    _bim_santiye_yetkisi_kontrol(user, santiye_id, db)
+    require_site(user, santiye_id, db, "write")
+    if blok_id:
+        block = db.query(models.Bina).filter_by(id=blok_id, santiye_id=santiye_id).first()
+        if not block:
+            raise HTTPException(422, "Blok modelin şantiyesine ait olmalıdır.")
 
     contents = await file.read()
     if len(contents) > MAX_FILE_SIZE:
@@ -316,6 +291,7 @@ async def bim_fragment_yukle(
     bim_model = db.query(models.BimModel).filter(models.BimModel.id == model_id).first()
     if not bim_model:
         raise HTTPException(status_code=404, detail="BIM modeli bulunamadı.")
+    require_site(user, bim_model.santiye_id, db, "write")
     if bim_model.durum == "silindi":
         raise HTTPException(status_code=410, detail="Bu model silinmiş.")
     _bim_santiye_yetkisi_kontrol(user, bim_model.santiye_id, db)
@@ -362,6 +338,7 @@ async def bim_model_sil(
     bim_model = db.query(models.BimModel).filter(models.BimModel.id == model_id).first()
     if not bim_model:
         raise HTTPException(status_code=404, detail="BIM modeli bulunamadı.")
+    require_site(user, bim_model.santiye_id, db, "write")
     if bim_model.durum == "silindi":
         raise HTTPException(status_code=410, detail="Bu model zaten silinmiş.")
     _bim_santiye_yetkisi_kontrol(user, bim_model.santiye_id, db)
@@ -389,68 +366,26 @@ async def bim_model_sil(
     "/model/{model_id}/progress",
     summary="Element–iş kalemi eşleştirmeleri ve ilerleme verisi",
 )
-async def bim_model_progress(
-    request: Request,
-    model_id: int,
-    db: Session = Depends(database.get_db),
-):
-    """
-    BIM model elemanlarına atanmış iş kalemlerinin ilerleme durumunu döner.
-    Response formatı progressColoring.ts'deki ElementProgressMapping interface'ine uyumludur.
-    """
+async def bim_model_progress(request: Request, model_id: int, db: Session = Depends(database.get_db)):
     user = _bim_kullanici_dogrula(request, db)
-
-    bim_model = db.query(models.BimModel).filter(models.BimModel.id == model_id).first()
-    if not bim_model:
-        raise HTTPException(status_code=404, detail="BIM modeli bulunamadı.")
-    _bim_santiye_yetkisi_kontrol(user, bim_model.santiye_id, db)
-
-    # JOIN + correlated subquery — text() ile okunabilirlik korunur
-    q = text("""
-        SELECT
-            e.id              AS eslestirme_id,
-            e.ifc_global_id,
-            e.ifc_tip,
-            e.ifc_kat,
-            e.is_kalemi_id,
-            ik.tanim          AS is_kalemi_tanim,
-            ik.birim          AS is_kalemi_birim,
-            ik.durum          AS is_kalemi_durum,
-            ik.metraj         AS is_kalemi_metraj,
-            (
-                SELECT irl.yuzde
-                FROM ilerleme_kayitlari irl
-                WHERE irl.is_kalemi_id = e.is_kalemi_id
-                ORDER BY irl.created_at DESC
-                LIMIT 1
-            ) AS tamamlanma_yuzdesi
-        FROM bim_element_eslestirme e
-        LEFT JOIN is_kalemleri ik ON ik.id = e.is_kalemi_id
-        WHERE e.bim_model_id = :model_id
-        ORDER BY e.ifc_global_id
-    """)
-
-    with database.engine.connect() as conn:
-        rows = conn.execute(q, {"model_id": model_id}).fetchall()
-
+    model = db.query(models.BimModel).filter_by(id=model_id).first()
+    if not model or model.durum == "silindi":
+        raise HTTPException(404, "BIM modeli bulunamadı.")
+    require_site(user, model.santiye_id, db)
     mappings = []
+    rows = db.query(models.BimElementEslestirme).filter_by(bim_model_id=model_id).order_by(models.BimElementEslestirme.ifc_global_id).all()
     for row in rows:
-        d = _row_to_dict(row)
-        pct = d.get("tamamlanma_yuzdesi")
-        mappings.append({
-            "eslestirme_id":      d["eslestirme_id"],
-            "ifc_global_id":      d["ifc_global_id"],
-            "ifc_tip":            d.get("ifc_tip"),
-            "ifc_kat":            d.get("ifc_kat"),
-            "is_kalemi_id":       d.get("is_kalemi_id"),
-            "is_kalemi_tanim":    d.get("is_kalemi_tanim"),
-            "is_kalemi_birim":    d.get("is_kalemi_birim"),
-            "is_kalemi_durum":    _normalize_durum(d.get("is_kalemi_durum")),
-            "is_kalemi_metraj":   d.get("is_kalemi_metraj"),
-            "tamamlanma_yuzdesi": float(pct) if pct is not None else None,
-            "renk_kodu": _progress_renk(pct, _normalize_durum(d.get("is_kalemi_durum"))),
-        })
-
+        ik = row.is_kalemi
+        if ik:
+            _validate_mapping(user, model, ik.id, db, "read")
+        progress = db.query(models.IlerlemeKaydi).filter_by(is_kalemi_id=row.is_kalemi_id).order_by(models.IlerlemeKaydi.created_at.desc(), models.IlerlemeKaydi.id.desc()).first() if ik else None
+        pct = progress.yuzde if progress else None
+        durum = _normalize_durum(ik.durum) if ik else None
+        mappings.append({"eslestirme_id": row.id, "ifc_global_id": row.ifc_global_id,
+            "ifc_tip": row.ifc_tip, "ifc_kat": row.ifc_kat, "is_kalemi_id": row.is_kalemi_id,
+            "is_kalemi_tanim": ik.tanim if ik else None, "is_kalemi_birim": ik.birim if ik else None,
+            "is_kalemi_durum": durum, "is_kalemi_metraj": ik.metraj if ik else None,
+            "tamamlanma_yuzdesi": pct, "renk_kodu": _progress_renk(pct, durum)})
     return {"model_id": model_id, "eslestirmeler": mappings, "toplam": len(mappings)}
 
 
@@ -503,7 +438,9 @@ async def bim_mapping_kaydet(
     ).first()
     if not bim_model:
         raise HTTPException(status_code=404, detail="BIM modeli bulunamadı.")
+    require_site(user, bim_model.santiye_id, db, "write")
 
+    _validate_mapping(user, bim_model, body.is_kalemi_id, db)
     eslestirme = db.query(models.BimElementEslestirme).filter_by(
         bim_model_id=model_id,
         ifc_global_id=body.ifc_global_id,
@@ -572,7 +509,10 @@ async def bim_mapping_bulk(
     ).first()
     if not bim_model:
         raise HTTPException(status_code=404, detail="BIM modeli bulunamadı.")
+    require_site(user, bim_model.santiye_id, db, "write")
 
+    for item in body.mappings:
+        _validate_mapping(user, bim_model, item.is_kalemi_id, db)
     basarili = 0
     hatalar: list[dict] = []
 
@@ -651,6 +591,7 @@ async def bim_mapping_suggest(
     ).first()
     if not bim_model:
         raise HTTPException(status_code=404, detail="BIM modeli bulunamadı.")
+    require_site(user, bim_model.santiye_id, db, "write")
 
     is_kalemleri = (
         db.query(models.IsKalemi)
@@ -707,6 +648,7 @@ async def bim_mapping_sil(
     bim_model = db.query(models.BimModel).filter(models.BimModel.id == model_id).first()
     if not bim_model:
         raise HTTPException(status_code=404, detail="BIM modeli bulunamadı.")
+    require_site(user, bim_model.santiye_id, db, "write")
     _bim_santiye_yetkisi_kontrol(user, bim_model.santiye_id, db)
 
     db.delete(eslestirme)
@@ -919,202 +861,27 @@ SADECE aşağıdaki JSON formatında yanıt ver, başka hiçbir şey yazma:
     "/model/{model_id}/element/{eslestirme_id}/ilerleme",
     summary="BIM elementi üzerinden iş kalemi ilerleme güncelle — stok ve hakediş tetikle",
 )
-async def bim_element_ilerleme_guncelle(
-    request: Request,
-    model_id: int,
-    eslestirme_id: int,
-    body: ElementIlerlemeBody,
-    db: Session = Depends(database.get_db),
-):
-    """
-    Tek bir BIM elementinin ilerleme yüzdesini günceller.
-
-    Yan etkiler (yuzde == 100 ise):
-      • is_kalemleri.durum → 'tamamlandi'
-      • CsbIsKalemiMalzeme reçetesinden otomatik stok çıkışı (StokHareket)
-      • StokEsik kontrolü — kritik seviye uyarıları response'a eklenir
-      • Taslak hakedişte ilgili HakedisKalemi güncellenir
-    """
+async def bim_element_ilerleme_guncelle(request: Request, model_id: int, eslestirme_id: int,
+                                      body: ElementIlerlemeBody, db: Session = Depends(database.get_db)):
+    from app import _save_progress
     user = _bim_kullanici_dogrula(request, db)
+    model = db.query(models.BimModel).filter_by(id=model_id).first()
+    if not model or model.durum == "silindi":
+        raise HTTPException(404, "BIM modeli bulunamadı.")
+    require_site(user, model.santiye_id, db, "write")
+    mapping = db.query(models.BimElementEslestirme).filter_by(id=eslestirme_id, bim_model_id=model_id).first()
+    if not mapping or not mapping.is_kalemi_id:
+        raise HTTPException(404, "BIM element eşleştirmesi bulunamadı.")
+    ik = _validate_mapping(user, model, mapping.is_kalemi_id, db)
+    result = _save_progress(db, user, ik.id, {"yuzde": body.yuzde, "notlar": body.notlar})
+    return {**result, "is_kalemi_id": ik.id, "is_kalemi_tanim": ik.tanim,
+            "durum_guncellendi": body.yuzde == 100, "stok_hareketleri": [],
+            "hakedis_guncellendi": bool(result["hakedis_guncelleme"])}
 
-    # ── 1. Eşleştirme kaydını doğrula ───────────────────────────────────────
-    eslestirme = (
-        db.query(models.BimElementEslestirme)
-        .filter(
-            models.BimElementEslestirme.id == eslestirme_id,
-            models.BimElementEslestirme.bim_model_id == model_id,
-        )
-        .first()
-    )
-    if not eslestirme:
-        raise HTTPException(status_code=404, detail="BIM element eşleştirmesi bulunamadı.")
-    if not eslestirme.is_kalemi_id:
-        raise HTTPException(status_code=400, detail="Bu element henüz bir iş kalemine eşlenmemiş.")
 
-    # ── 2. Model erişilebilirlik kontrolü ────────────────────────────────────
-    bim_model = (
-        db.query(models.BimModel)
-        .filter(models.BimModel.id == model_id, models.BimModel.durum != "silindi")
-        .first()
-    )
-    if not bim_model:
-        raise HTTPException(status_code=404, detail="BIM modeli bulunamadı.")
-
-    # ── 3. İş kalemi ────────────────────────────────────────────────────────
-    try:
-        is_kalemi = db.query(models.IsKalemi).filter(
-            models.IsKalemi.id == eslestirme.is_kalemi_id
-        ).with_for_update().first()
-    except Exception:
-        # SQLite FOR UPDATE desteklemiyor; PostgreSQL'de kilitler çalışır
-        is_kalemi = db.query(models.IsKalemi).filter(
-            models.IsKalemi.id == eslestirme.is_kalemi_id
-        ).first()
-    if not is_kalemi:
-        raise HTTPException(status_code=404, detail="İş kalemi bulunamadı.")
-
-    # ── 4. Yüzde sınırla ve tamamlanma bayrağı ──────────────────────────────
-    yuzde = max(0.0, min(100.0, body.yuzde))
-    yuzde_tam = yuzde >= 100.0
-
-    # ── 5. IlerlemeKaydi oluştur ─────────────────────────────────────────────
-    notlar_metin = body.notlar.strip() if body.notlar else "BIM üzerinden güncellendi"
-    ilerleme_kaydi = models.IlerlemeKaydi(
-        is_kalemi_id=is_kalemi.id,
-        raporlayan_id=user.id,
-        yuzde=yuzde,
-        tarih=dt.utcnow().date().isoformat(),
-        notlar=notlar_metin,
-    )
-    db.add(ilerleme_kaydi)
-    db.flush()  # id'yi al, commit etme
-
-    # ── 6. Tamamlandı durumu ─────────────────────────────────────────────────
-    onceki_durum = is_kalemi.durum
-    if yuzde_tam:
-        is_kalemi.durum = "tamamlandi"
-
-    # ── 7. Stok sarf + eşik kontrolü ────────────────────────────────────────
-    # Stok çıkışı yalnızca bu çağrı ile GERÇEKTEN tamamlandı ise tetiklenir.
-    # Daha önce "tamamlandi" olan kalemlerde tekrar çıkış yapılmaz (idempotan).
-    stok_hareketleri: list[dict] = []
-    esik_uyarilari:   list[dict] = []
-
-    if yuzde_tam and is_kalemi.katalog_id and onceki_durum != "tamamlandi":
-        santiye = db.query(models.Santiye).filter(
-            models.Santiye.id == is_kalemi.santiye_id
-        ).first()
-        org_id = santiye.organization_id if santiye else None
-
-        recete = (
-            db.query(models.CsbIsKalemiMalzeme)
-            .filter(models.CsbIsKalemiMalzeme.is_kalemi_katalog_id == is_kalemi.katalog_id)
-            .all()
-        )
-
-        for rec in recete:
-            # malzeme adını doğrudan malzemeler tablosundan al (ORM modeli yok)
-            with database.engine.connect() as conn:
-                malzeme_row = conn.execute(
-                    text("SELECT ad, birim FROM malzemeler WHERE id = :id"),
-                    {"id": rec.malzeme_katalog_id},
-                ).fetchone()
-
-            if not malzeme_row:
-                continue
-
-            malzeme_adi = malzeme_row.ad
-            sarfiyat    = rec.miktar * (is_kalemi.metraj or 0)
-
-            hareket = models.StokHareket(
-                malzeme=malzeme_adi,
-                malzeme_ad=malzeme_adi,
-                miktar=sarfiyat,
-                tip="cikis",
-                kaynak="sarf",
-                kullanici_id=user.id,
-                santiye_id=is_kalemi.santiye_id,
-                organization_id=org_id,
-                notlar=f"BIM sarf — {is_kalemi.tanim[:50]}",
-            )
-            db.add(hareket)
-            stok_hareketleri.append({
-                "malzeme":  malzeme_adi,
-                "miktar":   round(sarfiyat, 4),
-                "birim":    rec.birim,
-                "tip":      "cikis",
-                "kaynak":   "sarf",
-            })
-
-            # Eşik kontrolü: mevcut net stok (bu çıkış hariç) - sarfiyat
-            with database.engine.connect() as conn:
-                esik_row = conn.execute(
-                    text("""
-                        SELECT
-                          COALESCE(SUM(CASE WHEN tip='giris' THEN miktar ELSE 0 END), 0)
-                          - COALESCE(SUM(CASE WHEN tip='cikis' THEN miktar ELSE 0 END), 0)
-                          - :sarfiyat AS net
-                        FROM stok_hareketler
-                        WHERE malzeme = :malzeme AND santiye_id = :santiye_id
-                    """),
-                    {
-                        "malzeme":    malzeme_adi,
-                        "santiye_id": is_kalemi.santiye_id,
-                        "sarfiyat":   sarfiyat,
-                    },
-                ).fetchone()
-
-            kalan = float(esik_row.net or 0) if esik_row else 0.0
-
-            esik = db.query(models.StokEsik).filter(
-                models.StokEsik.malzeme == malzeme_adi,
-                models.StokEsik.santiye_id == is_kalemi.santiye_id,
-            ).first()
-            if esik and kalan < esik.min_miktar:
-                esik_uyarilari.append({
-                    "malzeme":    malzeme_adi,
-                    "kalan":      round(kalan, 3),
-                    "min_miktar": esik.min_miktar,
-                    "acik":       kalan < 0,
-                })
-
-    # ── 8. Aktif taslak hakediş güncelle ────────────────────────────────────
-    hakedis_guncellendi = False
-    hakedis = (
-        db.query(models.Hakedis)
-        .filter(
-            models.Hakedis.santiye_id == is_kalemi.santiye_id,
-            models.Hakedis.durum == "taslak",
-        )
-        .order_by(models.Hakedis.hakedis_no.desc())
-        .first()
-    )
-    if hakedis:
-        hk = db.query(models.HakedisKalemi).filter(
-            models.HakedisKalemi.hakedis_id == hakedis.id,
-            models.HakedisKalemi.is_kalemi_id == is_kalemi.id,
-        ).first()
-        if hk:
-            hk.bu_donem_miktar = round(is_kalemi.metraj * yuzde / 100.0, 4)
-            hk.bu_donem_tutar  = round(hk.bu_donem_miktar * is_kalemi.birim_fiyat)
-            hakedis_guncellendi = True
-
-    db.commit()
-    db.refresh(ilerleme_kaydi)
-
-    logger.info(
-        "BIM ilerleme: model=%d eslestirme=%d is_kalemi=%d yuzde=%.1f stok=%d hakedis=%s user=%s",
-        model_id, eslestirme_id, is_kalemi.id, yuzde,
-        len(stok_hareketleri), hakedis_guncellendi, user.email,
-    )
-
-    return {
-        "ilerleme_id":        ilerleme_kaydi.id,
-        "yuzde":              yuzde,
-        "is_kalemi_id":       is_kalemi.id,
-        "is_kalemi_tanim":    is_kalemi.tanim,
-        "durum_guncellendi":  yuzde_tam,
-        "stok_hareketleri":   stok_hareketleri,
-        "esik_uyarilari":     esik_uyarilari,
-        "hakedis_guncellendi": hakedis_guncellendi,
-    }
+def _validate_mapping(user, model, work_id, db, action="write"):
+    ik = db.query(models.IsKalemi).filter_by(id=work_id, santiye_id=model.santiye_id).first()
+    if not ik:
+        raise HTTPException(422, "İş kalemi modelin şantiyesine ait olmalıdır.")
+    require_hierarchy(user, ik, db, action)
+    return ik

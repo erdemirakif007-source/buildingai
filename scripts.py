@@ -174,7 +174,8 @@ async function globalSantiyeSeciciDoldur() {
         const token = localStorage.getItem('bai_token');
         const r = await fetch('/santiyeler', {headers: {'Authorization': 'Bearer ' + token}});
         const d = await r.json();
-        const santiyeler = d.santiyeler || d || [];
+        if (!r.ok) throw new Error(d.detail || 'Projeler alınamadı');
+        const santiyeler = d.santiyeler || [];
         const mevcut = localStorage.getItem('bai_aktif_santiye') || '';
         select.querySelectorAll('option:not(:first-child)').forEach(o => o.remove());
         santiyeler.forEach(s => {
@@ -187,17 +188,9 @@ async function globalSantiyeSeciciDoldur() {
             if (s.lon) opt.setAttribute('data-lon', s.lon);
             select.appendChild(opt);
         });
-        const kayitli = localStorage.getItem('bai_aktif_santiye');
-        if (kayitli) {
-            select.value = kayitli;
-            window._aktifSantiyeId = kayitli;
-            window._aktifSantiyeSehir = localStorage.getItem('bai_aktif_santiye_sehir') || '';
-            const selected = santiyeler.find(s => Number(s.id) === Number(kayitli));
-            if (selected) {
-                window._kpAktifSantiye = selected;
-                localStorage.setItem('varsayilan_santiye', JSON.stringify(selected));
-            }
-        }
+        const selected = santiyeler.find(s => Number(s.id) === Number(mevcut)) || santiyeler[0];
+        select.value = selected ? String(selected.id) : '';
+        globalSantiyeDegisti();
     } catch(e) { console.log('Şantiye listesi yüklenemedi:', e); }
 }
 
@@ -230,6 +223,7 @@ function globalSantiyeDegisti() {
 
     // Global değişkenlere kaydet
     window._aktifSantiyeId = santiyeId;
+    window._baiProjectEpoch = (window._baiProjectEpoch || 0) + 1;
     window._aktifSantiyeSehir = sehir;
     window._aktifSantiyeLat = lat;
     window._aktifSantiyeLon = lon;
@@ -1954,6 +1948,7 @@ function googleGirisYap() {
             userinfo_failed:'Google bilgileri alınamadı. Tekrar deneyin.',
             no_email:       'Google hesabından e-posta alınamadı.',
             email_not_verified: 'Google e-posta adresi doğrulanmamış.',
+            account_link_required: 'Bu e-posta ile yerel hesabınız var. Şifrenizle giriş yapın; Google hesabı otomatik bağlanmaz.',
         };
         showToast(msgs[oauthError] || 'Google girişi başarısız.', 'error');
         return;
@@ -2035,11 +2030,20 @@ async function kayitOl() {
         const data = await response.json();
 
         if (response.ok) {
-            // Auto-login: token geldi, direkt uygulamaya al
-            localStorage.setItem('bai_token', data.token);
+            // /register returns only the public user profile; obtain a real session.
+            const loginResponse = await fetch('/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password: pass })
+            });
+            const session = await loginResponse.json();
+            if (!loginResponse.ok || !session.token) {
+                throw new Error(session.detail || 'Hesap oluşturuldu; lütfen giriş yapın.');
+            }
+            localStorage.setItem('bai_token', session.token);
             localStorage.setItem('bai_token_expiry', Date.now() + 7 * 24 * 60 * 60 * 1000);
-            applyServerUserProfile(data);
-            aktifKullanici = data;
+            applyServerUserProfile(session);
+            aktifKullanici = session;
 
             msg.innerHTML = '<div class="msg-success">? Hesabınız oluşturuldu!</div>';
             setTimeout(() => {
@@ -2052,10 +2056,13 @@ async function kayitOl() {
                 showToast('Hoş geldiniz! İlk şantiyenizi oluşturabilirsiniz.', 'success');
             }, 800);
         } else {
-            msg.innerHTML = `<div class="msg-error">${data.detail || 'Kayıt başarısız.'}</div>`;
+            const detail = Array.isArray(data.detail)
+                ? data.detail.map(item => item.msg || 'Geçersiz alan').join(' ')
+                : data.detail;
+            msg.textContent = detail || 'Kayıt başarısız.';
         }
     } catch (e) {
-        msg.innerHTML = '<div class="msg-error">Sunucu bağlantı hatası.</div>';
+        msg.textContent = e.message || 'Sunucu bağlantı hatası.';
     }
 
     btn.innerText = 'Hesabı Oluştur ?';
@@ -2092,7 +2099,7 @@ async function sifreResetGuncelle() {
     if (yeniSifre.length < 8) { document.getElementById('resetMsg').innerHTML = '<div class="msg-error">Şifre en az 8 karakter.</div>'; return; }
     if (yeniSifre !== tekrar) { document.getElementById('resetMsg').innerHTML = '<div class="msg-error">Şifreler eşleşmiyor.</div>'; return; }
     try {
-        const res = await fetch('/sifre-guncelle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: kod, yeni_sifre: yeniSifre }) });
+        const res = await fetch('/sifre-guncelle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: kod, email: document.getElementById("forgotEmail").value.trim(), yeni_sifre: yeniSifre }) });
         const data = await res.json();
         if (res.ok) {
             document.getElementById('resetMsg').innerHTML = '<div class="msg-success">? Şifreniz güncellendi!</div>';
@@ -2254,7 +2261,8 @@ async function pdfIndir() {
     }
 }
 
-function cikisYap() {
+async function cikisYap() {
+    await fetch("/logout", { method: "POST" });
     aktifKullanici = null;
     localStorage.removeItem('bai_token');
     localStorage.removeItem('bai_user');
@@ -2353,6 +2361,51 @@ function gunlukRaporAc() {
     if (tarihEl && !tarihEl.value) {
         tarihEl.value = new Date().toISOString().split('T')[0];
     }
+    let manual = document.getElementById('grManualActions');
+    if (!manual) {
+        manual = document.createElement('div');
+        manual.id = 'grManualActions';
+        manual.style.cssText = 'padding:12px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;margin:12px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center';
+        manual.innerHTML = '<button type="button" onclick="gunlukRaporManuelKaydet()" style="background:#0f172a;color:#fff;border:0;border-radius:8px;padding:10px 14px;cursor:pointer">Taslak kaydet</button><button type="button" onclick="gunlukRaporGecmisiYukle()" style="background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:10px 14px;cursor:pointer">Geçmiş raporlar</button><div id="grManualMessage" role="status" style="width:100%;font-size:13px"></div><div id="grManualHistory" style="width:100%;max-height:160px;overflow:auto"></div>';
+        (document.getElementById('grYapilanlar')?.parentElement || modal.firstElementChild).appendChild(manual);
+    }
+    gunlukRaporGecmisiYukle();
+}
+
+async function gunlukRaporManuelKaydet() {
+    const siteId = localStorage.getItem('bai_aktif_santiye');
+    const date = document.getElementById('grTarih')?.value;
+    const done = document.getElementById('grYapilanlar')?.value.trim();
+    const issues = document.getElementById('grSorunlar')?.value.trim();
+    const next = document.getElementById('grYarin')?.value.trim();
+    const message = document.getElementById('grManualMessage');
+    if (!siteId || !date || !done) { message.textContent = 'Proje, tarih ve yapılan işleri tamamlayın.'; return; }
+    const button = document.querySelector('#grManualActions button');
+    button.disabled = true;
+    try {
+        const response = await fetch('/daily-reports/manual', {method:'POST', headers:{'Authorization':'Bearer '+localStorage.getItem('bai_token'),'Content-Type':'application/json'},
+            body:JSON.stringify({santiye_id:Number(siteId), report_date:date, summary:`Yapılan işler: ${done}\nSorunlar: ${issues || 'Belirtilmedi'}\nSonraki işler: ${next || 'Belirtilmedi'}`})});
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Rapor kaydedilemedi.');
+        message.textContent = 'Taslak kaydedildi.';
+        await gunlukRaporGecmisiYukle();
+    } catch (error) { message.textContent = `${error.message} Girdileriniz korunuyor; tekrar deneyin.`; }
+    finally { button.disabled = false; }
+}
+
+async function gunlukRaporGecmisiYukle() {
+    const history = document.getElementById('grManualHistory');
+    const siteId = localStorage.getItem('bai_aktif_santiye');
+    const epoch = window._baiProjectEpoch || 0;
+    if (!history) return;
+    if (!siteId) { history.textContent = 'Raporları görmek için proje seçin.'; return; }
+    try {
+        const response = await fetch(`/daily-reports?santiye_id=${encodeURIComponent(siteId)}`, {headers:{'Authorization':'Bearer '+localStorage.getItem('bai_token')}});
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Rapor listesi alınamadı.');
+        if (epoch !== (window._baiProjectEpoch || 0)) return;
+        history.innerHTML = (data.raporlar || []).length ? data.raporlar.map(r => `<div style="border-top:1px solid #e2e8f0;padding:8px 0"><strong>${_hakedisEscape(r.report_date)}</strong> · ${r.status === 'draft' ? 'Taslak' : _hakedisEscape(r.status)}<div style="white-space:pre-wrap">${_hakedisEscape(r.summary || 'Özet yok')}</div></div>`).join('') : 'Bu projede kayıtlı günlük rapor yok.';
+    } catch (error) { history.textContent = `${error.message} Tekrar deneyin.`; }
 }
 
 function gunlukRaporKapat() {
@@ -2903,7 +2956,33 @@ function navGit(page) {
     }
 }
 
-function routeInitialPath() {
+async function routeInitialPath() {
+    const params = new URLSearchParams(window.location.search);
+    const module = params.get('workspace_module');
+    const allowed = ['hiyerarsi', 'hakedis', 'stok', 'fiyat'];
+    if (allowed.includes(module)) {
+        const requestedSite = Number(params.get('site'));
+        if (Number.isSafeInteger(requestedSite) && requestedSite > 0) {
+            try {
+                const token = localStorage.getItem('bai_token');
+                const response = await fetch('/santiyeler', {headers: {'Authorization': 'Bearer ' + token}});
+                if (!response.ok) throw new Error('Şantiye listesi alınamadı.');
+                const result = await response.json();
+                const site = (result.santiyeler || []).find(item => Number(item.id) === requestedSite);
+                if (!site) throw new Error('Bu şantiyeye erişiminiz yok.');
+                localStorage.setItem('bai_aktif_santiye', String(site.id));
+                localStorage.setItem('bai_aktif_santiye_ad', site.ad || 'Şantiye');
+                window._aktifSantiyeId = String(site.id);
+                window._aktifSantiyeAd = site.ad || 'Şantiye';
+                await globalSantiyeSeciciDoldur();
+            } catch (error) {
+                showToast(error.message, 'error');
+                return;
+            }
+        }
+        navGit(module);
+        return;
+    }
     if (window.location.pathname === '/saha-kayitlari') {
         setTimeout(() => navGit('saha-kayitlari'), 0);
     }
@@ -4479,7 +4558,7 @@ function santiyeKartlarGoster() {
     };
 
     el.innerHTML = santiyeVerisi.map(s => {
-        const cfg = durumCfg[s.durum] || durumCfg.iyi;
+        const cfg = durumCfg[s.durum] || {renk:'#94a3b8', badge:'Değerlendirilmedi', borderTop:'#94a3b8'};
         const pct = Math.min(100, Math.max(0, s.ilerleme || 0));
         // Progress bar rengi
         const barRenk = pct < 31 ? 'linear-gradient(90deg,#ef4444,#f87171)'
@@ -4500,7 +4579,7 @@ function santiyeKartlarGoster() {
             <!-- İlerleme Bar -->
             <div style="margin-bottom:4px; display:flex; justify-content:space-between; align-items:center;">
                 <span style="font-size:10.5px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.5px;">İlerleme</span>
-                <span style="font-size:12px; font-weight:700; color:#fff;">${pct}%</span>
+                <span style="font-size:12px; font-weight:700; color:#fff;" title="${s.ilerleme_yontemi || 'İlerleme için dayanak yok'}">${s.ilerleme == null ? 'Veri yok' : pct + '%'}</span>
             </div>
             <div style="background:rgba(255,255,255,0.06); border-radius:6px; height:5px; margin-bottom:12px; overflow:hidden;">
                 <div class="s-progress-bar" style="background:${barRenk}; height:100%; width:0%; border-radius:6px; transition:width 1.1s cubic-bezier(0.4,0,0.2,1);" data-target="${pct}"></div>
@@ -4508,7 +4587,7 @@ function santiyeKartlarGoster() {
             <!-- Meta bilgi -->
             <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; font-size:11.5px; color:#64748b;">
                 <span style="display:flex; align-items:center; gap:4px;">👷 <b style="color:#94a3b8;">${s.isci_sayisi || 0}</b> kişi</span>
-                ${s.isg_durumu ? `<span style="display:flex; align-items:center; gap:4px;">👷 <span style="color:#94a3b8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100px;">${s.isg_durumu}</span></span>` : ''}
+                <span style="display:flex; align-items:center; gap:4px;">İSG: <span style="color:#94a3b8;">${s.isg_durumu || 'Değerlendirilmedi'}</span></span>
             </div>
             <!-- Footer -->
             <div style="border-top:1px solid rgba(255,255,255,0.05); padding-top:10px; display:flex; gap:8px;">
@@ -4732,7 +4811,9 @@ async function santiyeKaydet() {
                 }
             }
 
-            setTimeout(() => { santiyeFormKapat(); santiyeYukle(); }, 700);
+            if (data.id && !id) localStorage.setItem('bai_aktif_santiye', String(data.id));
+            santiyeFormKapat();
+            await Promise.all([santiyeYukle(), santiyePageYukle(), globalSantiyeSeciciDoldur()]);
         } else {
             const detail = data.detail || 'Hata oluştu.';
             if (detail.startsWith('PLAN_YETERSIZ:')) {
@@ -4916,7 +4997,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // â"€â"€ Google OAuth callback handler â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     const urlParams = new URLSearchParams(window.location.search);
-    const oauthToken = urlParams.get('oauth_token');
+    const fragmentParams = new URLSearchParams(window.location.hash.slice(1));
+    const oauthToken = fragmentParams.get('oauth_token') || urlParams.get('oauth_token');
     const oauthError = urlParams.get('oauth_error');
 
     if (oauthToken) {
@@ -4936,7 +5018,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (header) header.style.display = 'flex';
         // Token ile kullanıcı bilgilerini yükle
         try {
-            const resp = await fetch('/beni-tanı?token=' + oauthToken);
+            const resp = await fetch('/beni-tanı', { headers: { 'Authorization': 'Bearer ' + oauthToken } });
             if (resp.ok) {
                 const userData = await resp.json();
                 aktifKullanici = { ...userData };
@@ -4945,6 +5027,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (rol) {
                     localStorage.setItem('bai_rol', rol);
                     navSidebarGuncelle(rol);
+                    routeInitialPath();
                     if (isContractorRole(rol)) setTimeout(() => loadContractorDashboard(true), 0);
                     else if (isEngineerRole(rol)) setTimeout(() => loadEngineerDashboard(true), 0);
                 } else {
@@ -4971,6 +5054,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             userinfo_failed:'Google bilgileri alınamadı.',
             no_email:       'Google hesabından e-posta alınamadı.',
             email_not_verified: 'Google e-posta adresi doğrulanmamış.',
+            account_link_required: 'Bu e-posta ile yerel hesabınız var. Şifrenizle giriş yapın; Google hesabı otomatik bağlanmaz.',
         };
         showToast(msgs[oauthError] || 'Google girişi başarısız.', 'error');
         window.history.replaceState({}, document.title, '/app');
@@ -4981,7 +5065,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const token = localStorage.getItem('bai_token');
     if (token) {
         try {
-            const res = await fetch(`/beni-tanı?token=${token}`);
+            const res = await fetch('/beni-tanı', { headers: { 'Authorization': 'Bearer ' + token } });
             if (res.ok) {
                 const data = await res.json();
                 aktifKullanici = data;
@@ -4997,6 +5081,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (kayitliRol) {
                     localStorage.setItem('bai_rol', kayitliRol);
                     navSidebarGuncelle(kayitliRol);
+                    routeInitialPath();
                     if (isContractorRole(kayitliRol)) setTimeout(() => loadContractorDashboard(true), 0);
                     else if (isEngineerRole(kayitliRol)) setTimeout(() => loadEngineerDashboard(true), 0);
                     else rolEkraniniGoster();
@@ -7822,7 +7907,7 @@ function davetModalEnsure() {
         <div>
           <div style="font-size:12px;font-weight:700;color:#64748B;margin-bottom:8px;">Şantiye Seçimi</div>
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#334155;margin-bottom:8px;">
-            <input id="davetTumSantiyeler" type="checkbox" checked onchange="davetTumSantiyelerDegisti()"> Tüm şantiyeler
+            <input id="davetTumSantiyeler" type="checkbox" onchange="davetTumSantiyelerDegisti()"> Tüm şantiyeler (ayrıca seçin)
           </label>
           <div id="davetSantiyeListesi" style="display:flex;flex-direction:column;gap:6px;max-height:180px;overflow:auto;border:1px solid #E2E8F0;border-radius:8px;padding:10px;background:#F8FAFC;"></div>
         </div>
@@ -7832,7 +7917,7 @@ function davetModalEnsure() {
 
       <div style="display:flex;justify-content:flex-end;gap:10px;padding:16px 20px;border-top:1px solid #E2E8F0;background:#F8FAFC;">
         <button type="button" onclick="davetModalKapat()" style="background:#FFFFFF;border:1px solid #CBD5E1;color:#334155;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer;">Vazgeç</button>
-        <button id="davetGonderBtn" type="button" onclick="davetGonder()" style="background:#2563EB;border:none;color:white;border-radius:8px;padding:10px 16px;font-weight:800;cursor:pointer;">Davet Gönder</button>
+        <button id="davetGonderBtn" type="button" disabled style="background:#94A3B8;border:none;color:white;border-radius:8px;padding:10px 16px;font-weight:800;cursor:not-allowed;">Davet gönderimi kapalı</button>
       </div>
     </div>`;
   document.body.appendChild(modal);
@@ -7848,18 +7933,18 @@ function davetTabSec(mod) {
   const emailField = document.getElementById('davetEmailField');
   const btn = document.getElementById('davetGonderBtn');
   const msg = document.getElementById('davetMsg');
-  if (msg) { msg.style.display = 'none'; msg.innerHTML = ''; }
+  if (msg) { msg.style.display = 'block'; msg.style.background = '#EFF6FF'; msg.style.color = '#1D4ED8'; msg.textContent = 'Gerçek davet gönderimi bu sürümde etkin değil. Kapsam seçimi yalnız önizlemedir.'; }
 
   if (mod === 'email') {
     emailTab.style.borderBottomColor = '#2563EB'; emailTab.style.color = '#2563EB'; emailTab.style.background = '#F8FAFC';
     linkTab.style.borderBottomColor  = 'transparent'; linkTab.style.color  = '#64748B'; linkTab.style.background = '#FFFFFF';
     emailField.style.display = 'block';
-    btn.textContent = 'Davet Gönder';
+    btn.textContent = 'Davet gönderimi kapalı';
   } else {
     linkTab.style.borderBottomColor  = '#2563EB'; linkTab.style.color  = '#2563EB'; linkTab.style.background = '#F8FAFC';
     emailTab.style.borderBottomColor = 'transparent'; emailTab.style.color = '#64748B'; emailTab.style.background = '#FFFFFF';
     emailField.style.display = 'none';
-    btn.textContent = 'Link Oluştur';
+    btn.textContent = 'Link oluşturma kapalı';
   }
 }
 
@@ -7870,15 +7955,17 @@ function davetModalAc() {
   if (list) {
     list.innerHTML = (_spVerisi || []).length ? _spVerisi.map((s) => `
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#334155;">
-        <input class="davetSantiyeCb" type="checkbox" value="${Number(s.id)}" disabled> ${engineerEscapeHtml(s.ad || 'Şantiye')}
+        <input class="davetSantiyeCb" type="checkbox" value="${Number(s.id)}" ${Number(s.id) === Number(localStorage.getItem('bai_aktif_santiye')) ? 'checked' : ''}> ${engineerEscapeHtml(s.ad || 'Şantiye')}
       </label>
     `).join('') : '<div style="font-size:13px;color:#94A3B8;">Henüz şantiye yok. Boş bırakılırsa tüm şantiyeler kabul edilir.</div>';
   }
   const allCb = document.getElementById('davetTumSantiyeler');
-  if (allCb) allCb.checked = true;
+  if (allCb) allCb.checked = false;
   davetTumSantiyelerDegisti();
   const emailInput = document.getElementById('davetEmail');
   if (emailInput) emailInput.value = '';
+  const notice = document.getElementById('davetMsg');
+  if (notice) { notice.style.display = 'block'; notice.style.background = '#EFF6FF'; notice.style.color = '#1D4ED8'; notice.textContent = 'Gerçek davet gönderimi bu sürümde etkin değil. Kapsam seçimi yalnız önizlemedir.'; }
   modal.style.display = 'flex';
 }
 
@@ -7903,6 +7990,10 @@ async function davetGonder() {
   const btn = document.getElementById('davetGonderBtn');
   const all = document.getElementById('davetTumSantiyeler').checked;
   const santiye_ids = all ? [] : Array.from(document.querySelectorAll('.davetSantiyeCb:checked')).map((cb) => Number(cb.value)).filter(Boolean);
+  if (!all && !santiye_ids.length) {
+    if (msg) { msg.style.display = 'block'; msg.textContent = 'Davet için en az bir proje seçin.'; }
+    return;
+  }
 
   if (_davetMod === 'email' && (!email || !email.includes('@'))) {
     if (msg) { msg.style.display = 'block'; msg.style.background = '#FEF2F2'; msg.style.color = '#DC2626'; msg.textContent = 'Geçerli bir e-posta girin.'; }
@@ -9713,7 +9804,7 @@ function santiyePageRender(liste) {
   set('spKpiDikkat', dikkat); set('spKpiIsci', isci);
 
   const durumCfg = {
-    iyi:    { bg:'#F0FDF4', border:'#86EFAC', txt:'#16A34A', icon:'?',  lbl:'Zamanında'    },
+    iyi:    { bg:'#F0FDF4', border:'#86EFAC', txt:'#16A34A', icon:'',  lbl:'İyi (manuel)'    },
     dikkat: { bg:'#FFF7ED', border:'#FED7AA', txt:'#EA580C', icon:'?',  lbl:'Gecikme Riski'},
     sorun:  { bg:'#FEF2F2', border:'#FECACA', txt:'#DC2626', icon:'âœ•',  lbl:'Kritik Sorun' },
   };
@@ -9752,7 +9843,7 @@ function santiyePageRender(liste) {
   }
 
     function badge(s) {
-    const cfg = durumCfg[s.durum] || durumCfg.iyi;
+    const cfg = durumCfg[s.durum] || {bg:'#F1F5F9', border:'#CBD5E1', txt:'#475569', icon:'', lbl:'Takvim değerlendirmesi yok'};
     return `<span class="sp-badge" style="background:${cfg.bg};color:${cfg.txt};border:1px solid ${cfg.border};">
       <span>${cfg.icon}</span>${cfg.lbl}
     </span>`;
@@ -9761,7 +9852,7 @@ function santiyePageRender(liste) {
   function hiyerarsiButton(s) {
     const id = String(s.id || '').replace(/'/g, "'");
     const ad = String(s.ad || '').replace(/[\r\n]/g, '').replace(/'/g, "'").replace(/"/g, '&quot;');
-    return `<button onclick="event.stopPropagation(); localStorage.setItem('bai_aktif_santiye', '${id}'); localStorage.setItem('bai_aktif_santiye_ad', '${ad}'); navGit('hiyerarsi');"
+    return `<button onclick="event.stopPropagation(); document.getElementById('globalSantiyeSecici').value='${id}'; globalSantiyeDegisti(); navGit('hiyerarsi');"
       style="margin-top:10px;width:100%;display:flex;align-items:center;justify-content:center;gap:6px;background:#EFF6FF;border:1px solid #BFDBFE;color:#2563EB;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">
       Metraj Yönetimi
     </button>`;
@@ -9787,7 +9878,7 @@ function santiyePageRender(liste) {
   const horizEl = document.getElementById('santiyePageHoriz');
   if (horizEl) {
     horizEl.innerHTML = ilk3.map((s, i) => {
-      const pct = Math.min(100, Math.max(0, s.ilerleme || 0));
+      const pct = s.ilerleme == null ? null : Math.min(100, Math.max(0, s.ilerleme));
       return `<div class="sp-kart-horiz" onclick="santiyeEkleModalAc(${JSON.stringify(s).replace(/"/g,'&quot;')})">
         ${imgDiv(s, i, '110px', '90px', '10px')}
         <div style="flex:1;min-width:0;">
@@ -9796,7 +9887,7 @@ function santiyePageRender(liste) {
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
             ${s.konum || '?'}
           </div>
-          ${progressBar(pct)}
+          ${pct == null ? '<div>İlerleme: veri yok</div>' : progressBar(pct)}
           ${badge(s)}
           ${hiyerarsiButton(s)}
         </div>
@@ -9808,7 +9899,7 @@ function santiyePageRender(liste) {
   const gridEl = document.getElementById('santiyePageGrid');
   if (gridEl) {
     gridEl.innerHTML = liste.map((s, i) => {
-      const pct = Math.min(100, Math.max(0, s.ilerleme || 0));
+      const pct = s.ilerleme == null ? null : Math.min(100, Math.max(0, s.ilerleme));
       return `<div class="sp-kart-vert" onclick="santiyeEkleModalAc(${JSON.stringify(s).replace(/"/g,'&quot;')})">
         ${imgDiv(s, i, '100%', '160px', '0')}
         <div style="padding:12px 14px;">
@@ -9817,7 +9908,7 @@ function santiyePageRender(liste) {
             <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
             ${s.konum || '?'}
           </div>
-          ${progressBar(pct)}
+          ${pct == null ? '<div>İlerleme: veri yok</div>' : progressBar(pct)}
           ${badge(s)}
           ${hiyerarsiButton(s)}
         </div>
@@ -13690,28 +13781,23 @@ function _metrajOzetKartlariGoster(data) {
         box.className = 'metraj-ozet-wrap';
         layout.parentNode.insertBefore(box, layout);
     }
-    const ilerleme = Math.max(0, Math.min(100, Number(data.genel_ilerleme || 0)));
-    const sonText = data.son_hakedis_no
-         ? 'Son Hakediş: #' + data.son_hakedis_no + ' — ' + _metrajOzetKurus(data.son_hakedis_tutar)
-        : 'Son Hakediş: Henüz yok';
+    const genelKalemler = (data.kalemler || []).filter(k => !k.mahal_id);
+    const money = Number(data.toplam_tutar || 0).toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ₺';
     box.innerHTML = [
         '<div class="metraj-ozet-grid">',
-        _metrajOzetKartHtml('Toplam Bütçe', _metrajOzetKurus(data.toplam_butce), sonText),
-        _metrajOzetKartHtml('Hakediş Toplamı', _metrajOzetKurus(data.toplam_hakedis), sonText),
-        _metrajOzetKartHtml('Kalan Bütçe', _metrajOzetKurus(data.kalan_butce), sonText),
-        '<div class="metraj-ozet-card">',
-        '  <div class="metraj-ozet-label">Genel İlerleme</div>',
-        '  <div class="metraj-ozet-value">' + _metrajOzetYuzde(ilerleme) + '</div>',
-        '  <div class="metraj-ozet-progress"><span style="width:' + ilerleme + '%"></span></div>',
-        '  <div class="metraj-ozet-sub">' + sonText + '</div>',
-        '</div>',
+        _metrajOzetKartHtml('İş Kalemi', String(data.toplam_kalem), 'Proje ve mahal kayıtları'),
+        _metrajOzetKartHtml('Tamamlanan', String(data.tamamlanan), 'Durumu tamamlandı olan kalem'),
+        _metrajOzetKartHtml('Devam Eden', String(data.devam_eden), 'Durumu devam eden kalem'),
+        _metrajOzetKartHtml('Plan Tutarı', Number(data.toplam_tutar || 0) > 0 ? money : 'Veri yok', 'Fiyatlandırılmış iş kalemi tutarları'),
         '</div>'
-    ].join('');
+    ].join('') + '<div class="metraj-genel-list"><strong>Proje geneli iş kalemleri</strong>' +
+      (genelKalemler.length ? genelKalemler.map(k => '<div>' + engineerEscapeHtml((k.poz_no ? k.poz_no + ' · ' : '') + (k.tanim || k.ad || 'İş kalemi')) + ' · ' + engineerEscapeHtml(k.birim || '') + '</div>').join('') : '<div>Proje genelinde iş kalemi yok; mahal kalemleri konum ağacında gösterilir.</div>') + '</div>';
 }
 
 async function metrajOzetYukle(santiyeId) {
     santiyeId = santiyeId || window._aktifSantiyeId || localStorage.getItem('bai_aktif_santiye') || '';
     if (!santiyeId) return;
+    const epoch = window._baiProjectEpoch || 0;
     const page = document.getElementById('hiyerarsiPage');
     const layout = page ? page.querySelector('.hiy-layout') : null;
     if (!page || !layout) return;
@@ -13725,11 +13811,15 @@ async function metrajOzetYukle(santiyeId) {
     box.innerHTML = '<div class="metraj-ozet-loading">Özet yükleniyor...</div>';
     try {
         const token = localStorage.getItem('bai_token') || '';
-        const r = await fetch('/api/metraj/ozet/' + santiyeId + '?token=' + encodeURIComponent(token), {
-            headers: {'Authorization': 'Bearer ' + token}
-        });
-        if (!r.ok) throw new Error(r.status);
-        _metrajOzetKartlariGoster(await r.json());
+        const [r, workResponse] = await Promise.all([
+            fetch('/api/metraj/ozet/' + santiyeId, {headers: {'Authorization': 'Bearer ' + token}}),
+            fetch('/api/v2/santiye/' + santiyeId + '/is-kalemleri', {headers: {'Authorization': 'Bearer ' + token}})
+        ]);
+        if (!r.ok || !workResponse.ok) throw new Error('Metraj özeti alınamadı.');
+        const data = await r.json();
+        data.kalemler = (await workResponse.json()).kalemler || [];
+        if (epoch !== (window._baiProjectEpoch || 0) || String(santiyeId) !== String(localStorage.getItem('bai_aktif_santiye'))) return;
+        _metrajOzetKartlariGoster(data);
     } catch (e) {
         box.innerHTML = '<div class="metraj-ozet-loading error">Metraj özeti yüklenemedi</div>';
     }
@@ -13758,7 +13848,7 @@ let _hakedisAktifId = null;
 
 function _hakedisKurus(kurus) {
     if (!kurus && kurus !== 0) return '—';
-    const tl = kurus / 100;
+    const tl = Number(kurus); // API amounts are TL; persisted amounts are integer kuruş.
     return tl.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ₺';
 }
 
@@ -13809,6 +13899,12 @@ function hakedisPageAc() {
     }
     const pg = document.getElementById('hakedisPage');
     if (pg) pg.style.display = 'flex';
+    if (window.innerWidth < 640) {
+        const list = document.getElementById('hakedisListPanel');
+        const detail = document.getElementById('hakedisDetayPanel');
+        if (list) list.style.display = 'flex';
+        if (detail) detail.style.display = 'none';
+    }
     const titleEl = document.getElementById('contentTitle');
     if (titleEl) titleEl.textContent = 'Hakediş Yönetimi';
     const santiyeAdEl = document.getElementById('hakedisAktifSantiyeAd');
@@ -13826,7 +13922,8 @@ function hakedisSantiyeDoldur() {
 }
 
 async function hakedisListeYukle() {
-    const santiyeId = window._aktifSantiyeId || localStorage.getItem('bai_aktif_santiye') || '';
+    const santiyeId = localStorage.getItem('bai_aktif_santiye') || '';
+    const epoch = window._baiProjectEpoch || 0;
     const container = document.getElementById('hakedisListeContainer');
     if (!container) return;
     if (!santiyeId) {
@@ -13839,6 +13936,7 @@ async function hakedisListeYukle() {
         const r = await fetch('/api/hakedis/liste/' + santiyeId + '?token=' + token, {headers: {'Authorization': 'Bearer ' + token}});
         if (!r.ok) throw new Error(r.status);
         const d = await r.json();
+        if (epoch !== (window._baiProjectEpoch || 0) || String(santiyeId) !== String(localStorage.getItem('bai_aktif_santiye'))) return;
         const liste = d.hakedisler || [];
         if (!liste.length) {
             container.innerHTML = '<div style="color:#94A3B8;font-size:13px;text-align:center;padding:24px 0;">Henuz hakedis yok</div>';
@@ -13862,6 +13960,8 @@ async function hakedisListeYukle() {
 }
 
 async function hakedisDetayAc(hakedisId) {
+    const siteAtStart = localStorage.getItem('bai_aktif_santiye');
+    const epoch = window._baiProjectEpoch || 0;
     _hakedisAktifId = hakedisId;
     document.querySelectorAll('.hkd-kart').forEach(function(el) {
         el.style.borderColor = el.dataset.hkd == hakedisId ? '#0F172A' : '#E2E8F0';
@@ -13881,7 +13981,31 @@ async function hakedisDetayAc(hakedisId) {
         const r = await fetch('/api/hakedis/detay/' + hakedisId + '?token=' + token, {headers: {'Authorization': 'Bearer ' + token}});
         if (!r.ok) throw new Error(r.status);
         const d = await r.json();
-        panel.innerHTML = _hakedisDetayHTML(d.hakedis, d.kalemler);
+        if (epoch !== (window._baiProjectEpoch || 0) || siteAtStart !== localStorage.getItem('bai_aktif_santiye') || String(d.hakedis.santiye_id) !== String(siteAtStart)) return;
+        const capResponse = await fetch('/api/v2/payments/' + hakedisId + '/capabilities', {headers: {'Authorization': 'Bearer ' + token}});
+        const cap = capResponse.ok ? await capResponse.json() : {can_review:false, can_submit:false, contract_id:null};
+        if (epoch !== (window._baiProjectEpoch || 0)) return;
+        panel.innerHTML = _hakedisDetayHTML(d.hakedis, d.kalemler, cap);
+        if (cap.contract_id) {
+            const proof = await fetch('/api/v2/payments/' + hakedisId + '/allocations', {headers: {'Authorization': 'Bearer ' + token}});
+            if (proof.ok && epoch === (window._baiProjectEpoch || 0)) {
+                const rows = (await proof.json()).allocations || [];
+                const box = document.createElement('section');
+                box.style.cssText = 'background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin-top:16px';
+                box.innerHTML = '<h3 style="margin:0 0 10px">Ölçüm dayanakları</h3>' + rows.map(a => `<p>Ölçüm #${a.measurement.id} · ${_hakedisEscape(a.quantity)} ${_hakedisEscape(a.measurement.unit)} · ${_hakedisEscape(a.amount)} ₺<br>${_hakedisEscape(a.measurement.basis || 'Dayanak belirtilmedi')} · Belge kayıtları: ${_hakedisEscape((a.measurement.evidence_ids || []).join(', ') || 'Yok')}</p>`).join('');
+                panel.appendChild(box);
+            }
+        }
+        const decisionsResponse = await fetch('/api/hakedis/decisions/' + hakedisId, {headers: {'Authorization':'Bearer ' + token}});
+        if (decisionsResponse.ok && epoch === (window._baiProjectEpoch || 0)) {
+            const decisions = (await decisionsResponse.json()).decisions || [];
+            if (decisions.length) {
+                const history = document.createElement('section');
+                history.style.cssText = 'background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin-top:16px';
+                history.innerHTML = '<h3>Karar geçmişi</h3>' + decisions.map(x => `<p>${_hakedisEscape(x.created_at)} · Kullanıcı #${x.actor_id}: ${_hakedisEscape(x.previous_status)} → ${_hakedisEscape(x.new_status)}${x.reason ? ' · ' + _hakedisEscape(x.reason) : ''}</p>`).join('');
+                panel.appendChild(history);
+            }
+        }
         if (window.innerWidth < 640) {
             var btn = document.getElementById('hakedisGeriBtn');
             if (btn) btn.style.display = 'inline-block';
@@ -13891,20 +14015,25 @@ async function hakedisDetayAc(hakedisId) {
     }
 }
 
-function _hakedisDetayHTML(h, kalemler) {
-    var isDraft = h.durum === 'taslak';
+function _hakedisEscape(value) {
+    return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function _hakedisDetayHTML(h, kalemler, cap = {}) {
+    var isDraft = h.durum === 'taslak' && !cap.contract_id;
     var durumBtnHtml = '';
     var pdfBtnHtml = (h.durum === 'onaylandi' || h.durum === 'onay_bekliyor')
          ? '<button onclick="hakedisPdfIndir(' + h.id + ')" style="background:#FFFFFF;color:#0F172A;border:1px solid #CBD5E1;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;">PDF İndir</button>'
         : '';
-    if (h.durum === 'taslak') {
+    if (h.durum === 'taslak' && cap.can_submit) {
         durumBtnHtml = '<button onclick="hakedisDurumGuncelle(' + h.id + ',\'onay_bekliyor\')" style="background:#0F172A;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;">Onaya Gonder</button>';
-    } else if (h.durum === 'onay_bekliyor') {
+    } else if (h.durum === 'onay_bekliyor' && cap.can_review) {
         durumBtnHtml =
-            '<button onclick="hakedisDurumGuncelle(' + h.id + ',\'onaylandi\')" style="background:#16A34A;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;">Onayla</button>' +
-            '<button onclick="hakedisDurumGuncelle(' + h.id + ',\'reddedildi\')" style="background:#DC2626;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;">Reddet</button>' +
-            '<button onclick="hakedisDurumGuncelle(' + h.id + ',\'taslak\')" style="background:#F1F5F9;color:#64748B;border:1px solid #E2E8F0;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;">Geri Cek</button>';
-    } else if (h.durum === 'reddedildi') {
+            '<button onclick="hakedisDurumGuncelle(' + h.id + ',\'onaylandi\')" style="background:#16A34A;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;">İç kayıt onayı</button>' +
+            '<button onclick="hakedisDurumGuncelle(' + h.id + ',\'reddedildi\')" style="background:#DC2626;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;">Geri gönder</button>';
+    } else if (h.durum === 'onay_bekliyor' && cap.can_submit) {
+        durumBtnHtml = '<button onclick="hakedisDurumGuncelle(' + h.id + ',\'taslak\')">Geri çek</button>';
+    } else if (h.durum === 'reddedildi' && cap.can_submit) {
         durumBtnHtml = '<button onclick="hakedisDurumGuncelle(' + h.id + ',\'taslak\')" style="background:#F1F5F9;color:#64748B;border:1px solid #E2E8F0;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;">Taslaga Cek</button>';
     } else if (h.durum === 'onaylandi') {
         durumBtnHtml = '<span style="color:#16A34A;font-size:13px;font-weight:700;">Onaylandi</span>';
@@ -13912,9 +14041,9 @@ function _hakedisDetayHTML(h, kalemler) {
 
     var satirlar = kalemler.map(function(k) {
         return '<tr data-kalem-id="' + k.id + '" style="border-bottom:1px solid #F1F5F9;">' +
-            '<td style="padding:8px 10px;font-size:12px;color:#64748B;white-space:nowrap;">' + (k.poz_no || '-') + '</td>' +
-            '<td style="padding:8px 10px;font-size:12px;color:#0F172A;min-width:140px;">' + k.tanim + '</td>' +
-            '<td style="padding:8px 10px;font-size:12px;color:#64748B;text-align:center;">' + k.birim + '</td>' +
+            '<td style="padding:8px 10px;font-size:12px;color:#64748B;white-space:nowrap;">' + _hakedisEscape(k.poz_no || '-') + '</td>' +
+            '<td style="padding:8px 10px;font-size:12px;color:#0F172A;min-width:140px;">' + _hakedisEscape(k.tanim) + '</td>' +
+            '<td style="padding:8px 10px;font-size:12px;color:#64748B;text-align:center;">' + _hakedisEscape(k.birim) + '</td>' +
             '<td style="padding:8px 10px;font-size:12px;color:#0F172A;text-align:right;">' + (k.sozlesme_metraj||0).toLocaleString('tr-TR',{maximumFractionDigits:3}) + '</td>' +
             '<td style="padding:8px 10px;font-size:12px;color:#64748B;text-align:right;">' + (k.onceki_toplam_miktar||0).toLocaleString('tr-TR',{maximumFractionDigits:3}) + '</td>' +
             '<td style="padding:8px 10px;text-align:right;" class="hkd-bu-donem-cell">' +
@@ -14035,16 +14164,21 @@ function _hakedisFooterGuncelle() {
 function _hakedisKurusParse(txt) {
     if (!txt || txt === '-') return 0;
     var cleaned = txt.replace(/[^\d,]/g, '').replace(',', '.');
-    return Math.round(parseFloat(cleaned) * 100) || 0;
+    return parseFloat(cleaned) || 0;
 }
 
 async function hakedisDurumGuncelle(hakedisId, yeniDurum) {
     var token = localStorage.getItem('bai_token');
+    var reason = '';
+    if (yeniDurum === 'reddedildi') {
+        reason = window.prompt('Geri gönderme gerekçesi')?.trim() || '';
+        if (!reason) return;
+    }
     try {
         var r = await fetch('/api/hakedis/durum-guncelle/' + hakedisId, {
             method: 'PATCH',
             headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
-            body: JSON.stringify({durum: yeniDurum})
+            body: JSON.stringify({durum: yeniDurum, reason})
         });
         if (!r.ok) { var e = await r.json(); alert(e.detail || 'Durum guncellenemedi'); return; }
         await hakedisDetayAc(hakedisId);

@@ -18,16 +18,26 @@ NEW_HTML_TEMPLATE = f"""
     <link rel="shortcut icon" type="image/png" href="/static/buildingai-logo.svg">
     <title>BuildingAI</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="/static/wave2.css?v=wave2-4">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <link rel="stylesheet" href="/static/hiyerarsi.css">
-    <script src="/static/hiyerarsi.js" defer></script>
+    <script src="/static/hiyerarsi.js?v=wave2-4" defer></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     {CSS_STYLE}
+    <script>
+      if (new URLSearchParams(location.search).has('workspace_module')) document.documentElement.classList.add('workspace-embedded');
+    </script>
+    <style>
+      .workspace-embedded #sidebar {{ display: none !important; }}
+      .workspace-embedded #app, .workspace-embedded #bodyRow, .workspace-embedded #mainArea {{ width: 100% !important; height: 100vh !important; }}
+      .workspace-embedded #contentHeader {{ display: none !important; }}
+      .workspace-embedded #mainArea {{ min-width: 0 !important; }}
+    </style>
     <style>
         /* ---- PROFILE ---- */
         .profile-header {{ display: flex; align-items: center; gap: 20px; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.08); }}
@@ -167,41 +177,27 @@ NEW_HTML_TEMPLATE = f"""
     </a>
 
     <h2 class="auth-brand-h">Türkiye'nin<br>İnşaat Platformu</h2>
-    <p class="auth-brand-sub">Saha mühendisleri ve müteahhitler için yapay zeka destekli tam kontrol. TBDY 2018 uyumlu, 7/24 aktif.</p>
+    <p class="auth-brand-sub">Saha kayıtları, inceleme ve iş ilerlemesini aynı şantiye bağlamında takip edin.</p>
 
     <div class="auth-brand-feats">
       <div class="auth-brand-feat">
         <div class="auth-feat-check">✓</div>
-        <div class="auth-feat-text"><strong>AI Kamera Analizi</strong> — Çatlak, donatı ve kalıp tespiti</div>
+        <div class="auth-feat-text"><strong>Kamera bulguları</strong> — İnceleme bekleyen aday tespitler</div>
       </div>
       <div class="auth-brand-feat">
         <div class="auth-feat-check">✓</div>
-        <div class="auth-feat-text"><strong>TBDY 2018 Uyumlu</strong> — Otomatik hesap & raporlama</div>
+        <div class="auth-feat-text"><strong>Teknik hesaplar</strong> — Kaynağı ve kapsamı incelenebilen sonuçlar</div>
       </div>
       <div class="auth-brand-feat">
         <div class="auth-feat-check">✓</div>
-        <div class="auth-feat-text"><strong>Deprem Risk Analizi</strong> — AFAD verisiyle anlık sismik değerlendirme</div>
+        <div class="auth-feat-text"><strong>Saha kayıtları</strong> — Şantiye ve iş kalemiyle ilişkili kanıtlar</div>
       </div>
       <div class="auth-brand-feat">
         <div class="auth-feat-check">✓</div>
-        <div class="auth-feat-text"><strong>Maliyet & Stok Takibi</strong> — Canlı piyasa fiyatları</div>
+        <div class="auth-feat-text"><strong>Maliyet ve stok</strong> — Miktar ve kayıt geçmişi</div>
       </div>
     </div>
 
-    <div class="auth-brand-mini-stats">
-      <div>
-        <div class="auth-mini-stat-val amber">500+</div>
-        <div class="auth-mini-stat-lbl">Aktif Mühendis</div>
-      </div>
-      <div>
-        <div class="auth-mini-stat-val">12K+</div>
-        <div class="auth-mini-stat-lbl">AI Analizi</div>
-      </div>
-      <div>
-        <div class="auth-mini-stat-val">%98</div>
-        <div class="auth-mini-stat-lbl">TBDY Uyumu</div>
-      </div>
-    </div>
   </div>
 
   <!-- ── RIGHT: Form Panel ── -->
@@ -529,6 +525,10 @@ NEW_HTML_TEMPLATE = f"""
             <div class="nav-item active" id="nav-home" onclick="navGit('home')" style="margin:2px 8px;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
               Ana Panel
+            </div>
+            <div class="nav-item" onclick="window.location.href='/workspace'" style="margin:2px 8px;" role="link" tabindex="0" onkeydown="if(event.key==='Enter') window.location.href='/workspace'">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 9v12"/></svg>
+              Yeni Çalışma Alanı (Önizleme)
             </div>
             <!-- Şantiyelerim -->
             <div class="nav-item" id="nav-santiye" onclick="navGit('santiye')" style="margin:2px 8px;">
@@ -3573,7 +3573,9 @@ NEW_HTML_TEMPLATE = f"""
 <!-- 💳 ÖDEME MODALI -->
 <div id="odemeModal" style="display:none;"></div>
 
-{JS_SCRIPT}
+<script src="/app.js?v=wave2-4"></script>
+<script src="/static/wave2.js?v=wave2-4" defer></script>
+<script src="/static/wave2_stock.js?v=wave2-4" defer></script>
 <script src="/static/manual_evidence.js"></script>
 <script src="/static/manual_archive.js"></script>
 <script>

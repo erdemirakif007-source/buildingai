@@ -1,0 +1,41 @@
+{
+  "compilerOptions": {
+    // Hedef JavaScript sürümü — modern tarayıcılara uygun (ES2020)
+    "target": "ES2020",
+
+    // Kullanılacak lib kütüphaneleri (DOM API + ES2020 tipleri)
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+
+    // TypeScript modüllerini nasıl çözeceği — Vite için 'bundler' önerilir
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+
+    // Katı tip kontrolü açık — tür hatalarını erken yakalar
+    "strict": true,
+
+    // Kullanılmayan yerel değişkenler hata versin
+    "noUnusedLocals": true,
+
+    // Kullanılmayan parametreler hata versin
+    "noUnusedParameters": true,
+
+    // switch-case bloklarında fall-through olmasın
+    "noFallthroughCasesInSwitch": true,
+
+    // .ts kaynak haritaları
+    "sourceMap": true,
+
+    // Belirtilen çıktı klasörü yok (Vite bunu yönetir)
+    "skipLibCheck": true,
+
+    // İzole modül: her dosya bağımsız transpile edilebilir (Vite için gerekli)
+    "isolatedModules": true,
+
+    // JSON import desteği
+    "resolveJsonModule": true,
+
+    // ES modülü ile CommonJS birlikte kullanım uyumu
+    "esModuleInterop": true
+  },
+  "include": ["src"]
+}

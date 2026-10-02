@@ -34,4 +34,11 @@ static/uploads/
 _tmp_*.js
 *_tmp/
 tmp*/
-*.db.*
+*.db.*buildingai.log
+*.db
+*.db-shm
+*.db-wal
+uploads/
+static/faturalar/
+static/avatars/
+*.js.map

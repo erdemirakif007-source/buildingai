@@ -34,8 +34,7 @@ function _hiyHeaders() {
 }
 
 async function _hiyGet(url) {
-  var sep = url.indexOf('?') >= 0 ? '&' : '?';
-  var r = await fetch(url + sep + 'token=' + encodeURIComponent(_hiyToken()));
+  var r = await fetch(url, { headers: { 'Authorization': 'Bearer ' + _hiyToken() } });
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
@@ -262,7 +261,7 @@ function _hiyAgacRender(veri) {
   if (!kap) return;
 
   if (!veri.binalar || veri.binalar.length === 0) {
-    kap.innerHTML = '<div class="hiy-empty" style="padding:30px 14px;"><div class="hiy-empty-title" style="font-size:13px;">Henuz bina yok</div><div class="hiy-empty-desc" style="font-size:11px;">Yukaridaki "Bina Ekle" butonunu kullanin.</div></div>';
+    kap.innerHTML = '<div class="hiy-empty" style="padding:30px 14px;"><div class="hiy-empty-title" style="font-size:13px;">Bu projede bina yok</div><div class="hiy-empty-desc" style="font-size:11px;">Bina dışı işlerde bina eklemek gerekmez. Proje geneli iş kalemleri üstte görünür.</div></div>';
     return;
   }
 
@@ -1642,7 +1641,7 @@ async function hiyBimGoruntule() {
     if (!ov || !iframe) return;
     if (baslik) baslik.textContent = model.orijinal_dosya_adi || '3D BIM Modeli';
     if (alt) alt.textContent = _hiy.santiyeAd + (modeller.length > 1 ? ' — ' + modeller.length + ' model mevcut' : '');
-    iframe.src = '/bim-viewer?model_id=' + model.id + '&santiye_id=' + _hiy.santiyeId + '&token=' + encodeURIComponent(_hiyToken());
+    iframe.src = '/bim-viewer/?model_id=' + model.id + '&santiye_id=' + _hiy.santiyeId;
     ov.style.display = 'flex';
     document.body.style.overflow = 'hidden';
   } catch (e) {
@@ -1700,7 +1699,7 @@ function _hiyCepheBimKutuHtml(katlar, model) {
       +'</div>'
       // iframe
       +'<div style="flex:1;position:relative;overflow:hidden;min-height:0;">'
-      +'<iframe src="/bim-viewer?model_id='+model.id+'&santiye_id='+(_hiy.santiyeId||0)+'&compact=true&token='+encodeURIComponent(_hiyToken())+'"'
+      +'<iframe src="/bim-viewer/?model_id='+model.id+'&santiye_id='+(_hiy.santiyeId||0)+'&compact=true"'
       +' id="hiyCepheBimIframe" title="BIM 3D önizleme" loading="lazy"'
       +' style="width:100%;height:100%;border:none;background:#1E293B;display:block;"></iframe>'
       +'</div>'

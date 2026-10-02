@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BuildingAI Logo - Dark/Light Theme</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@800;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  /* ========== LOGO STYLES ========== */
+  .bai-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+  }
+
+  .bai-logo-icon {
+    height: 48px;
+    width: auto;
+  }
+
+  .bai-logo-text {
+    font-family: 'Inter', sans-serif;
+    font-weight: 800;
+    font-size: 32px;
+    letter-spacing: -0.5px;
+    line-height: 1;
+  }
+
+  .bai-logo-text .building {
+    color: #1a1a1a;
+    transition: color 0.3s ease;
+  }
+
+  .bai-logo-text .ai {
+    color: #e6743b;
+  }
+
+  /* Dark theme override */
+  [data-theme="dark"] .bai-logo-text .building {
+    color: #ffffff;
+  }
+
+  /* OR use system preference */
+  @media (prefers-color-scheme: dark) {
+    .bai-logo-text .building {
+      color: #ffffff;
+    }
+  }
+  /* If data-theme is explicitly "light", override media query */
+  [data-theme="light"] .bai-logo-text .building {
+    color: #1a1a1a;
+  }
+
+  /* ========== DEMO PAGE ========== */
+  body {
+    font-family: 'Inter', sans-serif;
+    transition: background 0.3s ease, color 0.3s ease;
+  }
+
+  [data-theme="light"] { background: #f5f5f5; color: #1a1a1a; }
+  [data-theme="dark"] { background: #111111; color: #ffffff; }
+
+  .demo-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 60px 32px;
+  }
+
+  .demo-section {
+    margin-bottom: 48px;
+    padding: 40px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  [data-theme="light"] .demo-section { background: #ffffff; }
+  [data-theme="dark"] .demo-section { background: #1a1a1a; }
+
+  .toggle-btn {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  [data-theme="light"] .toggle-btn { background: #1a1a1a; color: #fff; }
+  [data-theme="dark"] .toggle-btn { background: #ffffff; color: #1a1a1a; }
+
+  .label {
+    text-align: center;
+    font-size: 13px;
+    opacity: 0.5;
+    margin-bottom: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .sizes { display: flex; flex-direction: column; gap: 32px; align-items: center; }
+
+  .bai-logo.small .bai-logo-icon { height: 28px; }
+  .bai-logo.small .bai-logo-text { font-size: 20px; }
+
+  .bai-logo.large .bai-logo-icon { height: 64px; }
+  .bai-logo.large .bai-logo-text { font-size: 44px; }
+</style>
+</head>
+<body data-theme="light">
+
+<button class="toggle-btn" onclick="toggleTheme()">Temayı değiştir</button>
+
+<div class="demo-container">
+  <p class="label">Logo - farklı boyutlar</p>
+  <div class="demo-section">
+    <div class="sizes">
+
+      <!-- SMALL -->
+      <a href="#" class="bai-logo small">
+        <img src="buildingai_logo_clean.svg" alt="BuildingAI" class="bai-logo-icon">
+        <span class="bai-logo-text"><span class="building">Building</span><span class="ai">AI</span></span>
+      </a>
+
+      <!-- NORMAL -->
+      <a href="#" class="bai-logo">
+        <img src="buildingai_logo_clean.svg" alt="BuildingAI" class="bai-logo-icon">
+        <span class="bai-logo-text"><span class="building">Building</span><span class="ai">AI</span></span>
+      </a>
+
+      <!-- LARGE -->
+      <a href="#" class="bai-logo large">
+        <img src="buildingai_logo_clean.svg" alt="BuildingAI" class="bai-logo-icon">
+        <span class="bai-logo-text"><span class="building">Building</span><span class="ai">AI</span></span>
+      </a>
+
+    </div>
+  </div>
+
+  <p class="label">Sadece yazı (ikonsuz)</p>
+  <div class="demo-section">
+    <span class="bai-logo-text" style="font-size:40px"><span class="building">Building</span><span class="ai">AI</span></span>
+  </div>
+</div>
+
+<script>
+function toggleTheme() {
+  const body = document.body;
+  const current = body.getAttribute('data-theme');
+  body.setAttribute('data-theme', current === 'light' ? 'dark' : 'light');
+}
+</script>
+</body>
+</html>

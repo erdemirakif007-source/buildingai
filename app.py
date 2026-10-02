@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from sqlalchemy import inspect
+from sqlalchemy import inspect, or_
 from sqlalchemy.orm import Session
 from google import genai
 from dotenv import load_dotenv
@@ -50,11 +50,17 @@ def _get_redirect_uri(request: Request) -> str:
     - localhost (her port) → http://127.0.0.1:8000/auth/callback/
     """
     host = request.headers.get("host", "")
-    if PRODUCTION_DOMAIN in host:
+    if request.url.hostname == PRODUCTION_DOMAIN:
         return f"https://{PRODUCTION_DOMAIN}/auth/callback/"
     return LOCALHOST_CALLBACK
 import models, schemas, auth, database
+from access_control import allowed_site_ids, require_site, require_record, require_hierarchy, scope_query, is_org_owner, normalize_role
+from financial_values import number, kurus, amount
+from decimal import Decimal
+import secrets
 import bim_api
+import hakedis_api
+import wave2_api
 from models import Santiye, ResetToken, LoginAttempt
 VERIFICATION_STATUSES = {"DRAFT", "VERIFIED", "REJECTED"}
 WORKFLOW_STATUSES = {"NEW", "ACKNOWLEDGED", "CLOSED"}
@@ -420,26 +426,28 @@ def _sync_review_source_state(source_type: str, row, review_status: str, note: s
 
 def _review_source_row_or_404(user: models.User, source_type: str, source_id: int, db: Session):
     if source_type == "evidence":
-        return _manual_record_or_404(source_id, user.organization_id, db)
+        return _manual_record_or_404(source_id, user, db)
     if source_type == "alert":
-        row = db.query(models.MalzemeUyari).filter(models.MalzemeUyari.id == source_id).first()
+        row = scope_query(db, user, models.MalzemeUyari).filter(models.MalzemeUyari.id == source_id).first()
         if not row:
             raise HTTPException(status_code=404, detail="Uyarı kaydı bulunamadı.")
+        require_record(user, row, db)
         return row
     if source_type == "report":
-        row = db.query(models.DailyReport).filter(
+        row = scope_query(db, user, models.DailyReport).filter(
             models.DailyReport.id == source_id,
             models.DailyReport.organization_id == user.organization_id,
         ).first()
         if not row:
             raise HTTPException(status_code=404, detail="Rapor kaydı bulunamadı.")
+        require_record(user, row, db)
         return row
     raise HTTPException(status_code=400, detail="Desteklenmeyen review kaynağı.")
 
 
 def _build_review_datasets(user: models.User, db: Session) -> dict:
     _allowed_sites = get_allowed_santiye_ids(user, db)
-    _site_q = db.query(models.Santiye).filter(
+    _site_q = scope_query(db, user, models.Santiye).filter(
         models.Santiye.organization_id == user.organization_id,
         models.Santiye.aktif == True,
     )
@@ -456,7 +464,7 @@ def _build_review_datasets(user: models.User, db: Session) -> dict:
     }
     created_any = False
 
-    _evidence_q = db.query(models.ArchiveRecord).filter(
+    _evidence_q = scope_query(db, user, models.ArchiveRecord).filter(
         models.ArchiveRecord.organization_id == user.organization_id,
         models.ArchiveRecord.source_type == "manual",
         models.ArchiveRecord.deleted_at.is_(None),
@@ -466,11 +474,11 @@ def _build_review_datasets(user: models.User, db: Session) -> dict:
         _evidence_q = _evidence_q.filter(models.ArchiveRecord.santiye_id.in_(_allowed_sites))
     evidence_rows = _evidence_q.order_by(models.ArchiveRecord.captured_at.desc(), models.ArchiveRecord.uploaded_at.desc()).limit(60).all()
 
-    alert_rows = db.query(models.MalzemeUyari).filter(
+    alert_rows = scope_query(db, user, models.MalzemeUyari).filter(
         (models.MalzemeUyari.organization_id == user.organization_id) | (models.MalzemeUyari.organization_id.is_(None))
     ).order_by(models.MalzemeUyari.created_at.desc()).limit(40).all()
 
-    _report_q = db.query(models.DailyReport).filter(
+    _report_q = scope_query(db, user, models.DailyReport).filter(
         models.DailyReport.organization_id == user.organization_id,
     )
     if _allowed_sites is not None:
@@ -561,6 +569,7 @@ def _build_review_datasets(user: models.User, db: Session) -> dict:
 
 
 from interface import NEW_HTML_TEMPLATE
+from scripts import JS_SCRIPT
 from admin_panel import ADMIN_HTML
 from weather import hava_getir
 from pdf_rapor import rapor_olustur
@@ -570,13 +579,14 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s | %(levelname)s | %(message)s',
     handlers=[
-        logging.FileHandler('buildingai.log', encoding='utf-8'),
+        logging.FileHandler(os.getenv("BUILDINGAI_LOG_PATH", "buildingai.log"), encoding="utf-8"),
         logging.StreamHandler()
     ]
 )
 logger = logging.getLogger("buildingai")
 
-models.Base.metadata.create_all(bind=database.engine)
+if os.getenv("BUILDINGAI_SCHEMA_SYNC") == "1":
+    models.Base.metadata.create_all(bind=database.engine)
 
 AUTH_SCHEMA_COLUMNS = {
     "auth_provider": "TEXT NOT NULL DEFAULT 'local'",
@@ -601,7 +611,8 @@ def _ensure_auth_schema() -> None:
         raise
 
 
-_ensure_auth_schema()
+if os.getenv("BUILDINGAI_SCHEMA_SYNC") == "1":
+    _ensure_auth_schema()
 
 ORG_SCHEMA_TABLES = {
     "organizations": """
@@ -697,7 +708,8 @@ def _ensure_org_schema() -> None:
         raise
 
 
-_ensure_org_schema()
+if os.getenv("BUILDINGAI_SCHEMA_SYNC") == "1":
+    _ensure_org_schema()
 
 
 def _user_profile_payload(user: models.User) -> dict:
@@ -707,7 +719,7 @@ def _user_profile_payload(user: models.User) -> dict:
         "user_id": user.id,
         "full_name": user.full_name or "",
         "email": user.email,
-        "role": getattr(user, "role", "santi_sefi") or "santi_sefi",
+        "role": normalize_role(getattr(user, "role", "santi_sefi") or "santi_sefi"),
         "plan": getattr(user, "plan", "free"),
         "is_admin": bool(getattr(user, "is_admin", False)),
         "organization_id": getattr(user, "organization_id", None),
@@ -760,6 +772,9 @@ async def _haftalik_scraper_calistir():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if os.getenv("BUILDINGAI_SCHEDULER", "1") == "0":
+        yield
+        return
     try:
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
         scheduler = AsyncIOScheduler(timezone="UTC")
@@ -781,9 +796,44 @@ async def lifespan(app: FastAPI):
     if scheduler and scheduler.running:
         scheduler.shutdown(wait=False)
 
+class ProtectedStaticFiles(StaticFiles):
+    async def get_response(self, path, scope):
+        normalized = path.replace("\\", "/").lstrip("/")
+        if normalized.startswith(("uploads/", "faturalar/")):
+            request = Request(scope)
+            with database.SessionLocal() as db:
+                user = kullanici_dogrula(_request_token(request) or request.cookies.get("media_session", ""), db)
+                url = "/static/" + normalized
+                record = db.query(models.ArchiveRecord).filter(
+                    or_(models.ArchiveRecord.file_url == url, models.ArchiveRecord.thumbnail_url == url),
+                    models.ArchiveRecord.deleted_at.is_(None),
+                    models.ArchiveRecord.status != "deleted",
+                ).first()
+                require_record(user, record, db)
+            response = await super().get_response(path, scope)
+            response.headers["Cache-Control"] = "private, no-store"
+            return response
+        return await super().get_response(path, scope)
+
+
+def _set_media_cookie(response, token, request):
+    response.set_cookie("media_session", token, httponly=True,
+                        secure=request.url.scheme == "https", samesite="strict",
+                        max_age=auth.TOKEN_EXPIRE_DAYS * 86400, path="/static")
+
+
 app = FastAPI(dependencies=[Depends(global_rate_limiter)], lifespan=lifespan)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", ProtectedStaticFiles(directory="static"), name="static")
 app.include_router(bim_api.bim_router)
+app.include_router(hakedis_api.router)
+app.include_router(wave2_api.router)
+
+
+@app.post("/logout")
+def logout():
+    response = JSONResponse({"ok": True})
+    response.delete_cookie("media_session", path="/static")
+    return response
 
 import signal, sys
 def handle_shutdown(signum, frame):
@@ -807,6 +857,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:8000",
         "http://127.0.0.1:8000",
+        "https://buildingai.com.tr",
         "https://buildingai.tr",
         "https://buildingaipro.com"
     ],
@@ -820,8 +871,10 @@ app.add_middleware(
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
-    # bim-viewer sayfası kendi içinden iframe olarak gömülüyor — SAMEORIGIN izni gerekli
-    if request.url.path.startswith("/bim-viewer"):
+    # BIM ve yeni çalışma alanındaki mevcut modüller yalnızca aynı origin'den gömülebilir.
+    workspace_module = request.query_params.get("workspace_module")
+    embedded_app = request.url.path == "/app" and workspace_module in {"hiyerarsi", "hakedis", "stok", "fiyat"}
+    if request.url.path.startswith("/bim-viewer") or embedded_app:
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
     else:
         response.headers["X-Frame-Options"] = "DENY"
@@ -832,14 +885,14 @@ async def add_security_headers(request: Request, call_next):
 # Global Exception Handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Unhandled error on {request.url}: {str(exc)}")
+    logger.error("Unhandled error on %s (%s)", request.url.path, type(exc).__name__)
     return JSONResponse(
         status_code=500,
         content={"detail": "Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin."}
     )
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-ai_client = genai.Client(api_key=GEMINI_API_KEY)
+ai_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 def _gemini_hata_yakala(e: Exception) -> HTTPException:
     """Google Gemini API hatalarını anlamlı HTTP exception'a çevirir."""
@@ -888,7 +941,7 @@ PLAN_LIMITS = {
 }
 
 def get_user_plan(user) -> str:
-    if user.email == ADMIN_EMAIL:
+    if user.is_admin:
         return "admin"
     return getattr(user, 'plan', 'free') or 'free'
 
@@ -947,6 +1000,15 @@ async def chat_hub(request: Request, body: dict = Body(...), db: Session = Depen
     except Exception:
         kullanici = None  # unauthenticated — still allow (global rate limiter applies)
 
+    site_id = body.get("santiye_id")
+    if site_id:
+        if kullanici is None:
+            raise HTTPException(status_code=401, detail="Şantiye bazlı chat için giriş yapmalısınız.")
+        require_site(kullanici, int(site_id), db)
+    if kullanici is None:
+        session_id = ("anon", None, None, session_id)
+    else:
+        session_id = (kullanici.id, kullanici.organization_id, site_id, session_id)
     # Contextual memory
     if session_id not in chat_sessions:
         chat_sessions[session_id] = []
@@ -954,14 +1016,14 @@ async def chat_hub(request: Request, body: dict = Body(...), db: Session = Depen
     gecmis.append({"rol": "user", "icerik": soru})
 
     # Generate response via Şantiye Brain
-    result = await santiye_agent.generate_response(soru, gecmis, ai_client=ai_client)
+    result = await santiye_agent.generate_response(soru, gecmis, ai_client=ai_client, santiye_id=site_id)
 
     # Store AI reply in memory (keep last 20 turns)
     gecmis.append({"rol": "ai", "icerik": result["cevap"]})
     if len(gecmis) > 20:
         chat_sessions[session_id] = gecmis[-20:]
 
-    logger.info(f"[CHAT HUB] session={session_id} kaynak={result['kaynak']} mesaj={len(gecmis)}")
+    logger.info("Chat response completed")
 
     return {
         "cevap":        result["cevap"],
@@ -1025,7 +1087,11 @@ Stok komutu değilse normal yanıt ver."""
 
 @app.post("/cevir")
 @limiter.limit("60/minute")
-async def translate_to_english(request: Request, payload: dict = Body(...)):
+async def translate_to_english(request: Request, payload: dict = Body(...), db: Session = Depends(database.get_db)):
+    user = kullanici_dogrula(payload.get("token", "") or _request_token(request), db)
+    if not kullanim_kontrol(user, db, 'sor', 10, 'gun'):
+        raise HTTPException(status_code=429, detail="Günlük AI limitinize ulaştınız.")
+    kullanim_kaydet(user.id, 'sor', db)
     metin = payload.get("metin")
     prompt = f"Aşağıdaki inşaat teknik analizini profesyonel IELTS 7.5 seviyesinde İngilizce teknik rapora çevir:\n\n{metin}"
     try:
@@ -1112,13 +1178,20 @@ def save_report(request: Request, payload: dict = Body(...), db: Session = Depen
 @app.get("/rapor_listesi")
 @limiter.limit("60/minute")
 def list_reports(request: Request, db: Session = Depends(database.get_db)):
-    reports = db.query(models.Report).all()
+    user = kullanici_dogrula(_request_token(request), db)
+    reports = scope_query(db, user, models.Report).filter(
+        models.Report.organization_id == user.organization_id
+    ).order_by(models.Report.created_at.desc()).all()
     return {"raporlar": [r.created_at.strftime("%Y-%m-%d %H:%M") for r in reports]}
 
 @app.get("/rapor_getir")
 @limiter.limit("60/minute")
-def get_report(request: Request, tarih: str, db: Session = Depends(database.get_db)):
-    report = db.query(models.Report).first()
+def get_report(request: Request, id: int, db: Session = Depends(database.get_db)):
+    user = kullanici_dogrula(_request_token(request), db)
+    report = scope_query(db, user, models.Report).filter(
+        models.Report.id == id,
+        models.Report.organization_id == user.organization_id,
+    ).first()
     return {"icerik": report.content if report else "Rapor bulunamadı."}
 
 # --- 📄 PDF İNDİR ---
@@ -1151,7 +1224,7 @@ async def pdf_indir(request: Request, payload: dict = Body(...)):
         content=pdf_bytes,
         media_type="application/pdf",
 
-        headers={"Content-Disposition": f"attachment; filename={dosya_adi}"}
+        headers={"Content-Disposition": _content_disposition(dosya_adi)}
     )
 
 # --- 🔐 ÜYELİK SİSTEMİ ---
@@ -1165,7 +1238,7 @@ def register_user(request: Request, user: schemas.UserCreate, db: Session = Depe
         email=user.email,
         hashed_password=auth.get_password_hash(user.password),
         full_name=user.full_name,
-        plan=user.plan if user.plan in ('free', 'pro', 'max') else 'free',
+        plan="free",
         auth_provider="local",
         email_verified=False,
     )
@@ -1202,7 +1275,7 @@ def login(request: Request, body: dict = Body(...), db: Session = Depends(databa
             detail="Bu hesap Google ile oluşturulmuş. Google ile giriş yapabilir veya hesabınıza giriş yaptıktan sonra Ayarlar > Güvenlik bölümünden BuildingAI şifresi belirleyebilirsiniz."
         )
 
-    if not user or not auth.verify_password((password or "")[:72], user.hashed_password):
+    if not user or not auth.verify_password((password or ""), user.hashed_password):
         # Başarısız denemeyi DB'ye kaydet
         if not attempt:
             attempt = LoginAttempt(email=email, attempt_count=0)
@@ -1213,10 +1286,10 @@ def login(request: Request, body: dict = Body(...), db: Session = Depends(databa
             attempt.locked_until = datetime.datetime.utcnow() + datetime.timedelta(minutes=15)
             attempt.attempt_count = 0
             db.commit()
-            logger.warning(f"ACCOUNT LOCKED: {email}")
+            logger.warning("Authentication event")
             raise HTTPException(status_code=429, detail="5 başarısız deneme. Hesap 15 dakika kilitlendi.")
         db.commit()
-        logger.warning(f"LOGIN FAILED: {email}")
+        logger.warning("Authentication event")
         raise HTTPException(status_code=400, detail="E-posta veya şifre hatalı!")
 
     # Başarılı girişte sayacı temizle
@@ -1224,12 +1297,14 @@ def login(request: Request, body: dict = Body(...), db: Session = Depends(databa
         attempt.attempt_count = 0
         attempt.locked_until = None
         db.commit()
-    logger.info(f"LOGIN SUCCESS: {email}")
+    logger.info("Authentication event")
 
-    token = auth.create_access_token({"email": user.email})
+    token = auth.create_user_token(user)
     payload = _user_profile_payload(user)
     payload["token"] = token
-    return payload
+    response = JSONResponse(payload)
+    _set_media_cookie(response, token, request)
+    return response
 
 # ════════════════════════════════════════════════════════════════
 #  GOOGLE OAUTH2
@@ -1245,7 +1320,9 @@ async def google_login(request: Request):
         )
     redirect_uri = _get_redirect_uri(request)
     logger.info(f"[GOOGLE LOGIN] redirect_uri → {redirect_uri}")
+    state = secrets.token_urlsafe(32)
     params = {
+        "state": state,
         "client_id":     GOOGLE_CLIENT_ID,
         "redirect_uri":  redirect_uri,
         "response_type": "code",
@@ -1254,7 +1331,9 @@ async def google_login(request: Request):
         "prompt":        "select_account",
     }
     url = GOOGLE_AUTH_URL + "?" + _urlparse.urlencode(params)
-    return RedirectResponse(url=url)
+    response = RedirectResponse(url=url)
+    response.set_cookie("oauth_state", state, max_age=600, httponly=True, secure=request.url.scheme == "https", samesite="lax", path="/auth")
+    return response
 
 
 @app.get("/auth/callback/")
@@ -1265,6 +1344,10 @@ async def google_callback(request: Request, code: Optional[str] = None, error: O
       1) Access token al  2) Kullanıcı bilgilerini çek
       3) get_or_create_user → JWT → /app?oauth_token=...
     """
+    received_state = request.query_params.get("state", "")
+    expected_state = request.cookies.get("oauth_state", "")
+    if not received_state or not expected_state or not secrets.compare_digest(received_state, expected_state):
+        raise HTTPException(400, "Google oturum doğrulaması başarısız; girişi yeniden başlatın.")
     # Kullanıcı izin vermediyse
     if error or not code:
         return RedirectResponse(url="/app?oauth_error=cancelled")
@@ -1282,7 +1365,7 @@ async def google_callback(request: Request, code: Optional[str] = None, error: O
         })
 
     if token_resp.status_code != 200:
-        logger.error(f"Google token exchange failed: {token_resp.text}")
+        logger.warning("Google token exchange failed (status=%s)", token_resp.status_code)
         return RedirectResponse(url="/app?oauth_error=token_failed")
 
     access_token = token_resp.json().get("access_token")
@@ -1301,15 +1384,21 @@ async def google_callback(request: Request, code: Optional[str] = None, error: O
     g_email   = g_info.get("email", "").lower().strip()
     g_name    = g_info.get("name", g_email.split("@")[0])
     g_sub     = g_info.get("sub") or g_info.get("id", "")
-    g_email_verified = bool(g_info.get("email_verified") or g_info.get("verified_email"))
+    g_email_verified = (g_info.get("email_verified") is True or g_info.get("verified_email") is True)
 
+    if not g_sub:
+        return RedirectResponse(url="/app?oauth_error=no_subject")
     if not g_email:
         return RedirectResponse(url="/app?oauth_error=no_email")
     if not g_email_verified:
         return RedirectResponse(url="/app?oauth_error=email_not_verified")
 
     # ── Adım 3: Bul veya Oluştur ─────────────────────────────
-    user = db.query(models.User).filter(models.User.email == g_email).first()
+    user = db.query(models.User).filter(models.User.google_sub == g_sub).first()
+    if not user:
+        user = db.query(models.User).filter(models.User.email == g_email).first()
+        if user and user.google_sub != g_sub:
+            return RedirectResponse(url="/app?oauth_error=account_link_required")
 
     if not user:
         # Yeni kullanıcı → otomatik kayıt (ücretsiz plan)
@@ -1325,17 +1414,20 @@ async def google_callback(request: Request, code: Optional[str] = None, error: O
         db.add(user)
         db.commit()
         db.refresh(user)
-        logger.info(f"GOOGLE AUTO-REGISTER: {g_email}")
+        logger.info("Authentication event")
     else:
         user.auth_provider = "google"
         user.google_sub = user.google_sub or g_sub or None
         user.email_verified = True
         db.commit()
-        logger.info(f"GOOGLE LOGIN: {g_email}")
+        logger.info("Authentication event")
 
     # ── Adım 4: JWT üret ve uygulamaya yönlendir ─────────────
-    jwt_token = auth.create_access_token({"email": user.email})
-    return RedirectResponse(url=f"/app?oauth_token={jwt_token}")
+    jwt_token = auth.create_user_token(user)
+    response = RedirectResponse(url=f"/app#oauth_token={jwt_token}")
+    response.delete_cookie("oauth_state", path="/auth")
+    _set_media_cookie(response, jwt_token, request)
+    return response
 
 
 @app.get("/beni-tanı")
@@ -1352,7 +1444,10 @@ def beni_tani(request: Request, token: str = "", db: Session = Depends(database.
         user = db.query(models.User).filter(models.User.email == email).first()
         if not user:
             raise HTTPException(status_code=401, detail="Kullanıcı bulunamadı.")
-        return _user_profile_payload(user)
+        auth.validate_user_token(payload, user)
+        response = JSONResponse(_user_profile_payload(user))
+        _set_media_cookie(response, token, request)
+        return response
     except HTTPException:
         raise
     except Exception:
@@ -1367,7 +1462,8 @@ def request_password_reset(request: Request, payload: dict = Body(...), db: Sess
     if not user:
         return {"mesaj": "Kod gönderildi."}  # Security: don't reveal if email exists
 
-    kod = str(random.randint(100000, 999999))
+    db.query(ResetToken).filter_by(email=email, used=False).update({"used": True})
+    kod = str(secrets.randbelow(900000) + 100000)
     db_token = ResetToken(
         email=email,
         token=kod,
@@ -1392,7 +1488,7 @@ def request_password_reset(request: Request, payload: dict = Body(...), db: Sess
     """
 
     if email_gonder(email, "BuildingAI Pro - Şifre Sıfırlama Kodu", html):
-        logger.info(f"RESET CODE SENT: {email}")
+        logger.info("Authentication event")
         return {"mesaj": "6 haneli kod e-posta adresinize gönderildi."}
     else:
         raise HTTPException(status_code=500, detail="Email gönderilemedi.")
@@ -1401,10 +1497,14 @@ def request_password_reset(request: Request, payload: dict = Body(...), db: Sess
 @limiter.limit("5/minute")
 def update_password(request: Request, payload: dict = Body(...), db: Session = Depends(database.get_db)):
     kod = payload.get("token")
-    yeni_sifre = payload.get("yeni_sifre")
+    yeni_sifre = payload.get("yeni_sifre") or ""
+    email = (payload.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(422, "E-posta adresi gerekli.")
 
     db_token = db.query(ResetToken).filter(
         ResetToken.token == kod,
+        ResetToken.email == email,
         ResetToken.expires_at > datetime.datetime.utcnow(),
         ResetToken.used == False
     ).first()
@@ -1415,12 +1515,12 @@ def update_password(request: Request, payload: dict = Body(...), db: Session = D
         raise HTTPException(status_code=400, detail="Şifre en az 8 karakter olmalıdır.")
 
     user = db.query(models.User).filter(models.User.email == db_token.email).first()
-    user.hashed_password = auth.get_password_hash(yeni_sifre[:72])
+    user.hashed_password = auth.get_password_hash(yeni_sifre)
     if not user.auth_provider:
         user.auth_provider = "local"
-    db_token.used = True
+    db.query(ResetToken).filter_by(email=email, used=False).update({"used": True})
     db.commit()
-    logger.info(f"PASSWORD RESET SUCCESS: {db_token.email}")
+    logger.info("Authentication event")
     return {"mesaj": "Şifreniz güncellendi!"}
 
 @app.post("/hesap/sifre")
@@ -1436,13 +1536,13 @@ def account_password_update(request: Request, payload: dict = Body(...), db: Ses
     if user.hashed_password:
         if not mevcut_sifre:
             raise HTTPException(status_code=400, detail="Mevcut şifre zorunludur.")
-        if not auth.verify_password(str(mevcut_sifre)[:72], user.hashed_password):
+        if not auth.verify_password(str(mevcut_sifre), user.hashed_password):
             raise HTTPException(status_code=400, detail="Mevcut şifre hatalı.")
 
-    user.hashed_password = auth.get_password_hash(str(yeni_sifre)[:72])
+    user.hashed_password = auth.get_password_hash(str(yeni_sifre))
     db.commit()
     db.refresh(user)
-    logger.info(f"ACCOUNT PASSWORD UPDATED: {user.email}")
+    logger.info("Authentication event")
     return _user_profile_payload(user)
 
 @app.get("/", response_class=HTMLResponse)
@@ -1459,6 +1559,19 @@ async def root(request: Request):
 @limiter.limit("60/minute")
 async def main_page(request: Request):
     return NEW_HTML_TEMPLATE
+
+
+@app.get("/app.js")
+async def main_app_script():
+    script = JS_SCRIPT.strip()
+    return Response(script[len("<script>"):-len("</script>")], media_type="application/javascript")
+
+@app.get("/workspace", response_class=FileResponse)
+@app.get("/workspace/", response_class=FileResponse)
+async def workspace_page():
+    return FileResponse("react-dashboard/dist/index.html")
+
+app.mount("/workspace/assets", StaticFiles(directory="react-dashboard/dist/assets"), name="workspace-assets")
 
 @app.get("/landing", response_class=HTMLResponse)
 @limiter.limit("60/minute")
@@ -1603,6 +1716,7 @@ def kullanici_dogrula(token: str, db: Session):
         user = db.query(models.User).filter(models.User.email == email).first()
         if not user:
             raise HTTPException(status_code=401, detail="Kullanıcı bulunamadı.")
+        auth.validate_user_token(payload, user)
         return user
     except Exception:
         raise HTTPException(status_code=401, detail="Token geçersiz.")
@@ -1671,6 +1785,8 @@ async def kamera_analiz(request: Request, payload: dict = Body(...), db: Session
     dil = payload.get("dil", "tr")
 
     user = kullanici_dogrula(token, db)
+    if payload.get("santiye_id"):
+        require_site(user, int(payload["santiye_id"]), db, "write")
     logger.info(f"AI QUERY: user {user.id}, type: kamera-analiz, tip: {analiz_tipi}")
 
     if not kullanim_kontrol(user, db, 'kamera', 3, 'hafta'):
@@ -1936,6 +2052,15 @@ def _dt_to_str(value: Optional[datetime.datetime]) -> Optional[str]:
     return value.replace(microsecond=0).isoformat()
 
 
+def _content_disposition(filename: str) -> str:
+    """RFC 5987 uyumlu Content-Disposition başlığı — Türkçe dosya adlarını destekler."""
+    import urllib.parse as _up
+    encoded = _up.quote(filename, safe="")
+    ascii_fallback = filename.encode("ascii", errors="replace").decode("ascii")
+    return f'attachment; filename="{ascii_fallback}"; filename*=UTF-8\'\'{encoded}'
+
+
+
 def _parse_datetime_input(value: Optional[str]) -> Optional[datetime.datetime]:
     raw = (value or "").strip()
     if not raw:
@@ -2093,22 +2218,8 @@ def _extract_video_metadata(file_path: Path) -> dict:
     return metadata
 
 
-def get_allowed_santiye_ids(user, db: Session) -> Optional[list]:
-    """Return list of santiye IDs the user can access, or None if all are allowed."""
-    if not user.organization_id:
-        return None
-    org = db.query(models.Organization).filter(models.Organization.id == user.organization_id).first()
-    if org and org.owner_user_id == user.id:
-        return None
-    members = db.query(models.ProjectMember).filter(
-        models.ProjectMember.user_id == user.id,
-        models.ProjectMember.organization_id == user.organization_id,
-        models.ProjectMember.status == "active",
-    ).all()
-    if not members:
-        return None
-    ids = [m.santiye_id for m in members if m.santiye_id]
-    return ids if ids else None
+def get_allowed_santiye_ids(user, db: Session) -> list:
+    return allowed_site_ids(user, db)
 
 
 def _santiye_kontrol(organization_id: Optional[int], santiye_id: Optional[int], db: Session) -> Optional[models.Santiye]:
@@ -2122,6 +2233,10 @@ def _santiye_kontrol(organization_id: Optional[int], santiye_id: Optional[int], 
     if not santiye:
         raise HTTPException(status_code=404, detail="Şantiye bulunamadı.")
     return santiye
+
+
+def _kullanici_santiye_kontrol(user, santiye_id, db):
+    return require_site(user, santiye_id, db)
 
 
 def _manual_record_to_dict(
@@ -2269,7 +2384,7 @@ def _site_filter_matches(item: dict, santiye_id: Optional[int]) -> bool:
 
 def _collect_archive_records(user, db: Session, arsiv_limit: int) -> tuple[list[dict], dict]:
     _allowed_sites = get_allowed_santiye_ids(user, db)
-    _sant_q = db.query(models.Santiye).filter(
+    _sant_q = scope_query(db, user, models.Santiye).filter(
         models.Santiye.organization_id == user.organization_id,
         models.Santiye.aktif == True,
     )
@@ -2279,11 +2394,11 @@ def _collect_archive_records(user, db: Session, arsiv_limit: int) -> tuple[list[
     santiye_map = {s.id: s.ad for s in santiyeler}
     camera_map = {
         c.id: c.name
-        for c in db.query(models.Camera).filter(models.Camera.organization_id == user.organization_id).all()
+        for c in scope_query(db, user, models.Camera).filter(models.Camera.organization_id == user.organization_id).all()
     }
     uploaded_by = user.full_name or user.email
 
-    _manual_q = db.query(models.ArchiveRecord).filter(
+    _manual_q = scope_query(db, user, models.ArchiveRecord).filter(
         models.ArchiveRecord.organization_id == user.organization_id,
         models.ArchiveRecord.source_type == "manual",
         models.ArchiveRecord.deleted_at.is_(None),
@@ -2293,14 +2408,14 @@ def _collect_archive_records(user, db: Session, arsiv_limit: int) -> tuple[list[
         _manual_q = _manual_q.filter(models.ArchiveRecord.santiye_id.in_(_allowed_sites))
     manual_records = _manual_q.order_by(models.ArchiveRecord.uploaded_at.desc()).all()
 
-    _kamera_q = db.query(models.KameraAnaliz).filter(
+    _kamera_q = scope_query(db, user, models.KameraAnaliz).filter(
         models.KameraAnaliz.organization_id == user.organization_id,
     )
     if _allowed_sites is not None:
         _kamera_q = _kamera_q.filter(models.KameraAnaliz.santiye_id.in_(_allowed_sites))
     kamera_records = _kamera_q.order_by(models.KameraAnaliz.created_at.desc()).all()
 
-    rapor_records = db.query(models.Report).filter(
+    rapor_records = scope_query(db, user, models.Report).filter(
         models.Report.organization_id == user.organization_id,
     ).order_by(models.Report.created_at.desc()).all()
 
@@ -2412,6 +2527,7 @@ def _daily_report_get_or_create(
         models.DailyReport.organization_id == organization_id,
         models.DailyReport.santiye_id == santiye_id,
         models.DailyReport.report_date == report_date,
+        models.DailyReport.user_id == user_id,
     ).first()
     if report:
         return report
@@ -2426,19 +2542,19 @@ def _daily_report_get_or_create(
         summary="",
     )
     db.add(report)
-    db.commit()
-    db.refresh(report)
+    db.flush()
     return report
 
 
-def _manual_record_or_404(record_id: int, organization_id: Optional[int], db: Session) -> models.ArchiveRecord:
-    record = db.query(models.ArchiveRecord).filter(
+def _manual_record_or_404(record_id: int, user: models.User, db: Session) -> models.ArchiveRecord:
+    record = scope_query(db, user, models.ArchiveRecord).filter(
         models.ArchiveRecord.id == record_id,
-        models.ArchiveRecord.organization_id == organization_id,
+        models.ArchiveRecord.organization_id == user.organization_id,
         models.ArchiveRecord.source_type == "manual",
     ).first()
     if not record or record.deleted_at is not None or record.status == "deleted":
         raise HTTPException(status_code=404, detail="Manuel kanıt bulunamadı.")
+    require_record(user, record, db)
     return record
 
 # --- 📁 KİŞİSEL ARŞİV ---
@@ -2459,7 +2575,7 @@ def arsiv_getir(
     db: Session = Depends(database.get_db),
 ):
     user = kullanici_dogrula(_request_token(request), db)
-    _santiye_kontrol(user.organization_id, santiye_id, db) if santiye_id else None
+    require_site(user, santiye_id, db) if santiye_id else None
     plan = get_user_plan(user)
     arsiv_max = get_plan_limit(plan, "arsiv_max")
     arsiv_limit = 9999 if arsiv_max == -1 else arsiv_max
@@ -2518,18 +2634,18 @@ def manual_evidence_list(
 ):
     user = kullanici_dogrula(_request_token(request), db)
     allowed_me = get_allowed_santiye_ids(user, db)
-    _santiye_kontrol(user.organization_id, santiye_id, db) if santiye_id else None
+    require_site(user, santiye_id, db) if santiye_id else None
     if santiye_id and allowed_me is not None and santiye_id not in allowed_me:
         raise HTTPException(status_code=403, detail="Bu şantiyeye erişim yetkiniz yok.")
-    _sant_me_q = db.query(models.Santiye).filter(models.Santiye.organization_id == user.organization_id, models.Santiye.aktif == True)
+    _sant_me_q = scope_query(db, user, models.Santiye).filter(models.Santiye.organization_id == user.organization_id, models.Santiye.aktif == True)
     if allowed_me is not None:
         _sant_me_q = _sant_me_q.filter(models.Santiye.id.in_(allowed_me))
     santiyeler = {s.id: s.ad for s in _sant_me_q.all()}
     camera_map = {
         c.id: c.name
-        for c in db.query(models.Camera).filter(models.Camera.organization_id == user.organization_id).all()
+        for c in scope_query(db, user, models.Camera).filter(models.Camera.organization_id == user.organization_id).all()
     }
-    q = db.query(models.ArchiveRecord).filter(
+    q = scope_query(db, user, models.ArchiveRecord).filter(
         models.ArchiveRecord.organization_id == user.organization_id,
         models.ArchiveRecord.source_type == "manual",
         models.ArchiveRecord.deleted_at.is_(None),
@@ -2572,15 +2688,17 @@ async def manual_evidence_upload(
     user = kullanici_dogrula(token, db)
     if not user.organization_id:
         raise HTTPException(status_code=400, detail="Bir organizasyona dahil olmalısınız.")
-    santiye = _santiye_kontrol(user.organization_id, santiye_id, db) if santiye_id else None
+    santiye = require_site(user, santiye_id, db, "write") if santiye_id else None
     if not files:
         raise HTTPException(status_code=400, detail="En az bir dosya seçmelisiniz.")
 
     if camera_id:
-        camera = db.query(models.Camera).filter(
+        camera = scope_query(db, user, models.Camera).filter(
             models.Camera.id == camera_id,
             models.Camera.organization_id == user.organization_id,
         ).first()
+        if camera and camera.user_id != user.id:
+            raise HTTPException(403, "Yalnızca kendi kameranızı kayda bağlayabilirsiniz.")
         if not camera:
             raise HTTPException(status_code=404, detail="İlgili kamera bulunamadı.")
 
@@ -2588,95 +2706,106 @@ async def manual_evidence_upload(
     tag_list = _split_tags(tags)
     created_records: list[models.ArchiveRecord] = []
 
-    for upload in files:
-        file_name = upload.filename or "kanit"
-        media_type = _media_type_from_filename(file_name)
-        file_bytes = await upload.read()
-        if not file_bytes:
-            raise HTTPException(status_code=400, detail=f"{file_name} boş görünüyor.")
+    written_paths = []
+    try:
+        for upload in files:
+            file_name = upload.filename or "kanit"
+            media_type = _media_type_from_filename(file_name)
+            file_bytes = await upload.read()
+            if not file_bytes:
+                raise HTTPException(status_code=400, detail=f"{file_name} boş görünüyor.")
 
-        size_limit = MAX_MANUAL_IMAGE_SIZE if media_type == "photo" else MAX_MANUAL_VIDEO_SIZE
-        if len(file_bytes) > size_limit:
-            limit_mb = int(size_limit / (1024 * 1024))
-            raise HTTPException(status_code=413, detail=f"{file_name} için dosya limiti {limit_mb} MB.")
+            size_limit = MAX_MANUAL_IMAGE_SIZE if media_type == "photo" else MAX_MANUAL_VIDEO_SIZE
+            if len(file_bytes) > size_limit:
+                limit_mb = int(size_limit / (1024 * 1024))
+                raise HTTPException(status_code=413, detail=f"{file_name} için dosya limiti {limit_mb} MB.")
 
-        suffix = Path(file_name).suffix.lower()
-        unique_name = f"{dt_module.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex}{suffix}"
-        target_path = MANUAL_UPLOAD_ROOT / unique_name
-        target_path.write_bytes(file_bytes)
+            suffix = Path(file_name).suffix.lower()
+            unique_name = f"{dt_module.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex}{suffix}"
+            target_path = MANUAL_UPLOAD_ROOT / unique_name
+            written_paths.append(target_path)
+            target_path.write_bytes(file_bytes)
 
-        thumb_url = ""
-        gps_lat = ""
-        gps_lon = ""
-        exif_payload = {}
-        duration_seconds = ""
-        captured_value = requested_captured_at
+            thumb_url = ""
+            gps_lat = ""
+            gps_lon = ""
+            exif_payload = {}
+            duration_seconds = ""
+            captured_value = requested_captured_at
 
-        if media_type == "photo":
-            image_meta = _extract_image_metadata(file_bytes)
-            captured_value = requested_captured_at or image_meta.get("captured_at") or dt_module.datetime.utcnow()
-            gps_lat = image_meta.get("gps_lat") or ""
-            gps_lon = image_meta.get("gps_lon") or ""
-            exif_payload = image_meta.get("exif_payload") or {}
-            thumb_bytes = image_meta.get("thumbnail_bytes") or b""
-            if thumb_bytes:
-                thumb_name = f"{Path(unique_name).stem}.jpg"
-                thumb_path = MANUAL_THUMB_ROOT / thumb_name
-                thumb_path.write_bytes(thumb_bytes)
-                thumb_url = "/" + thumb_path.as_posix()
-        else:
-            captured_value = requested_captured_at or dt_module.datetime.utcnow()
-            video_meta = _extract_video_metadata(target_path)
-            duration_seconds = video_meta.get("duration_seconds") or ""
-            thumb_bytes = video_meta.get("thumbnail_bytes") or b""
-            if thumb_bytes:
-                thumb_name = f"{Path(unique_name).stem}.jpg"
-                thumb_path = MANUAL_THUMB_ROOT / thumb_name
-                thumb_path.write_bytes(thumb_bytes)
-                thumb_url = "/" + thumb_path.as_posix()
+            if media_type == "photo":
+                image_meta = _extract_image_metadata(file_bytes)
+                captured_value = requested_captured_at or image_meta.get("captured_at") or dt_module.datetime.utcnow()
+                gps_lat = image_meta.get("gps_lat") or ""
+                gps_lon = image_meta.get("gps_lon") or ""
+                exif_payload = image_meta.get("exif_payload") or {}
+                thumb_bytes = image_meta.get("thumbnail_bytes") or b""
+                if thumb_bytes:
+                    thumb_name = f"{Path(unique_name).stem}.jpg"
+                    thumb_path = MANUAL_THUMB_ROOT / thumb_name
+                    written_paths.append(thumb_path)
+                    thumb_path.write_bytes(thumb_bytes)
+                    thumb_url = "/" + thumb_path.as_posix()
+            else:
+                captured_value = requested_captured_at or dt_module.datetime.utcnow()
+                video_meta = _extract_video_metadata(target_path)
+                duration_seconds = video_meta.get("duration_seconds") or ""
+                thumb_bytes = video_meta.get("thumbnail_bytes") or b""
+                if thumb_bytes:
+                    thumb_name = f"{Path(unique_name).stem}.jpg"
+                    thumb_path = MANUAL_THUMB_ROOT / thumb_name
+                    written_paths.append(thumb_path)
+                    thumb_path.write_bytes(thumb_bytes)
+                    thumb_url = "/" + thumb_path.as_posix()
 
-        record = models.ArchiveRecord(
-            user_id=user.id,
-            organization_id=user.organization_id,
-            santiye_id=santiye.id if santiye else None,
-            camera_id=camera_id,
-            source_type="manual",
-            media_type=media_type,
-            file_url="/" + target_path.as_posix(),
-            thumbnail_url=thumb_url or ("/" + target_path.as_posix() if media_type == "photo" else ""),
-            file_name=file_name,
-            mime_type=upload.content_type or "",
-            file_size=len(file_bytes),
-            title=_normalize_text(title) or Path(file_name).stem,
-            description=_normalize_text(description),
-            event_type=_normalize_text(event_type),
-            tags=json.dumps(tag_list, ensure_ascii=False),
-            zone_label=_normalize_text(zone_label),
-            captured_at=captured_value,
-            duration_seconds=duration_seconds,
-            gps_lat=gps_lat,
-            gps_lon=gps_lon,
-            exif_payload=json.dumps(exif_payload, ensure_ascii=False),
-            ai_suggestions=json.dumps({}, ensure_ascii=False),
-            status="active",
-            verification_status="DRAFT",
-            workflow_status="NEW",
-            uploaded_at=dt_module.datetime.utcnow(),
-            created_at=dt_module.datetime.utcnow(),
-            updated_at=dt_module.datetime.utcnow(),
-        )
-        db.add(record)
+            record = models.ArchiveRecord(
+                user_id=user.id,
+                organization_id=user.organization_id,
+                santiye_id=santiye.id if santiye else None,
+                camera_id=camera_id,
+                source_type="manual",
+                media_type=media_type,
+                file_url="/" + target_path.as_posix(),
+                thumbnail_url=thumb_url or ("/" + target_path.as_posix() if media_type == "photo" else ""),
+                file_name=file_name,
+                mime_type=upload.content_type or "",
+                file_size=len(file_bytes),
+                title=_normalize_text(title) or Path(file_name).stem,
+                description=_normalize_text(description),
+                event_type=_normalize_text(event_type),
+                tags=json.dumps(tag_list, ensure_ascii=False),
+                zone_label=_normalize_text(zone_label),
+                captured_at=captured_value,
+                duration_seconds=duration_seconds,
+                gps_lat=gps_lat,
+                gps_lon=gps_lon,
+                exif_payload=json.dumps(exif_payload, ensure_ascii=False),
+                ai_suggestions=json.dumps({}, ensure_ascii=False),
+                status="active",
+                verification_status="DRAFT",
+                workflow_status="NEW",
+                uploaded_at=dt_module.datetime.utcnow(),
+                created_at=dt_module.datetime.utcnow(),
+                updated_at=dt_module.datetime.utcnow(),
+            )
+            db.add(record)
+            db.flush()
+            created_records.append(record)
+
         db.commit()
-        db.refresh(record)
-        created_records.append(record)
+    except Exception:
+        db.rollback()
+        for written_path in written_paths:
+            written_path.unlink(missing_ok=True)
+        raise
 
     santiyeler = {
         s.id: s.ad
-        for s in db.query(models.Santiye).filter(models.Santiye.organization_id == user.organization_id).all()
+        for s in scope_query(db, user, models.Santiye).filter(models.Santiye.organization_id == user.organization_id).all()
     }
     camera_map = {
         c.id: c.name
-        for c in db.query(models.Camera).filter(models.Camera.organization_id == user.organization_id).all()
+        for c in scope_query(db, user, models.Camera).filter(models.Camera.organization_id == user.organization_id).all()
     }
     return {
         "mesaj": f"{len(created_records)} manuel kanıt kaydedildi.",
@@ -2696,8 +2825,13 @@ def manual_evidence_update(
     db: Session = Depends(database.get_db),
 ):
     user = kullanici_dogrula(payload.get("token", ""), db)
-    record = _manual_record_or_404(record_id, user.organization_id, db)
+    record = _manual_record_or_404(record_id, user, db)
+    require_record(user, record, db, "write")
+    if record.verification_status == "VERIFIED":
+        raise HTTPException(409, "Onaylı kayıt değiştirilemez; önce düzeltme incelemesi açın.")
 
+    if {"verification_status", "workflow_status"} & payload.keys():
+        raise HTTPException(422, "Durum değişikliği için inceleme işlemini kullanın.")
     if "title" in payload:
         record.title = _normalize_text(payload.get("title"))
     if "description" in payload:
@@ -2724,11 +2858,11 @@ def manual_evidence_update(
 
     santiyeler = {
         s.id: s.ad
-        for s in db.query(models.Santiye).filter(models.Santiye.organization_id == user.organization_id).all()
+        for s in scope_query(db, user, models.Santiye).filter(models.Santiye.organization_id == user.organization_id).all()
     }
     camera_map = {
         c.id: c.name
-        for c in db.query(models.Camera).filter(models.Camera.organization_id == user.organization_id).all()
+        for c in scope_query(db, user, models.Camera).filter(models.Camera.organization_id == user.organization_id).all()
     }
     return _manual_record_to_dict(record, santiyeler, camera_map, user.full_name or user.email)
 
@@ -2742,7 +2876,10 @@ def manual_evidence_ai_suggestions(
     db: Session = Depends(database.get_db),
 ):
     user = kullanici_dogrula(payload.get("token", ""), db)
-    record = _manual_record_or_404(record_id, user.organization_id, db)
+    record = _manual_record_or_404(record_id, user, db)
+    require_record(user, record, db, "write")
+    if record.verification_status == "VERIFIED":
+        raise HTTPException(409, "Onaylı kayıt değiştirilemez; önce düzeltme incelemesi açın.")
 
     file_path = Path((record.file_url or "").lstrip("/"))
     if not file_path.exists():
@@ -2819,7 +2956,10 @@ def manual_evidence_delete(
     db: Session = Depends(database.get_db),
 ):
     user = kullanici_dogrula(_request_token(request), db)
-    record = _manual_record_or_404(record_id, user.organization_id, db)
+    record = _manual_record_or_404(record_id, user, db)
+    require_record(user, record, db, "write")
+    if record.verification_status == "VERIFIED":
+        raise HTTPException(409, "Onaylı kayıt değiştirilemez; önce düzeltme incelemesi açın.")
     record.status = "deleted"
     record.deleted_at = dt_module.datetime.utcnow()
     record.updated_at = dt_module.datetime.utcnow()
@@ -2835,14 +2975,14 @@ def manual_evidence_detail(
     db: Session = Depends(database.get_db),
 ):
     user = kullanici_dogrula(_request_token(request), db)
-    record = _manual_record_or_404(record_id, user.organization_id, db)
+    record = _manual_record_or_404(record_id, user, db)
     santiyeler = {
         s.id: s.ad
-        for s in db.query(models.Santiye).filter(models.Santiye.organization_id == user.organization_id).all()
+        for s in scope_query(db, user, models.Santiye).filter(models.Santiye.organization_id == user.organization_id).all()
     }
     camera_map = {
         c.id: c.name
-        for c in db.query(models.Camera).filter(models.Camera.organization_id == user.organization_id).all()
+        for c in scope_query(db, user, models.Camera).filter(models.Camera.organization_id == user.organization_id).all()
     }
     data = _manual_record_to_dict(record, santiyeler, camera_map, user.full_name or user.email)
     data["content"] = record.description or record.title or ""
@@ -2870,11 +3010,11 @@ def daily_report_item_add(
     archive_record_id = None
 
     if source_type == "manual":
-        source_record = _manual_record_or_404(source_id, user.organization_id, db)
+        source_record = _manual_record_or_404(source_id, user, db)
         santiye_id = source_record.santiye_id
         archive_record_id = source_record.id
     elif source_type == "kamera":
-        source_record = db.query(models.KameraAnaliz).filter(
+        source_record = scope_query(db, user, models.KameraAnaliz).filter(
             models.KameraAnaliz.id == source_id,
             models.KameraAnaliz.organization_id == user.organization_id,
         ).first()
@@ -2882,7 +3022,7 @@ def daily_report_item_add(
             raise HTTPException(status_code=404, detail="Kamera kaydı bulunamadı.")
         santiye_id = getattr(source_record, "santiye_id", None)
     elif source_type == "rapor":
-        source_record = db.query(models.Report).filter(
+        source_record = scope_query(db, user, models.Report).filter(
             models.Report.id == source_id,
             models.Report.organization_id == user.organization_id,
         ).first()
@@ -2891,7 +3031,10 @@ def daily_report_item_add(
     else:
         raise HTTPException(status_code=400, detail="Desteklenmeyen kaynak türü.")
 
-    _santiye_kontrol(user.organization_id, santiye_id, db) if santiye_id else None
+    if payload.get("santiye_id") and payload["santiye_id"] != santiye_id:
+        raise HTTPException(422, "Kaynak kayıt ve günlük rapor aynı şantiyeye ait olmalıdır.")
+    require_site(user, santiye_id, db, "write") if santiye_id else None
+    require_record(user, source_record, db, "write")
     report = _daily_report_get_or_create(
         db,
         user_id=user.id,
@@ -2899,6 +3042,8 @@ def daily_report_item_add(
         santiye_id=santiye_id,
         report_date=report_date,
     )
+    if _report_verification_status(report) == "VERIFIED":
+        raise HTTPException(409, "Onaylı rapora kayıt eklenemez.")
     existing_item = db.query(models.DailyReportItem).filter(
         models.DailyReportItem.daily_report_id == report.id,
         models.DailyReportItem.source_type == source_type,
@@ -2936,18 +3081,43 @@ def daily_report_item_add(
     }
 
 
+@app.post("/daily-reports/manual")
+@limiter.limit("30/minute")
+def daily_report_manual(request: Request, payload: dict = Body(...), db: Session = Depends(database.get_db)):
+    user = kullanici_dogrula(_request_token(request) or payload.get("token", ""), db)
+    site_id = payload.get("santiye_id")
+    if not site_id:
+        raise HTTPException(422, "Günlük rapor için proje seçin.")
+    require_site(user, site_id, db, "write")
+    try:
+        report_date = datetime.date.fromisoformat(payload.get("report_date", "")).isoformat()
+    except (TypeError, ValueError):
+        raise HTTPException(422, "Geçerli rapor tarihi girin.")
+    summary = str(payload.get("summary") or "").strip()
+    if not summary:
+        raise HTTPException(422, "Yapılan işleri veya rapor özetini yazın.")
+    report = _daily_report_get_or_create(db, user_id=user.id,
+        organization_id=user.organization_id, santiye_id=site_id, report_date=report_date)
+    if report.status != "draft":
+        raise HTTPException(409, "Kesinleşmiş rapor değiştirilemez.")
+    report.summary = summary
+    report.updated_at = datetime.datetime.utcnow()
+    db.commit()
+    return {"id": report.id, "status": "draft"}
+
+
 @app.get("/daily-reports")
 @limiter.limit("60/minute")
 def daily_reports_list(
     request: Request,
-    token: str,
+    token: str = "",
     santiye_id: Optional[int] = None,
     report_date: str = "",
     db: Session = Depends(database.get_db),
 ):
-    user = kullanici_dogrula(token, db)
-    _santiye_kontrol(user.organization_id, santiye_id, db) if santiye_id else None
-    q = db.query(models.DailyReport).filter(models.DailyReport.organization_id == user.organization_id)
+    user = kullanici_dogrula(_request_token(request) or token, db)
+    _kullanici_santiye_kontrol(user, santiye_id, db) if santiye_id else None
+    q = scope_query(db, user, models.DailyReport).filter(models.DailyReport.organization_id == user.organization_id)
     if santiye_id:
         q = q.filter(models.DailyReport.santiye_id == santiye_id)
     if report_date:
@@ -2994,23 +3164,23 @@ def daily_reports_list(
 def arsiv_detay(request: Request, tip: str, id: int, db: Session = Depends(database.get_db)):
     user = kullanici_dogrula(_request_token(request), db)
     if tip == "manual":
-        record = _manual_record_or_404(id, user.organization_id, db)
+        record = _manual_record_or_404(id, user, db)
         santiyeler = {
             s.id: s.ad
-            for s in db.query(models.Santiye).filter(models.Santiye.organization_id == user.organization_id).all()
+            for s in scope_query(db, user, models.Santiye).filter(models.Santiye.organization_id == user.organization_id).all()
         }
         camera_map = {
             c.id: c.name
-            for c in db.query(models.Camera).filter(models.Camera.organization_id == user.organization_id).all()
+            for c in scope_query(db, user, models.Camera).filter(models.Camera.organization_id == user.organization_id).all()
         }
         data = _manual_record_to_dict(record, santiyeler, camera_map, user.full_name or user.email)
         data["content"] = record.description or record.title or ""
         data["exif_payload"] = _json_or_default(record.exif_payload, {})
         return data
     if tip == "rapor":
-        item = db.query(models.Report).filter(models.Report.id == id, models.Report.organization_id == user.organization_id).first()
+        item = scope_query(db, user, models.Report).filter(models.Report.id == id, models.Report.organization_id == user.organization_id).first()
     elif tip == "kamera":
-        item = db.query(models.KameraAnaliz).filter(models.KameraAnaliz.id == id, models.KameraAnaliz.organization_id == user.organization_id).first()
+        item = scope_query(db, user, models.KameraAnaliz).filter(models.KameraAnaliz.id == id, models.KameraAnaliz.organization_id == user.organization_id).first()
     else:
         raise HTTPException(status_code=400, detail="Desteklenmeyen arşiv tipi.")
     if not item:
@@ -3025,7 +3195,7 @@ def kanit_sil(request: Request, id: int, token: str = "", db: Session = Depends(
     if not token:
         token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
     user = kullanici_dogrula(token, db)
-    item = db.query(models.KameraAnaliz).filter(models.KameraAnaliz.id == id, models.KameraAnaliz.user_id == user.id).first()
+    item = scope_query(db, user, models.KameraAnaliz).filter(models.KameraAnaliz.id == id, models.KameraAnaliz.user_id == user.id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Kayıt bulunamadı.")
     db.delete(item)
@@ -3038,7 +3208,7 @@ def rapor_sil(request: Request, id: int, token: str = "", db: Session = Depends(
     if not token:
         token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
     user = kullanici_dogrula(token, db)
-    item = db.query(models.Report).filter(models.Report.id == id, models.Report.user_id == user.id).first()
+    item = scope_query(db, user, models.Report).filter(models.Report.id == id, models.Report.user_id == user.id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Rapor bulunamadı.")
     db.delete(item)
@@ -3052,7 +3222,7 @@ def cameras_list(request: Request, token: str = "", db: Session = Depends(databa
     if not token:
         token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
     user = kullanici_dogrula(token, db)
-    cams = db.query(models.Camera).filter(models.Camera.user_id == user.id).order_by(models.Camera.created_at.asc()).all()
+    cams = scope_query(db, user, models.Camera).filter(models.Camera.user_id == user.id).order_by(models.Camera.created_at.asc()).all()
     return [{"id": c.id, "name": c.name, "url": c.url, "location": c.location, "tip": c.tip, "aktif": c.aktif, "created_at": str(c.created_at)} for c in cams]
 
 @app.post("/cameras")
@@ -3060,11 +3230,14 @@ def cameras_list(request: Request, token: str = "", db: Session = Depends(databa
 async def camera_ekle(request: Request, payload: dict = Body(...), db: Session = Depends(database.get_db)):
     token = payload.get("token")
     user = kullanici_dogrula(token, db)
+    if payload.get("santiye_id"):
+        require_site(user, int(payload["santiye_id"]), db, "write")
     name = (payload.get("name") or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Kamera adı zorunludur.")
     cam = models.Camera(
         user_id=user.id,
+        organization_id=user.organization_id,
         name=name,
         url=payload.get("url", ""),
         location=payload.get("location", ""),
@@ -3081,9 +3254,10 @@ def camera_sil(request: Request, cam_id: int, token: str = "", db: Session = Dep
     if not token:
         token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
     user = kullanici_dogrula(token, db)
-    cam = db.query(models.Camera).filter(models.Camera.id == cam_id, models.Camera.user_id == user.id).first()
+    cam = scope_query(db, user, models.Camera).filter(models.Camera.id == cam_id, models.Camera.user_id == user.id).first()
     if not cam:
         raise HTTPException(status_code=404, detail="Kamera bulunamadı.")
+    require_record(user, cam, db, "write")
     db.delete(cam)
     db.commit()
     return {"ok": True}
@@ -3150,6 +3324,7 @@ def review_item_decide(
 
     note = (payload.get("note", "") or "").strip()
     source_row = _review_source_row_or_404(user, normalized_source, source_id, db)
+    require_record(user, source_row, db, "review")
     decision, _ = _review_get_or_create_decision(
         db,
         user_id=user.id,
@@ -3160,6 +3335,9 @@ def review_item_decide(
         seed_decided_at=_review_seed_decided_at(normalized_source, source_row),
     )
 
+    if decision.status != new_status or decision.decision_note != note:
+        db.add(models.DecisionMessage(decision_id=decision.id, user_id=user.id,
+            organization_id=user.organization_id, message=f"{decision.status} → {new_status}: {note}"))
     decision.status = new_status
     decision.decision_note = note
     decision.updated_at = dt_module.datetime.utcnow()
@@ -3171,10 +3349,14 @@ def review_item_decide(
         decision.decided_by_user_id = None
 
     _sync_review_source_state(normalized_source, source_row, new_status, note)
+    if normalized_source == "evidence":
+        source_row.reviewed_at = decision.decided_at
+        source_row.reviewed_by = decision.decided_by_user_id
+        source_row.review_note = note
     db.commit()
     db.refresh(decision)
 
-    site_rows = db.query(models.Santiye).filter(
+    site_rows = scope_query(db, user, models.Santiye).filter(
         models.Santiye.organization_id == user.organization_id,
         models.Santiye.aktif == True,
     ).all()
@@ -3269,6 +3451,8 @@ def fiyat_gir(payload: dict = Body(...), db: Session = Depends(database.get_db))
     birim = payload.get("birim", "")
     sehir = payload.get("sehir", "genel")
     user = kullanici_dogrula(token, db)
+    if sehir == "genel" and not user.is_admin:
+        raise HTTPException(status_code=403, detail="Global referans fiyatı yalnızca yönetici güncelleyebilir.")
 
     son_fiyat = db.query(models.MalzemeFiyat).filter(
         models.MalzemeFiyat.malzeme == malzeme,
@@ -3296,7 +3480,7 @@ def fiyat_gir(payload: dict = Body(...), db: Session = Depends(database.get_db))
         fiyat=str(fiyat),
         birim=birim,
         sehir=sehir,
-        kaynak="admin" if user.email == ADMIN_EMAIL else "kullanici",
+        kaynak="admin" if user.is_admin else "kullanici",
         giren_id=user.id
     )
     db.add(yeni_fiyat)
@@ -3305,7 +3489,8 @@ def fiyat_gir(payload: dict = Body(...), db: Session = Depends(database.get_db))
 
 # --- 📄 RESMİ FİYAT PDF ÇEKME ---
 @app.get("/fiyat-pdf-cek")
-async def fiyat_pdf_cek(db: Session = Depends(database.get_db)):
+async def fiyat_pdf_cek(request: Request, db: Session = Depends(database.get_db)):
+    admin_kontrol(_request_token(request), db)
     PDF_URL = "https://webdosya.csb.gov.tr/v2/yfk/2026/03/2026-mart-in-aat-rayi-20260303131227.pdf"
 
     ARAMA_TERIMLERI = {
@@ -3378,7 +3563,8 @@ async def fiyat_pdf_cek(db: Session = Depends(database.get_db)):
         raise HTTPException(status_code=500, detail=f"PDF parse hatası: {str(e)}")
 
 @app.api_route("/fiyat-ai-guncelle", methods=["GET", "POST"])
-async def fiyat_ai_guncelle(db: Session = Depends(database.get_db)):
+async def fiyat_ai_guncelle(request: Request, db: Session = Depends(database.get_db)):
+    admin_kontrol(_request_token(request), db)
     try:
         prompt = """Bugünkü Türkiye piyasasında güncel inşaat malzeme fiyatlarını ver.
 SADECE bu JSON formatında cevap ver, başka hiçbir şey yazma:
@@ -3443,61 +3629,8 @@ Fiyatlar KDV dahil Türkiye ortalaması olmalı. Sadece sayı, birim bilgisi yet
             ))
             kaydedilenler.append({"malzeme": malzeme, "fiyat": fiyat})
 
-        # Generate 12 months of historical data
-        gecmis_prompt = f"""Türkiye'de inşaat malzemelerinin son 12 aylık aylık ortalama fiyat geçmişini ver.
-Bugün: {datetime.datetime.utcnow().strftime('%Y-%m')}.
-SADECE bu JSON formatında cevap ver, başka hiçbir şey yazma:
-{{
-  "gecmis": [
-    {{"ay": "2025-03", "demir": 24000, "cimento": 180, "beton": 2800, "tugla": 7, "kum": 750}},
-    {{"ay": "2025-04", "demir": 25000, "cimento": 185, "beton": 2900, "tugla": 7, "kum": 760}}
-  ]
-}}
-Fiyatlar KDV dahil Türkiye ortalaması, gerçekçi trend göstermeli. 12 ay toplam, en eskiden en yeniye."""
-
-        gecmis_response = ai_client.models.generate_content(
-            model="gemini-3.1-flash-lite-preview",
-            contents=[gecmis_prompt]
-        )
-
-        gecmis_text = gecmis_response.text.strip()
-        gecmis_match = re.search(r'\{.*\}', gecmis_text, re.DOTALL)
-        if gecmis_match:
-            gecmis_data = json.loads(gecmis_match.group())
-            malzemeler_list = ['demir', 'cimento', 'beton', 'tugla', 'kum']
-
-            for ay_data in gecmis_data.get("gecmis", []):
-                ay = ay_data.get("ay", "")
-                if not ay:
-                    continue
-                try:
-                    ay_tarihi = datetime.datetime.strptime(ay + "-01", "%Y-%m-%d")
-                except Exception:
-                    continue
-                for malzeme in malzemeler_list:
-                    fiyat = ay_data.get(malzeme)
-                    if not fiyat:
-                        continue
-                    mevcut = db.query(models.MalzemeFiyat).filter(
-                        models.MalzemeFiyat.malzeme == malzeme,
-                        models.MalzemeFiyat.sehir == "genel",
-                        models.MalzemeFiyat.kaynak == "ai_gecmis",
-                        models.MalzemeFiyat.created_at >= ay_tarihi,
-                        models.MalzemeFiyat.created_at < ay_tarihi + datetime.timedelta(days=32)
-                    ).first()
-                    if not mevcut:
-                        db.add(models.MalzemeFiyat(
-                            malzeme=malzeme,
-                            fiyat=str(fiyat),
-                            birim=birimler[malzeme],
-                            sehir="genel",
-                            kaynak="ai_gecmis",
-                            giren_id=None,
-                            created_at=ay_tarihi
-                        ))
-
         db.commit()
-        return {"mesaj": f"{len(kaydedilenler)} güncel fiyat + 12 aylık geçmiş AI ile güncellendi.", "fiyatlar": kaydedilenler}
+        return {"mesaj": f"{len(kaydedilenler)} güncel fiyat AI ile güncellendi (kaynak: ai_gemini).", "fiyatlar": kaydedilenler}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI fiyat güncelleme hatası: {str(e)}")
@@ -3520,7 +3653,7 @@ def stok_getir(request: Request, token: str = "", santiye_id: int = None, db: Se
         sonuc = {}
         uyarilar = []
         for m in malzemeler:
-            q = db.query(models.Stok).filter(models.Stok.user_id == user.id, models.Stok.malzeme == m)
+            q = scope_query(db, user, models.Stok).filter(models.Stok.user_id == user.id, models.Stok.malzeme == m)
             if sid is not None:
                 q = q.filter(models.Stok.santiye_id == (sid if sid != 0 else None))
             girisler = q.filter(models.Stok.tip == 'giris').all()
@@ -3540,7 +3673,7 @@ def stok_getir(request: Request, token: str = "", santiye_id: int = None, db: Se
 
     # Tek şantiye seçiliyse — eski davranış
     if santiye_id:
-        s = db.query(models.Santiye).filter(models.Santiye.id == santiye_id).first()
+        s = scope_query(db, user, models.Santiye).filter(models.Santiye.id == santiye_id).first()
         santiye_adi = s.ad if s else None
         sonuc, uyarilar = _stok_hesapla(santiye_id)
         return {"stok": sonuc, "uyarilar": uyarilar, "santiye_adi": santiye_adi, "gruplar": None}
@@ -3554,7 +3687,7 @@ def stok_getir(request: Request, token: str = "", santiye_id: int = None, db: Se
     santiye_adi_map = {}
     for sid in santiye_idler:
         if sid is not None:
-            s = db.query(models.Santiye).filter(models.Santiye.id == sid).first()
+            s = scope_query(db, user, models.Santiye).filter(models.Santiye.id == sid).first()
             santiye_adi_map[sid] = s.ad if s else f"Şantiye #{sid}"
 
     gruplar = []
@@ -3583,7 +3716,7 @@ def stok_gecmis(request: Request, malzeme: str, token: str = "", santiye_id: int
         auth_header = request.headers.get("Authorization", "")
         token = auth_header.replace("Bearer ", "").strip() if auth_header else ""
     user = kullanici_dogrula(token, db)
-    q = db.query(models.Stok).filter(
+    q = scope_query(db, user, models.Stok).filter(
         models.Stok.user_id == user.id, models.Stok.malzeme == malzeme
     )
     if santiye_id:
@@ -3592,7 +3725,7 @@ def stok_gecmis(request: Request, malzeme: str, token: str = "", santiye_id: int
     santiye_map = {}
     for k in kayitlar:
         if k.santiye_id and k.santiye_id not in santiye_map:
-            s = db.query(models.Santiye).filter(models.Santiye.id == k.santiye_id).first()
+            s = scope_query(db, user, models.Santiye).filter(models.Santiye.id == k.santiye_id).first()
             santiye_map[k.santiye_id] = s.ad if s else None
     return {"gecmis": [
         {
@@ -3609,19 +3742,38 @@ def stok_gecmis(request: Request, malzeme: str, token: str = "", santiye_id: int
 def stok_ekle(payload: dict = Body(...), db: Session = Depends(database.get_db)):
     token = payload.get("token")
     user = kullanici_dogrula(token, db)
+    if payload.get("santiye_id"):
+        require_site(user, int(payload["santiye_id"]), db, "write")
     plan = get_user_plan(user)
     if not get_plan_limit(plan, "stok"):
         raise HTTPException(status_code=403, detail="PLAN_YETERSIZ:stok:pro")
+
+    raw_miktar = str(payload.get("miktar") or "0").replace(",", ".")
+    raw_fiyat  = str(payload.get("fiyat") or "0").replace(",", ".")
+    from financial_values import number as _number
+    miktar_val = _number(raw_miktar, "Miktar")
+    if payload.get("fiyat") not in (None, "", 0):
+        fiyat_val = _number(raw_fiyat, "Birim fiyat")
+    else:
+        fiyat_val = None
+
+    tip = (payload.get("tip") or "giris").strip().lower()
+    if tip not in ("giris", "cikis"):
+        raise HTTPException(422, "Tip 'giris' veya 'cikis' olmalıdır.")
+    if miktar_val == 0:
+        raise HTTPException(422, "Miktar sıfır olamaz.")
+
     kayit = models.Stok(
         user_id=user.id,
+        organization_id=user.organization_id,
         santiye_id=payload.get("santiye_id"),
         malzeme=payload.get("malzeme"),
         malzeme_ad=payload.get("malzeme_ad", ""),
-        miktar=str(payload.get("miktar")),
+        miktar=str(miktar_val),
         birim=payload.get("birim", ""),
-        tip=payload.get("tip", "giris"),
+        tip=tip,
         tedarikci=payload.get("tedarikci", ""),
-        fiyat=str(payload.get("fiyat", "")),
+        fiyat=str(fiyat_val) if fiyat_val is not None else "",
         notlar=payload.get("notlar", "")
     )
     db.add(kayit)
@@ -3634,12 +3786,94 @@ def stok_sil(request: Request, stok_id: int, token: str = "", db: Session = Depe
         auth_header = request.headers.get("Authorization", "")
         token = auth_header.replace("Bearer ", "").strip() if auth_header else ""
     user = kullanici_dogrula(token, db)
-    kayit = db.query(models.Stok).filter(models.Stok.id == stok_id, models.Stok.user_id == user.id).first()
+    kayit = scope_query(db, user, models.Stok).filter(models.Stok.id == stok_id, models.Stok.user_id == user.id).first()
     if not kayit:
         raise HTTPException(status_code=404, detail="Kayıt bulunamadı.")
+    require_record(user, kayit, db, "write")
     db.delete(kayit)
     db.commit()
     return {"mesaj": "Silindi."}
+
+
+@app.post("/stok-sarf")
+@limiter.limit("30/minute")
+def stok_sarf(request: Request, payload: dict = Body(...), db: Session = Depends(database.get_db)):
+    """Manuel stok sarfiyatı (çıkış hareketi). React StokYonetimi tarafından çağrılır."""
+    token = payload.get("token") or _request_token(request)
+    user = kullanici_dogrula(token, db)
+    plan = get_user_plan(user)
+    if not get_plan_limit(plan, "stok"):
+        raise HTTPException(status_code=403, detail="PLAN_YETERSIZ:stok:pro")
+    if payload.get("santiye_id"):
+        require_site(user, int(payload["santiye_id"]), db, "write")
+
+    raw_miktar = str(payload.get("miktar") or "0").replace(",", ".")
+    from financial_values import number as _number
+    miktar_val = _number(raw_miktar, "Miktar")
+    if miktar_val == 0:
+        raise HTTPException(422, "Miktar sıfır olamaz.")
+
+    malzeme = (payload.get("malzeme") or "").strip()
+    if not malzeme:
+        raise HTTPException(422, "Malzeme adı zorunludur.")
+
+    hareket = models.StokHareket(
+        malzeme=malzeme,
+        malzeme_ad=payload.get("malzeme_ad") or malzeme,
+        miktar=float(miktar_val),
+        tip="cikis",
+        kaynak="manuel",
+        santiye_id=payload.get("santiye_id") or None,
+        kullanici_id=user.id,
+        organization_id=user.organization_id,
+        notlar=payload.get("notlar") or "",
+    )
+    db.add(hareket)
+    db.commit()
+    db.refresh(hareket)
+    return {"mesaj": "Sarf kaydedildi.", "id": hareket.id}
+
+
+@app.post("/stok-esik-ayarla")
+@limiter.limit("30/minute")
+def stok_esik_ayarla(request: Request, payload: dict = Body(...), db: Session = Depends(database.get_db)):
+    """Malzeme minimum stok eşiğini belirler veya günceller. React StokYonetimi tarafından çağrılır."""
+    token = payload.get("token") or _request_token(request)
+    user = kullanici_dogrula(token, db)
+    plan = get_user_plan(user)
+    if not get_plan_limit(plan, "stok"):
+        raise HTTPException(status_code=403, detail="PLAN_YETERSIZ:stok:pro")
+    if payload.get("santiye_id"):
+        require_site(user, int(payload["santiye_id"]), db, "write")
+
+    malzeme = (payload.get("malzeme") or "").strip()
+    if not malzeme:
+        raise HTTPException(422, "Malzeme adı zorunludur.")
+
+    raw_min = str(payload.get("min_miktar") or "0").replace(",", ".")
+    from financial_values import number as _number
+    min_val = float(_number(raw_min, "Minimum miktar"))
+
+    esik = db.query(models.StokEsik).filter(
+        models.StokEsik.malzeme == malzeme,
+        models.StokEsik.organization_id == user.organization_id,
+        models.StokEsik.santiye_id == (payload.get("santiye_id") or None),
+    ).first()
+    if esik:
+        esik.min_miktar = min_val
+        esik.malzeme_ad = payload.get("malzeme_ad") or malzeme
+    else:
+        esik = models.StokEsik(
+            malzeme=malzeme,
+            malzeme_ad=payload.get("malzeme_ad") or malzeme,
+            min_miktar=min_val,
+            santiye_id=payload.get("santiye_id") or None,
+            organization_id=user.organization_id,
+        )
+        db.add(esik)
+    db.commit()
+    return {"mesaj": "Eşik kaydedildi.", "malzeme": malzeme, "min_miktar": min_val}
+
 
 # --- 💳 ÖDEME BİLDİRİMİ ---
 @app.post("/odeme-bildirimi")
@@ -3763,19 +3997,208 @@ def admin_istatistikler(request: Request, token: str = "", db: Session = Depends
     }
 
 
+# --- 🏢 ORGANİZASYON YÖNETİMİ ---
+
+@app.post("/organizasyon")
+@limiter.limit("10/minute")
+def organizasyon_olustur(request: Request, payload: dict = Body(...), db: Session = Depends(database.get_db)):
+    user = kullanici_dogrula(_request_token(request) or payload.get("token", ""), db)
+    if user.organization_id:
+        raise HTTPException(status_code=409, detail="Zaten bir organizasyona üyesiniz.")
+    ad = (payload.get("ad") or payload.get("name") or "").strip()
+    if not ad:
+        raise HTTPException(status_code=422, detail="Organizasyon adı zorunludur.")
+    org = models.Organization(name=ad, owner_user_id=user.id)
+    db.add(org)
+    db.flush()
+    user.organization_id = org.id
+    db.add(models.ProjectMember(
+        organization_id=org.id,
+        user_id=user.id,
+        santiye_id=None,
+        role="proje_muduru",
+        status="active",
+        invited_by=user.id,
+    ))
+    db.commit()
+    db.refresh(user)
+    logger.info("Organizasyon oluşturuldu: org_id=%s user_id=%s", org.id, user.id)
+    return {"ok": True, "organization_id": org.id, "name": org.name}
+
+
+@app.get("/organizasyon")
+@limiter.limit("60/minute")
+def organizasyon_getir(request: Request, db: Session = Depends(database.get_db)):
+    user = kullanici_dogrula(_request_token(request), db)
+    if not user.organization_id:
+        return {"organization": None}
+    org = db.query(models.Organization).filter_by(id=user.organization_id).first()
+    if not org:
+        return {"organization": None}
+    return {
+        "organization": {
+            "id": org.id,
+            "name": org.name,
+            "is_owner": org.owner_user_id == user.id,
+        }
+    }
+
+
+@app.post("/davet-gonder")
+@limiter.limit("20/minute")
+def davet_gonder(request: Request, payload: dict = Body(...), db: Session = Depends(database.get_db)):
+    user = kullanici_dogrula(_request_token(request) or payload.get("token", ""), db)
+    if not is_org_owner(user, db):
+        raise HTTPException(status_code=403, detail="Davet göndermek için organizasyon sahibi olmalısınız.")
+
+    email = (payload.get("email") or "").strip().lower()
+    from access_control import CANONICAL_ROLES
+    role = normalize_role((payload.get("role") or "muhendis").strip())
+    santiye_ids: list = payload.get("santiye_ids") or []
+
+    if role not in CANONICAL_ROLES:
+        raise HTTPException(status_code=422, detail=f"Geçersiz rol. İzin verilenler: {', '.join(sorted(CANONICAL_ROLES))}")
+
+    token_str = secrets.token_urlsafe(32)
+    expires_at = datetime.datetime.utcnow() + datetime.timedelta(days=7)
+
+    davet = models.Invitation(
+        organization_id=user.organization_id,
+        email=email or "",
+        role=role,
+        invited_by=user.id,
+        token=token_str,
+        expires_at=expires_at,
+        status="pending",
+    )
+    db.add(davet)
+    db.commit()
+
+    host = request.headers.get("host", "buildingai.com.tr")
+    scheme = "https" if request.url.scheme == "https" or "buildingai.com.tr" in host else "http"
+    davet_url = f"{scheme}://{host}/davet/{token_str}"
+
+    email_sent = False
+    if email:
+        org = db.query(models.Organization).filter_by(id=user.organization_id).first()
+        org_name = org.name if org else "BuildingAI"
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;background:#1a1d21;color:#f0f0f0;padding:30px;border-radius:12px;">
+            <h2 style="color:#e67e22;text-align:center;">🏗️ BuildingAI Pro</h2>
+            <h3 style="text-align:center;">Ekip Daveti</h3>
+            <p style="color:#a0a0a0;"><b style="color:white">{user.full_name or user.email}</b> sizi <b style="color:white">{org_name}</b> organizasyonuna <b style="color:#e67e22">{role}</b> rolüyle davet etti.</p>
+            <div style="text-align:center;margin:24px 0;">
+                <a href="{davet_url}" style="background:#e67e22;color:white;padding:14px 28px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:16px;">Daveti Kabul Et</a>
+            </div>
+            <p style="color:#a0a0a0;font-size:12px;text-align:center;">Bu link 7 gün geçerlidir.</p>
+            <hr style="border-color:#333;margin:20px 0;">
+            <p style="color:#555;font-size:11px;text-align:center;">BuildingAI Pro — buildingai.com.tr</p>
+        </div>
+        """
+        email_sent = email_gonder(email, f"BuildingAI Pro — {org_name} Ekip Daveti", html)
+
+    logger.info("Davet oluşturuldu: org=%s role=%s email_sent=%s", user.organization_id, role, email_sent)
+    return {"ok": True, "davet_url": davet_url, "email_sent": email_sent, "expires_at": expires_at.isoformat()}
+
+
+@app.get("/davet/{token_str}")
+@limiter.limit("20/minute")
+async def davet_kabul(request: Request, token_str: str, db: Session = Depends(database.get_db)):
+    davet = db.query(models.Invitation).filter_by(token=token_str, status="pending").first()
+    if not davet:
+        return HTMLResponse("<h2>Davet geçersiz veya zaten kullanılmış.</h2>", status_code=400)
+    if davet.expires_at < datetime.datetime.utcnow():
+        return HTMLResponse("<h2>Davet süresi dolmuş. Yeni davet isteyin.</h2>", status_code=400)
+
+    # Giriş yapmış kullanıcı varsa doğrudan işle
+    token_header = _request_token(request)
+    if token_header:
+        try:
+            user = kullanici_dogrula(token_header, db)
+            if user.organization_id and user.organization_id != davet.organization_id:
+                return HTMLResponse("<h2>Zaten başka bir organizasyona üyesiniz.</h2>", status_code=409)
+            if not user.organization_id:
+                user.organization_id = davet.organization_id
+            existing = db.query(models.ProjectMember).filter_by(
+                organization_id=davet.organization_id,
+                user_id=user.id,
+                status="active",
+            ).first()
+            if not existing:
+                db.add(models.ProjectMember(
+                    organization_id=davet.organization_id,
+                    user_id=user.id,
+                    santiye_id=None,
+                    role=normalize_role(davet.role or "muhendis"),
+                    status="active",
+                    invited_by=davet.invited_by,
+                ))
+            davet.status = "accepted"
+            db.commit()
+            logger.info("Davet kabul edildi: davet_id=%s user_id=%s", davet.id, user.id)
+            return RedirectResponse(url="/app?davet=kabul")
+        except HTTPException:
+            pass
+
+    # Giriş yapılmamışsa kayıt/giriş sayfasına yönlendir, token'ı cookie'ye kaydet
+    response = RedirectResponse(url=f"/app?davet_token={token_str}")
+    response.set_cookie("pending_invite", token_str, max_age=3600, httponly=True,
+                        secure=request.url.scheme == "https", samesite="lax")
+    return response
+
+
+@app.post("/davet-iptal/{davet_id}")
+@limiter.limit("20/minute")
+def davet_iptal(request: Request, davet_id: int, db: Session = Depends(database.get_db)):
+    user = kullanici_dogrula(_request_token(request), db)
+    if not is_org_owner(user, db):
+        raise HTTPException(403, "Yalnızca organizasyon sahibi davet iptal edebilir.")
+    davet = db.query(models.Invitation).filter_by(id=davet_id, organization_id=user.organization_id).first()
+    if not davet:
+        raise HTTPException(404, "Davet bulunamadı.")
+    davet.status = "cancelled"
+    db.commit()
+    return {"ok": True}
+
+
 # --- 🏗️ ŞANTİYE YÖNETİMİ ---
 @app.get("/santiyeler")
 async def santiyeler_getir(request: Request, db: Session = Depends(database.get_db)):
     auth = request.headers.get("Authorization", "")
     token = auth.replace("Bearer ", "") if auth else request.query_params.get("token", "")
     user = kullanici_dogrula(token, db)
-    santiyeler = db.query(Santiye).filter(Santiye.user_id==user.id, Santiye.aktif==True).all()
+    santiyeler_q = scope_query(db, user, models.Santiye).filter(Santiye.aktif == True)
+    if user.organization_id is not None:
+        santiyeler_q = santiyeler_q.filter(
+            (Santiye.user_id == user.id) | (Santiye.organization_id == user.organization_id)
+        )
+    else:
+        santiyeler_q = santiyeler_q.filter(Santiye.user_id == user.id)
+    santiyeler = santiyeler_q.order_by(Santiye.id).all()
+    def progress(site_id):
+        works = db.query(models.IsKalemi).filter_by(santiye_id=site_id).filter(models.IsKalemi.durum != "iptal").all()
+        weights = sum(max(k.toplam_fiyat or 0, 0) for k in works)
+        if weights <= 0:
+            return None
+        weighted = 0
+        observed = False
+        for work in works:
+            latest = db.query(models.IlerlemeKaydi).filter_by(is_kalemi_id=work.id).order_by(models.IlerlemeKaydi.id.desc()).first()
+            if latest:
+                observed = True
+                weighted += max(work.toplam_fiyat or 0, 0) * latest.yuzde
+        return round(weighted / weights) if observed else None
+    progress_by_site = {s.id: progress(s.id) for s in santiyeler}
     return {"santiyeler": [
         {
             "id": s.id, "ad": s.ad, "konum": s.konum,
+            "sehir": s.sehir,
             "lat": s.lat, "lon": s.lon,
-            "ilerleme": s.ilerleme, "isci_sayisi": s.isci_sayisi,
-            "durum": s.durum, "isg_durumu": s.isg_durumu,
+            "ilerleme": progress_by_site[s.id],
+            "ilerleme_yontemi": "İş kalemi plan tutarı ağırlıklı; kaydı olmayan kalem %0" if progress_by_site[s.id] is not None else None,
+            "isci_sayisi": s.isci_sayisi,
+            "durum": s.durum if s.durum not in ("iyi", "Zamanında") else None,
+            "isg_durumu": s.isg_durumu if s.isg_durumu not in ("Normal", "Uygun") else None,
             "notlar": s.notlar, "foto": s.foto or None,
             "guncelleme": str(s.updated_at)[:16]
         } for s in santiyeler
@@ -3786,24 +4209,28 @@ async def santiye_ekle(request: Request, payload: dict = Body(...), db: Session 
     auth = request.headers.get("Authorization", "")
     token = auth.replace("Bearer ", "") if auth else payload.get("token", "")
     user = kullanici_dogrula(token, db)
+    if user.organization_id and not is_org_owner(user, db):
+        raise HTTPException(403, "Şantiye oluşturmak için organizasyon sahibi olmalısınız.")
     plan = get_user_plan(user)
     santiye_max = get_plan_limit(plan, "santiye_max")
     if santiye_max == 0:
         raise HTTPException(status_code=403, detail="PLAN_YETERSIZ:santiye:pro")
     if santiye_max != -1:
-        mevcut = db.query(Santiye).filter(Santiye.user_id==user.id, Santiye.aktif==True).count()
+        mevcut = scope_query(db, user, models.Santiye).filter(Santiye.user_id==user.id, Santiye.aktif==True).count()
         if mevcut >= santiye_max:
             raise HTTPException(status_code=403, detail=f"PLAN_YETERSIZ:santiye:max")
     s = Santiye(
         user_id=user.id,
+        organization_id=user.organization_id,
         ad=payload.get("ad", ""),
+        sehir=payload.get("sehir"),
         konum=payload.get("konum", ""),
         lat=str(payload.get("lat", "")),
         lon=str(payload.get("lon", "")),
-        ilerleme=int(payload.get("ilerleme", 0)),
+        ilerleme=0,
         isci_sayisi=int(payload.get("isci_sayisi", 0)),
-        durum=payload.get("durum", "iyi"),
-        isg_durumu=payload.get("isg_durumu", "Normal"),
+        durum=None,
+        isg_durumu=None,
         notlar=payload.get("notlar", ""),
         foto=payload.get("foto", None)
     )
@@ -3816,10 +4243,10 @@ async def santiye_guncelle(santiye_id: int, request: Request, payload: dict = Bo
     auth = request.headers.get("Authorization", "")
     token = auth.replace("Bearer ", "") if auth else payload.get("token", "")
     user = kullanici_dogrula(token, db)
-    s = db.query(Santiye).filter(Santiye.id==santiye_id, Santiye.user_id==user.id).first()
+    s = scope_query(db, user, models.Santiye).filter(Santiye.id==santiye_id, Santiye.user_id==user.id).first()
     if not s:
         raise HTTPException(status_code=404, detail="Şantiye bulunamadı.")
-    for alan in ["ad", "konum", "lat", "lon", "notlar", "durum", "isg_durumu", "foto"]:
+    for alan in ["ad", "sehir", "konum", "lat", "lon", "notlar", "durum", "isg_durumu", "foto"]:
         if alan in payload:
             setattr(s, alan, payload[alan])
     if "ilerleme" in payload:
@@ -3835,7 +4262,7 @@ async def santiye_sil(santiye_id: int, request: Request, db: Session = Depends(d
     auth = request.headers.get("Authorization", "")
     token = auth.replace("Bearer ", "") if auth else request.query_params.get("token", "")
     user = kullanici_dogrula(token, db)
-    s = db.query(Santiye).filter(Santiye.id==santiye_id, Santiye.user_id==user.id).first()
+    s = scope_query(db, user, models.Santiye).filter(Santiye.id==santiye_id, Santiye.user_id==user.id).first()
     if not s:
         raise HTTPException(status_code=404, detail="Şantiye bulunamadı.")
     s.aktif = False
@@ -3854,7 +4281,8 @@ async def santiye_dosya_yukle(
     santiye_beyni.py'deki read_documents() bu klasörü okuyacak şekilde güncellenir.
     """
     import shutil, os
-    kullanici_dogrula(token, db)  # auth kontrolü
+    user = kullanici_dogrula(token, db)
+    require_site(user, santiye_id, db, "write")
     izin = [".pdf", ".xlsx", ".xls", ".doc", ".docx"]
     kayit_klasoru = f"data/{santiye_id}"
     os.makedirs(kayit_klasoru, exist_ok=True)
@@ -3864,7 +4292,7 @@ async def santiye_dosya_yukle(
         ext = os.path.splitext(dosya.filename)[1].lower()
         if ext not in izin:
             continue
-        hedef = f"{kayit_klasoru}/{dosya.filename}"
+        hedef = str(Path(kayit_klasoru) / (uuid.uuid4().hex + ext))
         with open(hedef, "wb") as f:
             shutil.copyfileobj(dosya.file, f)
         kaydedilen.append(dosya.filename)
@@ -4011,7 +4439,7 @@ async def haftalik_rapor_olustur_endpoint(payload: dict = Body(...), db: Session
     yedi_gun_once = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None) - dt.timedelta(days=7)
 
     # ISG kayıtları (son 7 günlük raporlardan)
-    raporlar = db.query(models.Report).filter(
+    raporlar = scope_query(db, user, models.Report).filter(
         models.Report.user_id == user.id,
         models.Report.created_at >= yedi_gun_once
     ).order_by(models.Report.created_at.desc()).limit(20).all()
@@ -4028,8 +4456,8 @@ async def haftalik_rapor_olustur_endpoint(payload: dict = Body(...), db: Session
     malzemeler = ['demir', 'cimento', 'beton', 'tugla', 'kum']
     stok_ozet = {}
     for m in malzemeler:
-        girisler = db.query(models.Stok).filter(models.Stok.user_id==user.id, models.Stok.malzeme==m, models.Stok.tip=='giris').all()
-        cikislar = db.query(models.Stok).filter(models.Stok.user_id==user.id, models.Stok.malzeme==m, models.Stok.tip=='cikis').all()
+        girisler = scope_query(db, user, models.Stok).filter(models.Stok.user_id==user.id, models.Stok.malzeme==m, models.Stok.tip=='giris').all()
+        cikislar = scope_query(db, user, models.Stok).filter(models.Stok.user_id==user.id, models.Stok.malzeme==m, models.Stok.tip=='cikis').all()
         haftalik_giris = sum(float(s.miktar) for s in girisler if s.created_at >= yedi_gun_once)
         haftalik_cikis = sum(float(s.miktar) for s in cikislar if s.created_at >= yedi_gun_once)
         mevcut = sum(float(s.miktar) for s in girisler) - sum(float(s.miktar) for s in cikislar)
@@ -4041,7 +4469,7 @@ async def haftalik_rapor_olustur_endpoint(payload: dict = Body(...), db: Session
             }
 
     # Kamera analizleri
-    kamera_analizler = db.query(models.KameraAnaliz).filter(
+    kamera_analizler = scope_query(db, user, models.KameraAnaliz).filter(
         models.KameraAnaliz.user_id == user.id,
         models.KameraAnaliz.created_at >= yedi_gun_once
     ).order_by(models.KameraAnaliz.created_at.desc()).limit(5).all()
@@ -4094,18 +4522,16 @@ Sadece değerlendirme metnini yaz, başka hiçbir şey ekleme."""
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=BuildingAI_Haftalik_{tarih_str}.pdf"}
+        headers={"Content-Disposition": _content_disposition(f"BuildingAI_Haftalik_{tarih_str}.pdf")}
     )
 
 @app.get("/health")
 async def health_check(db: Session = Depends(database.get_db)):
-    from sqlalchemy import text
     try:
-        db.execute(text("SELECT 1"))
-        db_status = "connected"
-    except Exception as e:
-        db_status = f"error: {str(e)}"
-    return {"status": "ok", "db": db_status, "version": "1.0.0"}
+        db.query(models.User.id).limit(1).all()
+    except Exception:
+        return JSONResponse({"status": "error", "db": "unavailable"}, status_code=503)
+    return {"status": "ok", "db": "connected", "version": "1.0.0"}
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -4129,6 +4555,8 @@ def karar_mesajlari(
     ).first()
     if not decision:
         raise HTTPException(status_code=404, detail="Karar bulunamadı")
+    source = _review_source_row_or_404(user, decision.source_type, decision.source_id, db)
+    require_record(user, source, db, "read" if request.method == "GET" else "write")
 
     rows = (
         db.query(models.DecisionMessage, models.User)
@@ -4173,6 +4601,8 @@ def karar_mesaj_ekle(
     ).first()
     if not decision:
         raise HTTPException(status_code=404, detail="Karar bulunamadı")
+    source = _review_source_row_or_404(user, decision.source_type, decision.source_id, db)
+    require_record(user, source, db, "read" if request.method == "GET" else "write")
 
     yeni = models.DecisionMessage(
         decision_id=decision_id,
@@ -4207,6 +4637,8 @@ def karar_arsivle(
     ).first()
     if not decision:
         raise HTTPException(status_code=404, detail="Karar bulunamadı")
+    source = _review_source_row_or_404(user, decision.source_type, decision.source_id, db)
+    require_record(user, source, db, "read" if request.method == "GET" else "write")
     if decision.archived_at is not None:
         raise HTTPException(status_code=400, detail="Bu karar zaten arşivlenmiş")
 
@@ -4276,6 +4708,8 @@ async def yolo_frame_analiz(
     santiye_id = payload.get("santiye_id") or None
 
     user = kullanici_dogrula(token, db)
+    if santiye_id:
+        require_site(user, santiye_id, db, "write")
 
     if not kullanim_kontrol(user, db, "kamera", 3, "hafta"):
         raise HTTPException(
@@ -4323,6 +4757,8 @@ async def yolo_video_analiz(
                analiz_edilen_kare, toplam_kare, timestamp, analiz_id, thumbnail }
     """
     user = kullanici_dogrula(token, db)
+    if santiye_id:
+        require_site(user, santiye_id, db, "write")
 
     if not kullanim_kontrol(user, db, "kamera", 3, "hafta"):
         raise HTTPException(
@@ -4395,7 +4831,7 @@ def yolo_analizler(
     user = kullanici_dogrula(token, db)
     limit = max(1, min(limit, 100))
 
-    q = db.query(models.VideoAnaliz).filter(models.VideoAnaliz.user_id == user.id)
+    q = scope_query(db, user, models.VideoAnaliz).filter(models.VideoAnaliz.user_id == user.id)
     if santiye_id:
         q = q.filter(models.VideoAnaliz.santiye_id == santiye_id)
     kayitlar = q.order_by(models.VideoAnaliz.created_at.desc()).limit(limit).all()
@@ -4430,7 +4866,7 @@ def yolo_analiz_detay(
     db: Session = Depends(database.get_db),
 ):
     user = kullanici_dogrula(token, db)
-    kayit = db.query(models.VideoAnaliz).filter(
+    kayit = scope_query(db, user, models.VideoAnaliz).filter(
         models.VideoAnaliz.id == analiz_id,
         models.VideoAnaliz.user_id == user.id,
     ).first()
@@ -4499,10 +4935,12 @@ async def profil_guncelle(request: Request, payload: dict = Body(default={}), db
 def api_camera_analyses(request: Request, santiye_id: int = None, limit: int = 50, db: Session = Depends(database.get_db)):
     token = _request_token(request)
     user = kullanici_dogrula(token, db)
-    q = db.query(models.ArchiveRecord).filter(
-        models.ArchiveRecord.user_id == user.id,
-        models.ArchiveRecord.status != "deleted",
-    )
+    if santiye_id:
+        _kullanici_santiye_kontrol(user, santiye_id, db)
+    owner_filter = models.ArchiveRecord.user_id == user.id
+    if user.organization_id is not None:
+        owner_filter = or_(owner_filter, models.ArchiveRecord.organization_id == user.organization_id)
+    q = scope_query(db, user, models.ArchiveRecord).filter(owner_filter, models.ArchiveRecord.status != "deleted")
     if santiye_id:
         q = q.filter(models.ArchiveRecord.santiye_id == santiye_id)
     kayitlar = q.order_by(models.ArchiveRecord.created_at.desc()).limit(limit).all()
@@ -4526,10 +4964,12 @@ def api_camera_analyses(request: Request, santiye_id: int = None, limit: int = 5
 def api_saha_kayitlari(request: Request, santiye_id: int = None, limit: int = 50, db: Session = Depends(database.get_db)):
     token = _request_token(request)
     user = kullanici_dogrula(token, db)
-    q = db.query(models.ArchiveRecord).filter(
-        models.ArchiveRecord.user_id == user.id,
-        models.ArchiveRecord.status == "active",
-    )
+    if santiye_id:
+        _kullanici_santiye_kontrol(user, santiye_id, db)
+    owner_filter = models.ArchiveRecord.user_id == user.id
+    if user.organization_id is not None:
+        owner_filter = or_(owner_filter, models.ArchiveRecord.organization_id == user.organization_id)
+    q = scope_query(db, user, models.ArchiveRecord).filter(owner_filter, models.ArchiveRecord.status == "active")
     if santiye_id:
         q = q.filter(models.ArchiveRecord.santiye_id == santiye_id)
     kayitlar = q.order_by(models.ArchiveRecord.created_at.desc()).limit(limit).all()
@@ -4656,7 +5096,7 @@ def fiyat_alertler(request: Request, limit: int = 20, status: str = "pending", d
     token = _request_token(request)
     user = kullanici_dogrula(token, db)
     org_id = user.organization_id
-    q = db.query(models.MalzemeUyari)
+    q = scope_query(db, user, models.MalzemeUyari)
     if org_id:
         q = q.filter((models.MalzemeUyari.organization_id == org_id) | (models.MalzemeUyari.organization_id == None))
     else:
@@ -4704,9 +5144,7 @@ def fiyat_marka_karsilastirma(request: Request, alt_kategori: str = "", db: Sess
 def santiye_hiyerarsi(request: Request, santiye_id: int, db: Session = Depends(database.get_db)):
     token = _request_token(request)
     user = kullanici_dogrula(token, db)
-    santiye = db.query(Santiye).filter(Santiye.id == santiye_id).first()
-    if not santiye:
-        raise HTTPException(status_code=404, detail="Şantiye bulunamadı.")
+    _kullanici_santiye_kontrol(user, santiye_id, db)
 
     def _ik_dict(k, mahal_ad=None):
         son_ilerleme = db.query(models.IlerlemeKaydi).filter(
@@ -4765,13 +5203,15 @@ def santiye_hiyerarsi(request: Request, santiye_id: int, db: Session = Depends(d
 def santiye_is_kalemleri(request: Request, santiye_id: int, db: Session = Depends(database.get_db)):
     token = _request_token(request)
     user = kullanici_dogrula(token, db)
-    santiye = db.query(Santiye).filter(Santiye.id == santiye_id).first()
+    santiye = scope_query(db, user, models.Santiye).filter(Santiye.id == santiye_id).first()
     if not santiye:
         raise HTTPException(status_code=404, detail="Şantiye bulunamadı.")
+    require_hierarchy(user, santiye, db)
     kalemler = db.query(models.IsKalemi).filter(models.IsKalemi.santiye_id == santiye_id).order_by(models.IsKalemi.id).all()
     return {"kalemler": [
         {
-            "id": k.id, "ad": k.tanim, "birim": k.birim,
+            "id": k.id, "ad": k.tanim, "tanim": k.tanim, "poz_no": k.poz_no,
+            "mahal_id": k.mahal_id, "birim": k.birim,
             "miktar": k.metraj, "birim_fiyat": k.birim_fiyat / 100.0,
             "toplam_fiyat": k.toplam_fiyat / 100.0, "durum": k.durum,
         } for k in kalemler
@@ -4784,10 +5224,11 @@ def santiye_is_kalemleri(request: Request, santiye_id: int, db: Session = Depend
 @limiter.limit("60/minute")
 def bina_ekle(request: Request, santiye_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
     token = _request_token(request)
-    kullanici_dogrula(token, db)
-    santiye = db.query(Santiye).filter(Santiye.id == santiye_id).first()
+    user = kullanici_dogrula(token, db)
+    santiye = scope_query(db, user, models.Santiye).filter(Santiye.id == santiye_id).first()
     if not santiye:
         raise HTTPException(status_code=404, detail="Şantiye bulunamadı.")
+    require_hierarchy(user, santiye, db, "write")
     ad = (body.get("ad") or "").strip()
     if not ad:
         raise HTTPException(status_code=422, detail="Bina adı zorunludur.")
@@ -4807,10 +5248,11 @@ def bina_ekle(request: Request, santiye_id: int, body: dict = Body(...), db: Ses
 @limiter.limit("60/minute")
 def bina_guncelle(request: Request, bina_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
     token = _request_token(request)
-    kullanici_dogrula(token, db)
+    user = kullanici_dogrula(token, db)
     bina = db.query(models.Bina).filter(models.Bina.id == bina_id).first()
     if not bina:
         raise HTTPException(status_code=404, detail="Bina bulunamadı.")
+    require_hierarchy(user, bina, db, "write")
     if "ad" in body and body["ad"]:
         bina.ad = body["ad"].strip()
     if "bina_tipi" in body:
@@ -4825,10 +5267,13 @@ def bina_guncelle(request: Request, bina_id: int, body: dict = Body(...), db: Se
 @limiter.limit("60/minute")
 def bina_sil(request: Request, bina_id: int, db: Session = Depends(database.get_db)):
     token = _request_token(request)
-    kullanici_dogrula(token, db)
+    user = kullanici_dogrula(token, db)
     bina = db.query(models.Bina).filter(models.Bina.id == bina_id).first()
     if not bina:
         raise HTTPException(status_code=404, detail="Bina bulunamadı.")
+    require_hierarchy(user, bina, db, "write")
+    if db.query(models.IsKalemi.id).filter(models.IsKalemi.mahal.has(models.Mahal.kat.has(bina_id=bina.id))).first():
+        raise HTTPException(409, "İş kalemi bulunan çalışma alanı silinemez.")
     db.delete(bina)
     db.commit()
     return {"ok": True}
@@ -4838,10 +5283,11 @@ def bina_sil(request: Request, bina_id: int, db: Session = Depends(database.get_
 @limiter.limit("60/minute")
 def kat_ekle(request: Request, bina_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
     token = _request_token(request)
-    kullanici_dogrula(token, db)
+    user = kullanici_dogrula(token, db)
     bina = db.query(models.Bina).filter(models.Bina.id == bina_id).first()
     if not bina:
         raise HTTPException(status_code=404, detail="Bina bulunamadı.")
+    require_hierarchy(user, bina, db, "write")
     kat_no = body.get("kat_no")
     if kat_no is None:
         raise HTTPException(status_code=422, detail="Kat numarası zorunludur.")
@@ -4861,10 +5307,11 @@ def kat_ekle(request: Request, bina_id: int, body: dict = Body(...), db: Session
 @limiter.limit("60/minute")
 def kat_guncelle(request: Request, kat_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
     token = _request_token(request)
-    kullanici_dogrula(token, db)
+    user = kullanici_dogrula(token, db)
     kat = db.query(models.Kat).filter(models.Kat.id == kat_id).first()
     if not kat:
         raise HTTPException(status_code=404, detail="Kat bulunamadı.")
+    require_hierarchy(user, kat, db, "write")
     if "kat_no" in body and body["kat_no"] is not None:
         kat.kat_no = int(body["kat_no"])
     if "etiket" in body:
@@ -4879,10 +5326,13 @@ def kat_guncelle(request: Request, kat_id: int, body: dict = Body(...), db: Sess
 @limiter.limit("60/minute")
 def kat_sil(request: Request, kat_id: int, db: Session = Depends(database.get_db)):
     token = _request_token(request)
-    kullanici_dogrula(token, db)
+    user = kullanici_dogrula(token, db)
     kat = db.query(models.Kat).filter(models.Kat.id == kat_id).first()
     if not kat:
         raise HTTPException(status_code=404, detail="Kat bulunamadı.")
+    require_hierarchy(user, kat, db, "write")
+    if db.query(models.IsKalemi.id).filter(models.IsKalemi.mahal.has(kat_id=kat.id)).first():
+        raise HTTPException(409, "İş kalemi bulunan çalışma alanı silinemez.")
     db.delete(kat)
     db.commit()
     return {"ok": True}
@@ -4892,10 +5342,11 @@ def kat_sil(request: Request, kat_id: int, db: Session = Depends(database.get_db
 @limiter.limit("60/minute")
 def mahal_ekle(request: Request, kat_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
     token = _request_token(request)
-    kullanici_dogrula(token, db)
+    user = kullanici_dogrula(token, db)
     kat = db.query(models.Kat).filter(models.Kat.id == kat_id).first()
     if not kat:
         raise HTTPException(status_code=404, detail="Kat bulunamadı.")
+    require_hierarchy(user, kat, db, "write")
     ad = (body.get("ad") or "").strip()
     if not ad:
         raise HTTPException(status_code=422, detail="Mahal adı zorunludur.")
@@ -4915,10 +5366,11 @@ def mahal_ekle(request: Request, kat_id: int, body: dict = Body(...), db: Sessio
 @limiter.limit("60/minute")
 def mahal_guncelle(request: Request, mahal_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
     token = _request_token(request)
-    kullanici_dogrula(token, db)
+    user = kullanici_dogrula(token, db)
     mahal = db.query(models.Mahal).filter(models.Mahal.id == mahal_id).first()
     if not mahal:
         raise HTTPException(status_code=404, detail="Mahal bulunamadı.")
+    require_hierarchy(user, mahal, db, "write")
     if "ad" in body and body["ad"]:
         mahal.ad = body["ad"].strip()
     if "mahal_tipi" in body:
@@ -4933,25 +5385,28 @@ def mahal_guncelle(request: Request, mahal_id: int, body: dict = Body(...), db: 
 @limiter.limit("60/minute")
 def mahal_sil(request: Request, mahal_id: int, db: Session = Depends(database.get_db)):
     token = _request_token(request)
-    kullanici_dogrula(token, db)
+    user = kullanici_dogrula(token, db)
     mahal = db.query(models.Mahal).filter(models.Mahal.id == mahal_id).first()
     if not mahal:
         raise HTTPException(status_code=404, detail="Mahal bulunamadı.")
+    require_hierarchy(user, mahal, db, "write")
+    if db.query(models.IsKalemi.id).filter(models.IsKalemi.mahal_id == mahal.id).first():
+        raise HTTPException(409, "İş kalemi bulunan çalışma alanı silinemez.")
     db.delete(mahal)
     db.commit()
     return {"ok": True}
 
 
 def _is_kalemi_body_to_model(body: dict) -> dict:
-    birim_fiyat_tl = float(body.get("birim_fiyat_tl") or 0)
-    metraj = float(body.get("metraj") or 0)
+    birim_fiyat_tl = number(body.get("birim_fiyat_tl"), "Birim fiyat")
+    metraj = float(number(body.get("metraj"), "Metraj"))
     return {
         "poz_no": body.get("poz_no") or None,
         "tanim": (body.get("tanim") or "").strip(),
         "birim": body.get("birim") or "m²",
         "metraj": metraj,
-        "birim_fiyat": int(round(birim_fiyat_tl * 100)),
-        "toplam_fiyat": int(round(birim_fiyat_tl * metraj * 100)),
+        "birim_fiyat": kurus(birim_fiyat_tl),
+        "toplam_fiyat": amount(metraj, kurus(birim_fiyat_tl)),
         "durum": body.get("durum") or "planli",
         "katalog_id": body.get("katalog_id") or None,
     }
@@ -4961,10 +5416,11 @@ def _is_kalemi_body_to_model(body: dict) -> dict:
 @limiter.limit("60/minute")
 def is_kalemi_mahal_ekle(request: Request, mahal_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
     token = _request_token(request)
-    kullanici_dogrula(token, db)
+    user = kullanici_dogrula(token, db)
     mahal = db.query(models.Mahal).filter(models.Mahal.id == mahal_id).first()
     if not mahal:
         raise HTTPException(status_code=404, detail="Mahal bulunamadı.")
+    require_hierarchy(user, mahal, db, "write")
     fields = _is_kalemi_body_to_model(body)
     if not fields["tanim"]:
         raise HTTPException(status_code=422, detail="Tanım zorunludur.")
@@ -4985,10 +5441,11 @@ def is_kalemi_mahal_ekle(request: Request, mahal_id: int, body: dict = Body(...)
 @limiter.limit("60/minute")
 def is_kalemi_santiye_ekle(request: Request, santiye_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
     token = _request_token(request)
-    kullanici_dogrula(token, db)
-    santiye = db.query(Santiye).filter(Santiye.id == santiye_id).first()
+    user = kullanici_dogrula(token, db)
+    santiye = scope_query(db, user, models.Santiye).filter(Santiye.id == santiye_id).first()
     if not santiye:
         raise HTTPException(status_code=404, detail="Şantiye bulunamadı.")
+    require_hierarchy(user, santiye, db, "write")
     fields = _is_kalemi_body_to_model(body)
     if not fields["tanim"]:
         raise HTTPException(status_code=422, detail="Tanım zorunludur.")
@@ -5003,10 +5460,13 @@ def is_kalemi_santiye_ekle(request: Request, santiye_id: int, body: dict = Body(
 @limiter.limit("60/minute")
 def is_kalemi_guncelle(request: Request, ik_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
     token = _request_token(request)
-    kullanici_dogrula(token, db)
+    user = kullanici_dogrula(token, db)
     ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == ik_id).first()
     if not ik:
         raise HTTPException(status_code=404, detail="İş kalemi bulunamadı.")
+    require_hierarchy(user, ik, db, "write")
+    if db.query(models.IlerlemeKaydi.id).filter_by(is_kalemi_id=ik.id).first() or db.query(models.HakedisKalemi.id).filter_by(is_kalemi_id=ik.id).first():
+        raise HTTPException(409, "İlerleme veya hakedişe bağlı iş kalemi değiştirilemez; düzeltme kaydı gerekir.")
     if "tanim" in body and body["tanim"]:
         ik.tanim = body["tanim"].strip()
     if "poz_no" in body:
@@ -5014,14 +5474,14 @@ def is_kalemi_guncelle(request: Request, ik_id: int, body: dict = Body(...), db:
     if "birim" in body:
         ik.birim = body["birim"]
     if "metraj" in body:
-        ik.metraj = float(body["metraj"] or 0)
+        ik.metraj = float(number(body["metraj"], "Metraj"))
     if "birim_fiyat_tl" in body:
-        ik.birim_fiyat = int(round(float(body["birim_fiyat_tl"] or 0) * 100))
+        ik.birim_fiyat = kurus(body["birim_fiyat_tl"])
     if "durum" in body:
         ik.durum = body["durum"]
     if "katalog_id" in body:
         ik.katalog_id = body["katalog_id"] or None
-    ik.toplam_fiyat = int(round((ik.birim_fiyat / 100.0) * (ik.metraj or 0) * 100))
+    ik.toplam_fiyat = amount(ik.metraj or 0, ik.birim_fiyat)
     ik.updated_at = datetime.datetime.utcnow()
     db.commit()
     return {"id": ik.id, "tanim": ik.tanim}
@@ -5031,10 +5491,13 @@ def is_kalemi_guncelle(request: Request, ik_id: int, body: dict = Body(...), db:
 @limiter.limit("60/minute")
 def is_kalemi_sil(request: Request, ik_id: int, db: Session = Depends(database.get_db)):
     token = _request_token(request)
-    kullanici_dogrula(token, db)
+    user = kullanici_dogrula(token, db)
     ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == ik_id).first()
     if not ik:
         raise HTTPException(status_code=404, detail="İş kalemi bulunamadı.")
+    require_hierarchy(user, ik, db, "write")
+    if db.query(models.IlerlemeKaydi.id).filter_by(is_kalemi_id=ik.id).first() or db.query(models.HakedisKalemi.id).filter_by(is_kalemi_id=ik.id).first():
+        raise HTTPException(409, "İlerleme veya hakedişe bağlı iş kalemi değiştirilemez; düzeltme kaydı gerekir.")
     db.delete(ik)
     db.commit()
     return {"ok": True}
@@ -5044,10 +5507,11 @@ def is_kalemi_sil(request: Request, ik_id: int, db: Session = Depends(database.g
 @limiter.limit("60/minute")
 def is_kalemi_ilerleme_listele(request: Request, ik_id: int, db: Session = Depends(database.get_db)):
     token = _request_token(request)
-    kullanici_dogrula(token, db)
+    user = kullanici_dogrula(token, db)
     ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == ik_id).first()
     if not ik:
         raise HTTPException(status_code=404, detail="İş kalemi bulunamadı.")
+    require_hierarchy(user, ik, db, "read")
     kayitlar = (
         db.query(models.IlerlemeKaydi)
         .filter(models.IlerlemeKaydi.is_kalemi_id == ik_id)
@@ -5063,25 +5527,9 @@ def is_kalemi_ilerleme_listele(request: Request, ik_id: int, db: Session = Depen
 @app.post("/api/v2/is-kalemleri/{ik_id}/ilerleme")
 @limiter.limit("60/minute")
 def is_kalemi_ilerleme_ekle(request: Request, ik_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
-    token = _request_token(request)
-    kullanici_dogrula(token, db)
-    ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == ik_id).first()
-    if not ik:
-        raise HTTPException(status_code=404, detail="İş kalemi bulunamadı.")
-    yuzde = body.get("yuzde")
-    tarih = body.get("tarih")
-    if yuzde is None or tarih is None:
-        raise HTTPException(status_code=422, detail="Yüzde ve tarih zorunludur.")
-    kayit = models.IlerlemeKaydi(
-        is_kalemi_id=ik_id,
-        yuzde=float(yuzde),
-        tarih=str(tarih),
-        notlar=body.get("notlar") or None,
-    )
-    db.add(kayit)
-    db.commit()
-    db.refresh(kayit)
-    return {"id": kayit.id, "yuzde": kayit.yuzde, "tarih": kayit.tarih}
+    user = kullanici_dogrula(_request_token(request), db)
+    result = _save_progress(db, user, ik_id, body)
+    return {**result, "id": result["ilerleme_id"], "tarih": body.get("tarih") or datetime.date.today().isoformat()}
 
 
 @app.post("/api/v2/santiye/{santiye_id}/is-kalemleri/excel-import")
@@ -5094,10 +5542,11 @@ async def is_kalemi_excel_import(
 ):
     import openpyxl
     token = _request_token(request)
-    kullanici_dogrula(token, db)
-    santiye = db.query(Santiye).filter(Santiye.id == santiye_id).first()
+    user = kullanici_dogrula(token, db)
+    santiye = scope_query(db, user, models.Santiye).filter(Santiye.id == santiye_id).first()
     if not santiye:
         raise HTTPException(status_code=404, detail="Şantiye bulunamadı.")
+    require_hierarchy(user, santiye, db, "write")
 
     data = await file.read()
     try:
@@ -5134,9 +5583,9 @@ async def is_kalemi_excel_import(
             hatalar.append({"satir": idx, "sebep": "Tanım boş"})
             continue
         try:
-            metraj = float(_cell("metraj") or 0)
-            birim_fiyat_tl = float(_cell("birim_fiyat") or 0)
-        except (ValueError, TypeError):
+            metraj = float(number(_cell("metraj"), "Metraj"))
+            birim_fiyat_tl = number(_cell("birim_fiyat"), "Birim fiyat")
+        except (ValueError, TypeError, HTTPException):
             hatalar.append({"satir": idx, "sebep": "Metraj veya birim fiyat sayı değil"})
             continue
 
@@ -5148,7 +5597,7 @@ async def is_kalemi_excel_import(
         if bina_adi and kat_no_raw is not None and mahal_adi:
             try:
                 kat_no = int(float(kat_no_raw))
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, HTTPException):
                 kat_no = 0
             bina_key = (santiye_id, bina_adi)
             if bina_key not in bina_cache:
@@ -5196,8 +5645,8 @@ async def is_kalemi_excel_import(
             tanim=tanim,
             birim=str(_cell("birim") or "m²").strip(),
             metraj=metraj,
-            birim_fiyat=int(round(birim_fiyat_tl * 100)),
-            toplam_fiyat=int(round(birim_fiyat_tl * metraj * 100)),
+            birim_fiyat=kurus(birim_fiyat_tl),
+            toplam_fiyat=amount(metraj, kurus(birim_fiyat_tl)),
         )
         db.add(ik)
         basarili += 1
@@ -5214,13 +5663,13 @@ def malzemeler_katalog(request: Request, db: Session = Depends(database.get_db))
     token = _request_token(request)
     kullanici_dogrula(token, db)
     malzemeler = (
-        db.query(models.MalzemeKatalog)
-        .filter(models.MalzemeKatalog.aktif == True)
-        .order_by(models.MalzemeKatalog.ad)
+        db.query(models.BirlesikMalzeme)
+        .filter(models.BirlesikMalzeme.aktif == True)
+        .order_by(models.BirlesikMalzeme.ad)
         .all()
     )
     return {"malzemeler": [
-        {"id": m.id, "ad": m.ad, "birim": m.varsayilan_birim, "kategori": m.kategori}
+        {"id": m.id, "ad": m.ad, "birim": m.birim, "kategori": m.kategori}
         for m in malzemeler
     ]}
 
@@ -5229,10 +5678,11 @@ def malzemeler_katalog(request: Request, db: Session = Depends(database.get_db))
 @limiter.limit("60/minute")
 def is_kalemi_malzemeler(request: Request, ik_id: int, db: Session = Depends(database.get_db)):
     token = _request_token(request)
-    kullanici_dogrula(token, db)
+    user = kullanici_dogrula(token, db)
     ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == ik_id).first()
     if not ik:
         raise HTTPException(status_code=404, detail="İş kalemi bulunamadı.")
+    require_hierarchy(user, ik, db, "read")
     baglar = (
         db.query(models.IsKalemiMalzeme)
         .filter(models.IsKalemiMalzeme.is_kalemi_id == ik_id)
@@ -5246,7 +5696,7 @@ def is_kalemi_malzemeler(request: Request, ik_id: int, db: Session = Depends(dat
         mal_list.append({
             "malzeme_id": b.malzeme_katalog_id,
             "malzeme_ad": mk.ad if mk else f"#{b.malzeme_katalog_id}",
-            "birim": b.birim or (mk.varsayilan_birim if mk else None),
+            "birim": b.birim or (mk.birim if mk else None),
             "miktar": b.miktar,
             "kullanici_fiyat": None,
             "bolgesel_fiyat": None,
@@ -5266,14 +5716,15 @@ def is_kalemi_malzemeler(request: Request, ik_id: int, db: Session = Depends(dat
 @limiter.limit("60/minute")
 def is_kalemi_malzeme_ekle(request: Request, ik_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
     token = _request_token(request)
-    kullanici_dogrula(token, db)
+    user = kullanici_dogrula(token, db)
     ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == ik_id).first()
     if not ik:
         raise HTTPException(status_code=404, detail="İş kalemi bulunamadı.")
+    require_hierarchy(user, ik, db, "write")
     malzeme_id = body.get("malzeme_id")
     if not malzeme_id:
         raise HTTPException(status_code=422, detail="malzeme_id zorunludur.")
-    mk = db.query(models.MalzemeKatalog).filter(models.MalzemeKatalog.id == malzeme_id).first()
+    mk = db.query(models.BirlesikMalzeme).filter(models.BirlesikMalzeme.id == malzeme_id).first()
     if not mk:
         raise HTTPException(status_code=404, detail="Malzeme bulunamadı.")
     mevcut = db.query(models.IsKalemiMalzeme).filter(
@@ -5288,7 +5739,7 @@ def is_kalemi_malzeme_ekle(request: Request, ik_id: int, body: dict = Body(...),
             is_kalemi_id=ik_id,
             malzeme_katalog_id=malzeme_id,
             miktar=float(body.get("miktar") or 1.0),
-            birim=body.get("birim") or mk.varsayilan_birim,
+            birim=body.get("birim") or mk.birim,
         )
         db.add(mevcut)
     db.commit()
@@ -5299,7 +5750,9 @@ def is_kalemi_malzeme_ekle(request: Request, ik_id: int, body: dict = Body(...),
 @limiter.limit("60/minute")
 def is_kalemi_malzeme_miktar_guncelle(request: Request, ik_id: int, malzeme_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
     token = _request_token(request)
-    kullanici_dogrula(token, db)
+    user = kullanici_dogrula(token, db)
+    ik = db.query(models.IsKalemi).filter_by(id=ik_id).first()
+    require_hierarchy(user, ik, db, "write")
     bag = db.query(models.IsKalemiMalzeme).filter(
         models.IsKalemiMalzeme.is_kalemi_id == ik_id,
         models.IsKalemiMalzeme.malzeme_katalog_id == malzeme_id,
@@ -5317,7 +5770,9 @@ def is_kalemi_malzeme_miktar_guncelle(request: Request, ik_id: int, malzeme_id: 
 @limiter.limit("60/minute")
 def is_kalemi_malzeme_sil(request: Request, ik_id: int, malzeme_id: int, db: Session = Depends(database.get_db)):
     token = _request_token(request)
-    kullanici_dogrula(token, db)
+    user = kullanici_dogrula(token, db)
+    ik = db.query(models.IsKalemi).filter_by(id=ik_id).first()
+    require_hierarchy(user, ik, db, "write")
     bag = db.query(models.IsKalemiMalzeme).filter(
         models.IsKalemiMalzeme.is_kalemi_id == ik_id,
         models.IsKalemiMalzeme.malzeme_katalog_id == malzeme_id,
@@ -5334,17 +5789,18 @@ def is_kalemi_malzeme_sil(request: Request, ik_id: int, malzeme_id: int, db: Ses
 def is_kalemi_malzeme_toplu_ekle(request: Request, ik_id: int, body: dict = Body(...), db: Session = Depends(database.get_db)):
     """CSB öneri modalından toplu malzeme ekleme. body = {ekle: [{malzeme_katalog_id, miktar}]}"""
     token = _request_token(request)
-    kullanici_dogrula(token, db)
+    user = kullanici_dogrula(token, db)
     ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == ik_id).first()
     if not ik:
         raise HTTPException(status_code=404, detail="İş kalemi bulunamadı.")
+    require_hierarchy(user, ik, db, "write")
     ekle_listesi = body.get("ekle") or []
     eklendi = 0
     for item in ekle_listesi:
         mk_id = item.get("malzeme_katalog_id")
         if not mk_id:
             continue
-        mk = db.query(models.MalzemeKatalog).filter(models.MalzemeKatalog.id == mk_id).first()
+        mk = db.query(models.BirlesikMalzeme).filter(models.BirlesikMalzeme.id == mk_id).first()
         if not mk:
             continue
         mevcut = db.query(models.IsKalemiMalzeme).filter(
@@ -5358,7 +5814,7 @@ def is_kalemi_malzeme_toplu_ekle(request: Request, ik_id: int, body: dict = Body
                 is_kalemi_id=ik_id,
                 malzeme_katalog_id=mk_id,
                 miktar=float(item.get("miktar") or 1.0),
-                birim=mk.varsayilan_birim,
+                birim=mk.birim,
             ))
         eklendi += 1
     db.commit()
@@ -5370,7 +5826,9 @@ def is_kalemi_malzeme_toplu_ekle(request: Request, ik_id: int, body: dict = Body
 def is_kalemi_csb_malzemeler(request: Request, ik_id: int, db: Session = Depends(database.get_db)):
     """İş kalemine eklenmiş malzemelerin csb_malzeme_katalog_id listesi — 'zaten ekli' tespiti için."""
     token = _request_token(request)
-    kullanici_dogrula(token, db)
+    user = kullanici_dogrula(token, db)
+    ik = db.query(models.IsKalemi).filter_by(id=ik_id).first()
+    require_hierarchy(user, ik, db)
     baglar = db.query(models.IsKalemiMalzeme).filter(
         models.IsKalemiMalzeme.is_kalemi_id == ik_id
     ).all()
@@ -5384,10 +5842,11 @@ def is_kalemi_csb_malzemeler(request: Request, ik_id: int, db: Session = Depends
 @limiter.limit("60/minute")
 def is_kalemi_malzeme_oner(request: Request, ik_id: int, db: Session = Depends(database.get_db)):
     token = _request_token(request)
-    kullanici_dogrula(token, db)
+    user = kullanici_dogrula(token, db)
     ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == ik_id).first()
     if not ik:
         raise HTTPException(status_code=404, detail="İş kalemi bulunamadı.")
+    require_hierarchy(user, ik, db, "read")
 
     # CSB kataloğuna bağlıysa, katalog malzemelerini öner
     if ik.katalog_id:
@@ -5398,8 +5857,8 @@ def is_kalemi_malzeme_oner(request: Request, ik_id: int, db: Session = Depends(d
         )
         oneriler = []
         for cm in csb_malzemeler:
-            mk = db.query(models.MalzemeKatalog).filter(
-                models.MalzemeKatalog.id == cm.malzeme_katalog_id
+            mk = db.query(models.BirlesikMalzeme).filter(
+                models.BirlesikMalzeme.id == cm.malzeme_katalog_id
             ).first()
             oneriler.append({
                 "malzeme_katalog_id": cm.malzeme_katalog_id,
@@ -5414,8 +5873,8 @@ def is_kalemi_malzeme_oner(request: Request, ik_id: int, db: Session = Depends(d
 
     # Katalog bağlantısı yoksa: iş kalemi tanımında geçen kelimelere göre malzeme_katalog'dan eşleştir
     tanim = (ik.tanim or "").lower()
-    tum_malzemeler = db.query(models.MalzemeKatalog).filter(
-        models.MalzemeKatalog.aktif == True
+    tum_malzemeler = db.query(models.BirlesikMalzeme).filter(
+        models.BirlesikMalzeme.aktif == True
     ).all()
     oneriler = []
     for mk in tum_malzemeler:
@@ -5426,7 +5885,7 @@ def is_kalemi_malzeme_oner(request: Request, ik_id: int, db: Session = Depends(d
                 "malzeme_id": mk.id,
                 "malzeme_katalog_id": mk.id,
                 "malzeme_ad": mk.ad,
-                "birim": mk.varsayilan_birim,
+                "birim": mk.birim,
                 "miktar": 1.0,
                 "zorunlu": False,
                 "neden": f"'{mk.ad}' tanımda geçiyor",
@@ -5443,6 +5902,7 @@ def is_kalemi_malzeme_oner(request: Request, ik_id: int, db: Session = Depends(d
 def metraj_ozet(request: Request, santiye_id: int, db: Session = Depends(database.get_db)):
     token = _request_token(request)
     user = kullanici_dogrula(token, db)
+    _kullanici_santiye_kontrol(user, santiye_id, db)
     kalemler = db.query(models.IsKalemi).filter(models.IsKalemi.santiye_id == santiye_id).all()
     toplam = len(kalemler)
     tamamlanan = sum(1 for k in kalemler if k.durum == "tamamlandi")
@@ -5466,8 +5926,10 @@ def metraj_ozet(request: Request, santiye_id: int, db: Session = Depends(databas
 def hakedis_liste(request: Request, santiye_id: int, db: Session = Depends(database.get_db)):
     token = _request_token(request)
     user = kullanici_dogrula(token, db)
-    liste = db.query(models.Hakedis).filter(
-        models.Hakedis.santiye_id == santiye_id
+    _kullanici_santiye_kontrol(user, santiye_id, db)
+    liste = scope_query(db, user, models.Hakedis).filter(
+        models.Hakedis.santiye_id == santiye_id,
+        models.Hakedis.durum != "iptal"
     ).order_by(models.Hakedis.hakedis_no.desc()).all()
     return {"hakedisler": [
         {
@@ -5494,12 +5956,14 @@ def ekip_getir(request: Request, db: Session = Depends(database.get_db)):
         models.ProjectMember.organization_id == user.organization_id,
         models.ProjectMember.status == "active",
     ).all()
+    allowed = allowed_site_ids(user, db)
+    uyeler = [m for m in uyeler if is_org_owner(user, db) or m.user_id == user.id or m.santiye_id in allowed]
     sonuc = []
     for u in uyeler:
         uye = db.query(models.User).filter(models.User.id == u.user_id).first()
         if not uye:
             continue
-        santiye = db.query(Santiye).filter(Santiye.id == u.santiye_id).first() if u.santiye_id else None
+        santiye = scope_query(db, user, models.Santiye).filter(Santiye.id == u.santiye_id).first() if u.santiye_id else None
         sonuc.append({
             "id": u.id, "user_id": u.user_id,
             "ad": uye.full_name or uye.email, "email": uye.email,
@@ -5517,6 +5981,8 @@ def ekip_getir(request: Request, db: Session = Depends(database.get_db)):
 def davetler_getir(request: Request, db: Session = Depends(database.get_db)):
     token = _request_token(request) or request.query_params.get("token", "")
     user = kullanici_dogrula(token, db)
+    if not is_org_owner(user, db):
+        raise HTTPException(403, "Ekip yönetimi için organizasyon sahibi olmalısınız.")
     if not user.organization_id:
         return {"davetler": []}
     davetler = db.query(models.Invitation).filter(
@@ -5536,6 +6002,8 @@ def davetler_getir(request: Request, db: Session = Depends(database.get_db)):
 async def ekip_cikar(request: Request, payload: dict = Body(...), db: Session = Depends(database.get_db)):
     token = _request_token(request) or payload.get("token", "")
     user = kullanici_dogrula(token, db)
+    if not is_org_owner(user, db):
+        raise HTTPException(403, "Ekip yönetimi için organizasyon sahibi olmalısınız.")
     member_id = payload.get("member_id")
     uye = db.query(models.ProjectMember).filter(
         models.ProjectMember.id == member_id,
@@ -5543,6 +6011,8 @@ async def ekip_cikar(request: Request, payload: dict = Body(...), db: Session = 
     ).first()
     if not uye:
         raise HTTPException(status_code=404, detail="Üye bulunamadı.")
+    if uye.user_id == user.id:
+        raise HTTPException(409, "Organizasyon sahibi ekipten çıkarılamaz.")
     uye.status = "removed"
     db.commit()
     return {"ok": True}
@@ -5559,7 +6029,7 @@ def api_dashboard_contractor(request: Request, db: Session = Depends(database.ge
     bugun = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
     # Aktif şantiyeler
-    santiye_q = db.query(Santiye).filter(Santiye.aktif == True)
+    santiye_q = scope_query(db, user, models.Santiye).filter(Santiye.aktif == True)
     if org_id:
         santiye_q = santiye_q.filter(
             (Santiye.user_id == user.id) | (Santiye.organization_id == org_id)
@@ -5570,7 +6040,7 @@ def api_dashboard_contractor(request: Request, db: Session = Depends(database.ge
     aktif_santiye_sayisi = len(aktif_santiyeler)
 
     # Bugün onaylanan kayıtlar
-    approved_q = db.query(models.ArchiveRecord).filter(
+    approved_q = scope_query(db, user, models.ArchiveRecord).filter(
         models.ArchiveRecord.verification_status == "VERIFIED",
         models.ArchiveRecord.reviewed_at >= bugun,
         models.ArchiveRecord.status == "active",
@@ -5584,7 +6054,7 @@ def api_dashboard_contractor(request: Request, db: Session = Depends(database.ge
     approved_today = approved_q.count()
 
     # Açık kritik risk (onay bekleyen kayıtlar)
-    pending_q = db.query(models.ArchiveRecord).filter(
+    pending_q = scope_query(db, user, models.ArchiveRecord).filter(
         models.ArchiveRecord.verification_status.in_(["DRAFT", "PENDING"]),
         models.ArchiveRecord.status == "active",
     )
@@ -5597,7 +6067,7 @@ def api_dashboard_contractor(request: Request, db: Session = Depends(database.ge
     open_critical = pending_q.count()
 
     # Stok uyarı sayısı
-    stok_uyari = db.query(models.MalzemeUyari)
+    stok_uyari = scope_query(db, user, models.MalzemeUyari)
     if org_id:
         stok_uyari = stok_uyari.filter(
             (models.MalzemeUyari.organization_id == org_id) | (models.MalzemeUyari.organization_id == None)
@@ -5605,7 +6075,7 @@ def api_dashboard_contractor(request: Request, db: Session = Depends(database.ge
     stok_uyari_sayisi = stok_uyari.count()
 
     # Son onaylanan feed
-    feed_q = db.query(models.ArchiveRecord).filter(
+    feed_q = scope_query(db, user, models.ArchiveRecord).filter(
         models.ArchiveRecord.verification_status == "VERIFIED",
         models.ArchiveRecord.status == "active",
     )
@@ -5621,7 +6091,7 @@ def api_dashboard_contractor(request: Request, db: Session = Depends(database.ge
         "kpis": [
             {"id": "approved_today", "value": approved_today, "label": "Bugün Onaylanan", "context": f"{approved_today} kayıt", "note": ""},
             {"id": "open_critical_risk", "value": open_critical, "label": "Açık Risk", "context": f"{open_critical} bekliyor", "note": ""},
-            {"id": "critical_stock_delta", "value": 0, "label": "Stok Sapması", "context": "Stok hattı sakin", "note": ""},
+            {"id": "critical_stock_delta", "value": stok_uyari_sayisi, "label": "Stok Uyarısı", "context": f"{stok_uyari_sayisi} uyarı", "note": ""},
             {"id": "active_sites", "value": aktif_santiye_sayisi, "label": "Aktif Şantiye", "context": f"{aktif_santiye_sayisi} şantiye", "note": ""},
         ],
         "today_approved_feed": [
@@ -5657,18 +6127,18 @@ def api_dashboard_engineer(request: Request, db: Session = Depends(database.get_
         santiye_ids = [m.santiye_id for m in members if m.santiye_id]
         santiye_sayisi = len(santiye_ids)
     else:
-        santiyeler = db.query(Santiye).filter(Santiye.user_id == user.id, Santiye.aktif == True).all()
+        santiyeler = scope_query(db, user, models.Santiye).filter(Santiye.user_id == user.id, Santiye.aktif == True).all()
         santiye_sayisi = len(santiyeler)
 
     # Review queue: onay bekleyen kayıtlar
-    pending_q = db.query(models.ArchiveRecord).filter(
+    pending_q = scope_query(db, user, models.ArchiveRecord).filter(
         models.ArchiveRecord.user_id == user.id,
         models.ArchiveRecord.verification_status.in_(["DRAFT", "PENDING"]),
         models.ArchiveRecord.status == "active",
     ).order_by(models.ArchiveRecord.created_at.desc()).limit(30).all()
 
     # Review history: onaylanan/reddedilen son kayıtlar
-    history_q = db.query(models.ArchiveRecord).filter(
+    history_q = scope_query(db, user, models.ArchiveRecord).filter(
         models.ArchiveRecord.user_id == user.id,
         models.ArchiveRecord.verification_status.in_(["VERIFIED", "REJECTED"]),
         models.ArchiveRecord.status == "active",
@@ -5709,7 +6179,7 @@ def api_dashboard_engineer(request: Request, db: Session = Depends(database.get_
 def stok_hareketler(request: Request, santiye_id: int = None, limit: int = 50, db: Session = Depends(database.get_db)):
     token = _request_token(request) or request.query_params.get("token", "")
     user = kullanici_dogrula(token, db)
-    q = db.query(models.StokHareket).filter(models.StokHareket.kullanici_id == user.id)
+    q = scope_query(db, user, models.StokHareket).filter(models.StokHareket.kullanici_id == user.id)
     if santiye_id:
         q = q.filter(models.StokHareket.santiye_id == santiye_id)
     hareketler = q.order_by(models.StokHareket.created_at.desc()).limit(limit).all()
@@ -5728,12 +6198,13 @@ def stok_hareketler(request: Request, santiye_id: int = None, limit: int = 50, d
 def stok_hareket_sil(request: Request, hareket_id: int, db: Session = Depends(database.get_db)):
     token = _request_token(request)
     user = kullanici_dogrula(token, db)
-    h = db.query(models.StokHareket).filter(
+    h = scope_query(db, user, models.StokHareket).filter(
         models.StokHareket.id == hareket_id,
         models.StokHareket.kullanici_id == user.id,
     ).first()
     if not h:
         raise HTTPException(status_code=404, detail="Hareket bulunamadı.")
+    require_record(user, h, db, "write")
     db.delete(h)
     db.commit()
     return {"ok": True}
@@ -5779,15 +6250,19 @@ def api_katalog_malzemeler(request: Request, db: Session = Depends(database.get_
 def hakedis_detay(request: Request, hakedis_id: int, db: Session = Depends(database.get_db)):
     token = _request_token(request)
     user = kullanici_dogrula(token, db)
-    h = db.query(models.Hakedis).filter(models.Hakedis.id == hakedis_id).first()
-    if not h:
+    h = scope_query(db, user, models.Hakedis).filter(models.Hakedis.id == hakedis_id).first()
+    if not h or h.durum == "iptal":
         raise HTTPException(status_code=404, detail="Hakediş bulunamadı.")
+    _kullanici_santiye_kontrol(user, h.santiye_id, db)
     kalemler = db.query(models.HakedisKalemi).filter(models.HakedisKalemi.hakedis_id == hakedis_id).all()
     kalem_list = []
     for k in kalemler:
         ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == k.is_kalemi_id).first()
+        require_hierarchy(user, ik, db)
+        if ik.santiye_id != h.santiye_id:
+            raise HTTPException(409, "Hakediş ve iş kalemi şantiyeleri uyuşmuyor.")
         kalem_list.append({
-            "id": k.id,
+            "id": k.id, "poz_no": ik.poz_no or "",
             "is_kalemi_id": k.is_kalemi_id,
             "tanim": ik.tanim if ik else "",
             "birim": ik.birim if ik else "",
@@ -5820,6 +6295,48 @@ def hakedis_detay(request: Request, hakedis_id: int, db: Session = Depends(datab
 # BIM endpoint'leri de bu fonksiyonları doğrudan import edip kullanabilir.
 # ═══════════════════════════════════════════════════════════════════════
 
+def _save_progress(db, user, is_kalemi_id, payload):
+    """One transaction for the existing progress and draft payment workflow.
+
+    A field report is not an approved stock consumption event. Recipe stock
+    postings wait for the approval integration; the manual stock flow remains.
+    """
+    ik = db.query(models.IsKalemi).filter_by(id=is_kalemi_id).with_for_update().first()
+    require_hierarchy(user, ik, db, "write")
+    if "yuzde" not in payload:
+        raise HTTPException(422, "İlerleme yüzdesi gerekli.")
+    yuzde = float(number(payload["yuzde"], "Yüzde", maximum=Decimal("100")))
+    try:
+        tarih = datetime.date.fromisoformat(payload.get("tarih") or datetime.datetime.utcnow().date().isoformat()).isoformat()
+    except (ValueError, TypeError):
+        raise HTTPException(422, "Tarih YYYY-AA-GG biçiminde olmalıdır.")
+    if ik.durum == "tamamlandi" and yuzde < 100:
+        raise HTTPException(409, "Tamamlanmış iş için düzeltme incelemesi gerekir.")
+    approved_lines = db.query(models.HakedisKalemi).join(models.Hakedis).filter(
+        models.HakedisKalemi.is_kalemi_id == ik.id,
+        models.Hakedis.santiye_id == ik.santiye_id,
+        models.Hakedis.durum.in_(["onaylandi", "onay_bekliyor"]),
+    ).all()
+    committed_quantity = sum((number(line.bu_donem_miktar) for line in approved_lines), Decimal(0))
+    if number(ik.metraj or 0) * number(yuzde) / 100 < committed_quantity:
+        raise HTTPException(409, "İlerleme kesinleşmiş veya incelemedeki hakediş miktarının altına düşemez.")
+    kayit = models.IlerlemeKaydi(is_kalemi_id=ik.id, raporlayan_id=user.id,
+                                yuzde=yuzde, tarih=tarih, notlar=payload.get("notlar") or "")
+    try:
+        db.add(kayit)
+        db.flush()
+        hakedis = update_hakedis_from_ilerleme(db, ik.id)
+        ik.durum = "tamamlandi" if yuzde == 100 else "devam_eden"
+        ik.updated_at = datetime.datetime.utcnow()
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return {"status": "success", "ilerleme_id": kayit.id, "yuzde": yuzde,
+            "hakedis_guncelleme": hakedis, "stok_sarflari": [], "esik_uyarilari": [],
+            "stok_durumu": "İlerleme bildirimi stok hareketi oluşturmaz; onaylı sarf kaydı gerekir."}
+
+
 def update_hakedis_from_ilerleme(db: Session, is_kalemi_id: int):
     """Motor 1: Son IlerlemeKaydi yüzdesine göre aktif taslak hakedişi günceller."""
     from sqlalchemy import func as _func
@@ -5831,7 +6348,7 @@ def update_hakedis_from_ilerleme(db: Session, is_kalemi_id: int):
     son_ilerleme = (
         db.query(models.IlerlemeKaydi)
         .filter(models.IlerlemeKaydi.is_kalemi_id == is_kalemi_id)
-        .order_by(models.IlerlemeKaydi.created_at.desc())
+        .order_by(models.IlerlemeKaydi.created_at.desc(), models.IlerlemeKaydi.id.desc())
         .first()
     )
     if not son_ilerleme:
@@ -5844,6 +6361,7 @@ def update_hakedis_from_ilerleme(db: Session, is_kalemi_id: int):
             models.Hakedis.durum == "taslak",
         )
         .order_by(models.Hakedis.hakedis_no.desc())
+        .with_for_update()
         .first()
     )
     if not hakedis:
@@ -5852,23 +6370,30 @@ def update_hakedis_from_ilerleme(db: Session, is_kalemi_id: int):
     metraj = ik.metraj or 0.0
     birim_fiyat = ik.birim_fiyat or 0  # kuruş
     yuzde = son_ilerleme.yuzde or 0.0
-    kumulatif_miktar = metraj * (yuzde / 100.0)
+    kumulatif_miktar = number(metraj) * (number(yuzde, maximum=Decimal("100")) / 100)
 
     # Önceki onaylı/onay-bekleyen hakedişlerde bu iş kalemi için toplam miktar
-    onceki = (
-        db.query(_func.coalesce(_func.sum(models.HakedisKalemi.bu_donem_miktar), 0.0))
+    prior_rows = (
+        db.query(models.HakedisKalemi)
         .join(models.Hakedis, models.HakedisKalemi.hakedis_id == models.Hakedis.id)
-        .filter(
-            models.HakedisKalemi.is_kalemi_id == is_kalemi_id,
-            models.Hakedis.id != hakedis.id,
-            models.Hakedis.durum.in_(["onaylandi", "onay_bekliyor"]),
-        )
-        .scalar()
-    ) or 0.0
+        .filter(models.HakedisKalemi.is_kalemi_id == is_kalemi_id,
+                models.Hakedis.santiye_id == ik.santiye_id,
+                models.Hakedis.id != hakedis.id,
+                models.Hakedis.durum.in_(["onaylandi", "onay_bekliyor"]))
+        .all()
+    )
+    if any(row.hakedis.hakedis_no > hakedis.hakedis_no for row in prior_rows):
+        raise HTTPException(409, "Daha sonraki bir hakediş kesinleşmiş; eski taslak değiştirilemez.")
+    onceki = sum((number(row.bu_donem_miktar) for row in prior_rows), Decimal("0"))
+    onceki_tutar = sum(row.bu_donem_tutar or 0 for row in prior_rows)
 
-    bu_donem_miktar = max(0.0, kumulatif_miktar - onceki)
-    bu_donem_tutar = round(bu_donem_miktar * birim_fiyat)   # kuruş
-    kumulatif_tutar = round(kumulatif_miktar * birim_fiyat)  # kuruş
+    if kumulatif_miktar < number(onceki):
+        raise HTTPException(409, "İlerleme önceki hakediş miktarının altına düşemez.")
+    bu_donem_miktar = max(Decimal("0"), kumulatif_miktar - number(onceki))
+    kumulatif_tutar = amount(kumulatif_miktar, birim_fiyat)
+    bu_donem_tutar = kumulatif_tutar - onceki_tutar
+    if bu_donem_tutar < 0:
+        raise HTTPException(409, "Hesaplanan tutar önceki hakedişlerin altında; düzeltme incelemesi gerekir.")
 
     mevcut = (
         db.query(models.HakedisKalemi)
@@ -5878,6 +6403,8 @@ def update_hakedis_from_ilerleme(db: Session, is_kalemi_id: int):
         )
         .first()
     )
+    if mevcut and (mevcut.notlar or "").startswith("MANUEL:"):
+        return None
     if mevcut:
         mevcut.sozlesme_metraj     = metraj
         mevcut.onceki_toplam_miktar = onceki
@@ -6028,72 +6555,8 @@ def check_stok_esik(db: Session, santiye_id: int, malzeme_id: str) -> dict:
 @app.post("/api/ilerleme-kaydet")
 @limiter.limit("60/minute")
 def api_ilerleme_kaydet(request: Request, payload: dict = Body(...), db: Session = Depends(database.get_db)):
-    """
-    İlerleme kaydeder ve 3 motoru zincirir:
-    IlerlemeKaydi → update_hakedis → (eğer %100 ise) auto_stok_sarf → check_stok_esik
-    """
-    token = _request_token(request) or payload.get("token", "")
-    user = kullanici_dogrula(token, db)
-
-    is_kalemi_id = payload.get("is_kalemi_id")
-    yuzde        = float(payload.get("yuzde", 0))
-    tarih        = payload.get("tarih") or datetime.datetime.utcnow().strftime("%Y-%m-%d")
-    notlar       = payload.get("notlar", "")
-
-    if not is_kalemi_id:
-        raise HTTPException(status_code=400, detail="is_kalemi_id zorunludur.")
-    if not (0 <= yuzde <= 100):
-        raise HTTPException(status_code=400, detail="Yüzde 0-100 arasında olmalıdır.")
-
-    ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == is_kalemi_id).first()
-    if not ik:
-        raise HTTPException(status_code=404, detail="İş kalemi bulunamadı.")
-
-    kayit = models.IlerlemeKaydi(
-        is_kalemi_id=is_kalemi_id,
-        raporlayan_id=user.id,
-        yuzde=yuzde,
-        tarih=tarih,
-        notlar=notlar,
-    )
-    db.add(kayit)
-    db.flush()
-
-    # Motor 1 — Hakediş güncelle
-    hakedis_guncelleme = update_hakedis_from_ilerleme(db, is_kalemi_id)
-
-    stok_sarflari  = []
-    esik_uyarilari = []
-
-    # Motor 2 + 3 — Yalnızca %100 tamamlanmada
-    if yuzde >= 100.0:
-        ik.durum      = "tamamlandi"
-        ik.updated_at = datetime.datetime.utcnow()
-        stok_sarflari = auto_stok_sarf(
-            db,
-            is_kalemi_id=is_kalemi_id,
-            santiye_id=ik.santiye_id,
-            tamamlanan_miktar=ik.metraj or 0.0,
-            kullanici_id=user.id,
-            organization_id=user.organization_id or 0,
-        )
-        db.flush()
-        for sarf in stok_sarflari:
-            esik_sonuc = check_stok_esik(db, ik.santiye_id, sarf["malzeme"])
-            if esik_sonuc.get("uyari"):
-                esik_uyarilari.append(esik_sonuc)
-
-    db.commit()
-    db.refresh(kayit)
-
-    return {
-        "status": "success",
-        "ilerleme_id": kayit.id,
-        "yuzde": yuzde,
-        "hakedis_guncelleme": hakedis_guncelleme,
-        "stok_sarflari": stok_sarflari,
-        "esik_uyarilari": esik_uyarilari,
-    }
+    user = kullanici_dogrula(_request_token(request) or payload.get("token", ""), db)
+    return _save_progress(db, user, payload.get("is_kalemi_id"), payload)
 
 
 # --- 📊 FİYAT GRAFİK (bolgesel) ---
@@ -6176,7 +6639,7 @@ def api_katalog(request: Request, db: Session = Depends(database.get_db)):
 def api_tedarikciler(request: Request, db: Session = Depends(database.get_db)):
     token = _request_token(request)
     user = kullanici_dogrula(token, db)
-    tedarikciler = db.query(models.Tedarikci).filter(
+    tedarikciler = scope_query(db, user, models.Tedarikci).filter(
         models.Tedarikci.organization_id == user.organization_id,
         models.Tedarikci.aktif == True,
     ).order_by(models.Tedarikci.ad).all()
@@ -6218,15 +6681,15 @@ def api_satin_almalar(
 ):
     token = _request_token(request)
     user = kullanici_dogrula(token, db)
-    q = db.query(models.SatinAlma).filter(models.SatinAlma.organization_id == user.organization_id)
+    q = scope_query(db, user, models.SatinAlma).filter(models.SatinAlma.organization_id == user.organization_id)
     if santiye_id:
         q = q.filter(models.SatinAlma.santiye_id == santiye_id)
     if tedarikci_id:
         q = q.filter(models.SatinAlma.tedarikci_id == tedarikci_id)
     kayitlar = q.order_by(models.SatinAlma.tarih.desc()).limit(limit).all()
 
-    santiye_map = {s.id: s.ad for s in db.query(models.Santiye).filter(models.Santiye.organization_id == user.organization_id).all()} if kayitlar else {}
-    tedarikci_map = {t.id: t.ad for t in db.query(models.Tedarikci).filter(models.Tedarikci.organization_id == user.organization_id).all()} if kayitlar else {}
+    santiye_map = {s.id: s.ad for s in scope_query(db, user, models.Santiye).filter(models.Santiye.organization_id == user.organization_id).all()} if kayitlar else {}
+    tedarikci_map = {t.id: t.ad for t in scope_query(db, user, models.Tedarikci).filter(models.Tedarikci.organization_id == user.organization_id).all()} if kayitlar else {}
     cesit_map = {}
     if kayitlar:
         cesit_ids = [k.cesit_id for k in kayitlar if k.cesit_id]
@@ -6260,6 +6723,10 @@ def api_satin_almalar(
 def api_satin_alma_ekle(request: Request, payload: dict = Body(...), db: Session = Depends(database.get_db)):
     token = _request_token(request) or payload.get("token", "")
     user = kullanici_dogrula(token, db)
+    if payload.get("santiye_id"):
+        require_site(user, int(payload["santiye_id"]), db, "write")
+    if payload.get("tedarikci_id") and not scope_query(db, user, models.Tedarikci).filter_by(id=payload["tedarikci_id"]).first():
+        raise HTTPException(404, "Tedarikçi bulunamadı.")
     miktar = float(payload.get("miktar", 0) or 0)
     birim_fiyat = float(payload.get("birim_fiyat", 0) or 0)
     if miktar <= 0 or birim_fiyat <= 0:
@@ -6299,12 +6766,13 @@ def api_satin_alma_sil(request: Request, payload: dict = Body(...), db: Session 
     token = _request_token(request) or payload.get("token", "")
     user = kullanici_dogrula(token, db)
     sid = payload.get("id")
-    kayit = db.query(models.SatinAlma).filter(
+    kayit = scope_query(db, user, models.SatinAlma).filter(
         models.SatinAlma.id == sid,
         models.SatinAlma.organization_id == user.organization_id,
     ).first()
     if not kayit:
         raise HTTPException(status_code=404, detail="Kayıt bulunamadı.")
+    require_record(user, kayit, db, "write")
     db.delete(kayit)
     db.commit()
     return {"status": "success"}
@@ -6316,7 +6784,7 @@ def api_tedarikci_sil(request: Request, payload: dict = Body(...), db: Session =
     token = _request_token(request) or payload.get("token", "")
     user = kullanici_dogrula(token, db)
     tid = payload.get("id")
-    t = db.query(models.Tedarikci).filter(
+    t = scope_query(db, user, models.Tedarikci).filter(
         models.Tedarikci.id == tid,
         models.Tedarikci.organization_id == user.organization_id,
     ).first()

@@ -77,6 +77,10 @@ export class BIMViewer {
         this._compactModelId = null;
         /** URL'den okunan şantiye ID'si (sadece compact modda mevcut) */
         this._compactSantiyeId = null;
+        /** Yüklenen modelin backend ID'si — compact ve non-compact modda kullanılır */
+        this._activeBackendModelId = null;
+        /** Aktif şantiye ID'si — URL, localStorage veya auto_load'dan */
+        this._activeSantiyeId = null;
         /** Progress polling durdurma fonksiyonu */
         this._stopProgressPolling = null;
         this._containerId = containerId;
@@ -117,10 +121,14 @@ export class BIMViewer {
             const santiyeIdStr = params.get('santiye_id');
             const autoLoad = params.get('auto_load') === 'true';
             if (modelIdStr) {
-                void this._autoLoadModel(parseInt(modelIdStr, 10));
+                this._activeBackendModelId = parseInt(modelIdStr, 10);
+                if (santiyeIdStr)
+                    this._activeSantiyeId = parseInt(santiyeIdStr, 10);
+                void this._autoLoadModel(this._activeBackendModelId);
             }
             else if (autoLoad && santiyeIdStr) {
-                void this._autoLoadFirstModel(parseInt(santiyeIdStr, 10));
+                this._activeSantiyeId = parseInt(santiyeIdStr, 10);
+                void this._autoLoadFirstModel(this._activeSantiyeId);
             }
         }
         this._initialized = true;
@@ -245,7 +253,8 @@ export class BIMViewer {
                 console.warn('[BIMViewer] Bu şantiye için model bulunamadı:', santiyeId);
                 return;
             }
-            await this._autoLoadModel(data.modeller[0].id);
+            this._activeBackendModelId = data.modeller[0].id;
+            await this._autoLoadModel(this._activeBackendModelId);
         }
         catch (err) {
             console.warn('[BIMViewer] auto_load başarısız:', err);
@@ -682,7 +691,12 @@ export class BIMViewer {
         });
         // Mock Veri Uygula
         document.getElementById('bv-item-apply-mock')?.addEventListener('click', () => {
-            void this._applyMockProgressData();
+            if (this._compactModelId !== null) {
+                void this._refreshProgressColors(this._compactModelId);
+            }
+            else {
+                void this._applyMockProgressData();
+            }
         });
         // Renkleri Temizle
         document.getElementById('bv-item-clear-colors')?.addEventListener('click', () => {
@@ -932,10 +946,29 @@ export class BIMViewer {
         this._showLoading(file.name);
         this._currentFile = file.name;
         try {
-            await this._engine.loadIFC(file);
+            const { modelId } = await this._engine.loadIFC(file);
+            // Backend model ID varsa fragment'ı arka planda cache'le (non-blocking)
+            if (this._compactModelId !== null) {
+                void this._cacheFragmentAsync(modelId, this._compactModelId);
+            }
         }
         catch {
             // Hata engine.onError callback'i üzerinden iletildi
+        }
+    }
+    /** IFC parse sonrası üretilen fragment binary'yi backend'e yükler.
+     *  Sessiz: hata olursa model zaten sahnede, sadece cache eksik kalır. */
+    async _cacheFragmentAsync(modelId, backendModelId) {
+        if (!this._engine)
+            return;
+        try {
+            const buffer = await this._engine.exportFragment(modelId);
+            const api = getBIMApiClient();
+            await api.uploadFragment(backendModelId, buffer);
+            console.log(`[BIMViewer] Fragment cache'lendi: model_${backendModelId}`);
+        }
+        catch (err) {
+            console.warn('[BIMViewer] Fragment cache yüklenemedi (kritik değil):', err);
         }
     }
     // ─── Model Yüklendi ───────────────────────────────────────────────────────
@@ -1015,10 +1048,23 @@ export class BIMViewer {
             title: 'Model Yüklendi',
             message: `${this._currentFile} başarıyla yüklendi.`,
         });
-        // ── MappingPanel & ilerleme renklendirmesi (compact mod + santiye bilgisi) ─
+        // ── MappingPanel & ilerleme renklendirmesi ────────────────────────────────
         if (this._compact && this._compactModelId !== null && this._compactSantiyeId !== null) {
+            // Compact mod: URL parametrelerini kullan
             this._initMappingPanel(this._compactModelId, this._compactSantiyeId);
             this._startRealProgressColoring(this._compactModelId);
+        }
+        else if (!this._compact && this._activeBackendModelId !== null) {
+            // Non-compact mod: URL, localStorage sırasıyla dene
+            const santiyeId = this._activeSantiyeId ?? this._readSantiyeIdFromLocalStorage();
+            if (santiyeId !== null) {
+                this._initMappingPanel(this._activeBackendModelId, santiyeId);
+                this._startRealProgressColoring(this._activeBackendModelId);
+            }
+            else {
+                console.warn('[BIMViewer] MappingPanel başlatılamadı: santiye_id bulunamadı. ' +
+                    'URL\'e ?santiye_id=X ekleyin veya localStorage\'a "bai_santiye_id" kaydedin.');
+            }
         }
     }
     /** MappingPanel'i başlatır ve toolbar'a buton ekler. */
@@ -1059,6 +1105,22 @@ export class BIMViewer {
         });
         addMappingToolbarButton(toolbar, this._mappingPanel);
     }
+    /**
+     * localStorage'dan santiye ID'sini okur.
+     * Bilinen aday key'leri sırayla dener; bulunan ilk geçerli tamsayıyı döner.
+     */
+    _readSantiyeIdFromLocalStorage() {
+        const candidates = ['bai_aktif_santiye', 'bai_santiye_id', 'bai_secili_santiye', 'selectedSantiye', 'santiye_id'];
+        for (const key of candidates) {
+            const val = localStorage.getItem(key);
+            if (val) {
+                const parsed = parseInt(val, 10);
+                if (!isNaN(parsed))
+                    return parsed;
+            }
+        }
+        return null;
+    }
     /** Backend'den gerçek ilerleme verisini çekip modele uygular. */
     async _refreshProgressColors(modelId) {
         if (!this._progressColoring)
@@ -1098,6 +1160,7 @@ export class BIMViewer {
         // MappingPanel'i kaldır
         this._mappingPanel?.destroy();
         this._mappingPanel = null;
+        this._activeBackendModelId = null;
         // StoreyManager'ı sıfırla
         this._storeyManager?.reset();
         this._storeyManager = null;
@@ -1664,10 +1727,7 @@ export class BIMViewer {
             colorBtn.innerHTML = `<span>🎨</span> ${modeLabels[mode]} <span class="bv-chevron">▾</span>`;
         }
     }
-    /**
-     * Mock ilerleme verisi üretir ve modele uygular.
-     * Gerçek API entegrasyonu Aşama 4'te yapılacak.
-     */
+    // DEPRECATED: Gerçek API entegrasyonu yapıldı; artık yalnızca _compactModelId yokken fallback olarak kullanılır.
     async _applyMockProgressData() {
         if (!this._progressColoring)
             return;

@@ -112,9 +112,7 @@ class ŞantiyeAgent:
             if ozel_dir.exists():
                 self._pdf_klasoru_oku(ozel_dir, result)
                 logger.info(f"[RAG] Şantiye #{santiye_id} özel klasörü okundu.")
-            elif ortak_dir.exists():
-                self._pdf_klasoru_oku(ortak_dir, result)
-                logger.info("[RAG] Ortak data/ klasörü okundu (şantiyeye özel yoktu).")
+
 
         toplam_pdf = len(result["pdf"])
         result["loaded"] = toplam_pdf > 0
@@ -252,7 +250,7 @@ class ŞantiyeAgent:
             doc_blok = "📂 data/ klasöründe henüz PDF yok — genel inşaat mühendisliği bilginle yanıt ver."
 
         # Adım 2 — Gerçek veri
-        canli = self.check_live_status()
+        canli = self._bos_durum("Yetkili şantiye için doğrulanmış canlı veri bağlantısı yok.")
         uyari_str = " | ".join(canli["kritik_uyari"]) if canli["kritik_uyari"] else "✅ Kritik uyarı yok."
 
         stok_str = (

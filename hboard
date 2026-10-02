@@ -1,0 +1,114 @@
+warning: in the working copy of 'admin_panel.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'migration_final.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'styles.py', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/AGENTS.md b/AGENTS.md[m
+[1mindex e69de29..020a3b6 100644[m
+[1m--- a/AGENTS.md[m
+[1m+++ b/AGENTS.md[m
+[36m@@ -0,0 +1,22 @@[m
+[32m+[m[32m# AGENTS.md[m
+[32m+[m
+[32m+[m[32m## Goal[m
+[32m+[m[32mBu repo hızlı ama güvenli iterasyon için kullanılacak.[m
+[32m+[m
+[32m+[m[32m## Rules[m
+[32m+[m[32m- Gereksiz dependency ekleme.[m
+[32m+[m[32m- Mevcut dosya yapısını bozma.[m
+[32m+[m[32m- UI değişikliklerinde mevcut tasarım dilini koru.[m
+[32m+[m[32m- Büyük refactor yapmadan önce plan çıkar.[m
+[32m+[m
+[32m+[m[32m## Commands[m
+[32m+[m[32m- dev: npm run dev[m
+[32m+[m[32m- test: npm test[m
+[32m+[m[32m- lint: npm run lint[m
+[32m+[m[32m- build: npm run build[m
+[32m+[m
+[32m+[m[32m## Done when[m
+[32m+[m[32m- Kod çalışıyor[m
+[32m+[m[32m- Testler geçiyor[m
+[32m+[m[32m- Lint temiz[m
+[32m+[m[32m- Değişiklik kısa özetlenmiş[m
+\ No newline at end of file[m
+[1mdiff --git a/admin_panel.py b/admin_panel.py[m
+[1mindex c4c3b34..37248ea 100644[m
+[1m--- a/admin_panel.py[m
+[1m+++ b/admin_panel.py[m
+[36m@@ -3,7 +3,7 @@[m [mADMIN_HTML = """<!DOCTYPE html>[m
+ <head>[m
+ <meta charset="UTF-8">[m
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">[m
+[31m-<title>BuildingAI Pro — Admin</title>[m
+[32m+[m[32m<title>BuildingAI — Admin</title>[m
+ <style>[m
+ *{margin:0;padding:0;box-sizing:border-box}[m
+ body{background:#0d1117;color:#f0f0f0;font-family:Arial,sans-serif;min-height:100vh}[m
+[36m@@ -33,8 +33,8 @@[m [mbody{background:#0d1117;color:#f0f0f0;font-family:Arial,sans-serif;min-height:10[m
+ .table td{padding:12px;border-bottom:1px solid #1a1d21;font-size:0.9rem;vertical-align:middle}[m
+ .table tr:hover td{background:rgba(255,255,255,0.02)}[m
+ .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:0.78rem;font-weight:bold}[m
+[31m-.badge-pro{background:rgba(46,204,113,0.15);color:#2ecc71;border:1px solid #2ecc71}[m
+[31m-.badge-free{background:rgba(230,126,34,0.1);color:#e67e22;border:1px solid #e67e22}[m
+[32m+[m[32m.badge-profesyonel{background:rgba(46,204,113,0.15);color:#2ecc71;border:1px solid #2ecc71}[m
+[32m+[m[32m.badge-baslangic{background:rgba(230,126,34,0.1);color:#e67e22;border:1px solid #e67e22}[m
+ .badge-admin{background:rgba(52,152,219,0.15);color:#3498db;border:1px solid #3498db}[m
+ .msg{padding:10px 16px;border-radius:8px;margin-top:10px;font-size:0.9rem}[m
+ .msg-success{background:rgba(46,204,113,0.1);color:#2ecc71;border:1px solid #2ecc71}[m
+[36m@@ -52,7 +52,7 @@[m [mbody{background:#0d1117;color:#f0f0f0;font-family:Arial,sans-serif;min-height:10[m
+   <div class="login-box">[m
+     <div style="font-size:2.5rem;margin-bottom:10px"></div>[m
+     <h2>Admin Panel</h2>[m
+[31m-    <p style="color:#aaa;margin-bottom:25px;font-size:0.9rem">BuildingAI Pro</p>[m
+[32m+[m[32m    <p style="color:#aaa;margin-bottom:25px;font-size:0.9rem">BuildingAI</p>[m
+     <input type="email" id="adminEmail" class="input" placeholder="Admin email">[m
+     <input type="password" id="adminPass" class="input" placeholder="Şifre">[m
+     <button class="btn" onclick="adminGiris()">Giriş Yap</button>[m
+[36m@@ -62,7 +62,7 @@[m [mbody{background:#0d1117;color:#f0f0f0;font-family:Arial,sans-serif;min-height:10[m
+ [m
+ <div id="mainPanel">[m
+   <div class="header">[m
+[31m-    <h1> BuildingAI Pro — Admin</h1>[m
+[32m+[m[32m    <h1> BuildingAI — Admin</h1>[m
+     <div style="display:flex;align-items:center;gap:15px">[m
+       <span id="adminWelcome" style="color:#aaa;font-size:0.9rem"></span>[m
+       <button onclick="adminCikis()" style="background:none;border:1px solid #555;color:#aaa;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:0.85rem">Çıkış</button>[m
+[36m@@ -145,8 +145,8 @@[m [masync function istatistikleriYukle() {[m
+     const d = await res.json();[m
+     document.getElementById('statsGrid').innerHTML = `[m
+       <div class="stat-card"><div class="num">${d.toplam_kullanici}</div><div class="label">Toplam Kullanici</div></div>[m
+[31m-      <div class="stat-card green"><div class="num">${d.pro_kullanici}</div><div class="label">Pro Kullanici</div></div>[m
+[31m-      <div class="stat-card"><div class="num">${d.free_kullanici}</div><div class="label">Free Kullanici</div></div>[m
+[32m+[m[32m      <div class="stat-card green"><div class="num">${d.profesyonel_kullanici}</div><div class="label">Profesyonel Kullanici</div></div>[m
+[32m+[m[32m      <div class="stat-card"><div class="num">${d.baslangic_kullanici}</div><div class="label">Baslangic Kullanici</div></div>[m
+       <div class="stat-card blue"><div class="num">${d.yeni_kayit_7gun}</div><div class="label">Yeni (7 gun)</div></div>[m
+       <div class="stat-card green"><div class="num">$${d.tahmini_aylik_gelir}</div><div class="label">Tahmini Gelir/Ay</div></div>[m
+       <div class="stat-card"><div class="num">${d.toplam_rapor}</div><div class="label">Toplam Rapor</div></div>[m
+[36m@@ -162,8 +162,8 @@[m [masync function istatistikleriYukle() {[m
+           <div style="color:#aaa;font-size:0.85rem;margin-top:5px">Tahmini Yillik Gelir</div>[m
+         </div>[m
+         <div style="background:rgba(230,126,34,0.08);border:1px solid rgba(230,126,34,0.2);border-radius:12px;padding:16px">[m
+[31m-          <div style="color:#e67e22;font-size:1.5rem;font-weight:800">${d.pro_kullanici}/${d.toplam_kullanici}</div>[m
+[31m-          <div style="color:#aaa;font-size:0.85rem;margin-top:5px">Pro/Toplam Oran</div>[m
+[32m+[m[32m          <div style="color:#e67e22;font-size:1.5rem;font-weight:800">${d.profesyonel_kullanici}/${d.toplam_kullanici}</div>[m
+[32m+[m[32m          <div style="color:#aaa;font-size:0.85rem;margin-top:5px">Profesyonel/Toplam Oran</div>[m
+         </div>[m
+       </div>[m
+     `;[m
+[36m@@ -183,18 +183,23 @@[m [mfunction kullanicilariRender(liste) {[m
+   const tbody = document.getElementById('kullaniciTablosu');[m
+   if(!liste.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:#aaa;padding:30px">Kullanici bulunamadi</td></tr>';return;}[m
+   tbody.innerHTML = liste.map(u => {[m
+[31m-    const isAdmin = u.email === 'erdemirakif007@gmail.com';[m
+[32m+[m[32m    const isAdmin = u.is_admin === true;[m
+     const badge = isAdmin ? '<span class="badge badge-admin">ADMIN</span>' :[m
+[31m-                  u.plan==='max' ? '<span class="badge badge-pro" style="background:rgba(241,196,15,0.15);border-color:#f1c40f;color:#f1c40f;">👑 MAX</span>' :[m
+[31m-                  u.plan==='pro' ? '<span class="badge badge-pro">⚡ PRO</span>' :[m
+[31m-                  '<span class="badge badge-free">FREE</span>';[m
+[32m+[m[32m                  (u.plan==='profesyonel') ? '<span class="badge badge-profesyonel" style="background:rgba(241,196,15,0.15);border-color:#f1c40f;color:#f1c40f;">Profesyonel</span>' :[m
+[32m+[m[32m                  '<span class="badge badge-baslangic">Başlangıç</span>';[m
+     const tarih = u.created_at ? u.created_at.substring(0,10) : '-';[m
+[32m+[m[32m    const rolDropdown = `<select id="rol-select-${u.id}" style="margin-right:4px;padding:3px 6px;border-radius:4px;border:1px solid #444;background:#1e1e2e;color:#cdd6f4;font-size:0.78rem;">[m
+[32m+[m[32m      <option value="muhendis" ${u.role==='muhendis'?'selected':''}>Mühendis</option>[m
+[32m+[m[32m      <option value="muteahhit" ${(u.role==='muteahhit'||u.role==='mutahhit')?'selected':''}>Müteahhit</option>[m
+[32m+[m[32m      <option value="santi_sefi" ${u.role==='santi_sefi'?'selected':''}>Şantiye Şefi</option>[m
+[32m+[m[32m      <option value="yonetici" ${u.role==='yonetici'?'selected':''}>Yönetici</option>[m
+[32m+[m[32m      <option value="proje_muduru

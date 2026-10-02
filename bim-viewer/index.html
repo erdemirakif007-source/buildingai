@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="description" content="BuildingAI 3D BIM Viewer — IFC dosyalarını tarayıcıda görüntüleyin" />
+    <meta name="theme-color" content="#1B1612" />
+
+    <!-- Favicon (inline SVG — build dependency yok) -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%231B1612'/><text x='50%25' y='54%25' font-size='20' text-anchor='middle' dominant-baseline='middle' fill='%23E15A1F'>⬡</text></svg>" />
+
+    <title>BuildingAI BIM Viewer</title>
+
+    <!-- Vite entry point — TypeScript + CSS inject edilir -->
+    <script type="module" src="/src/main.ts"></script>
+  </head>
+  <body>
+    <!--
+      #bim-viewer-app: BIMViewer.ts bu container'ın içine
+      tam UI'ı (toolbar, sidebar, viewport, properties panel,
+      statusbar) dinamik olarak inject eder.
+    -->
+    <div id="bim-viewer-app" role="application" aria-label="BuildingAI BIM Viewer"></div>
+  </body>
+</html>
