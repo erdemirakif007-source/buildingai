@@ -1,4 +1,4 @@
-export function formatMoney(value, { cents = false } = {}) {
+export function formatMoney(value, { cents = true } = {}) {
   return new Intl.NumberFormat('tr-TR', {
     style: 'currency',
     currency: 'TRY',

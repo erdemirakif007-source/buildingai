@@ -241,7 +241,7 @@ export default function UiPreview() {
           <Section title="Card">
             <div className="grid md:grid-cols-2 gap-4">
               <Card title="Toplam hakediş" description="2026 yılı kümülatif" action={<Badge tone="success">Onaylı</Badge>}>
-                <p className="text-3xl font-bold text-text tabular-nums">{formatMoney(1490105)}</p>
+                <p className="text-3xl font-bold text-text tabular-nums">{formatMoney(hakedisFooter.tutar, { cents: false })}</p>
                 <p className="text-sm text-text-muted mt-1">Son güncelleme: {formatDate('2026-09-28')}</p>
               </Card>
               <Card title="Stok özeti" padding="sm">
@@ -367,7 +367,7 @@ export default function UiPreview() {
           <Section title="Format yardımcıları">
             <div className="space-y-2 font-mono text-sm text-text-muted">
               <p>formatMoney(1490105) → <strong className="text-text">{formatMoney(1490105)}</strong></p>
-              <p>formatMoney(1490105, {'{cents:true}'}) → <strong className="text-text">{formatMoney(1490105, { cents: true })}</strong></p>
+              <p>formatMoney(1490105, {'{cents:false}'}) → <strong className="text-text">{formatMoney(1490105, { cents: false })}</strong></p>
               <p>formatNumber(3.14159, 2) → <strong className="text-text">{formatNumber(3.14159, 2)}</strong></p>
               <p>formatDate('2026-09-28') → <strong className="text-text">{formatDate('2026-09-28')}</strong></p>
               <p>formatPercent(0.724) → <strong className="text-text">{formatPercent(0.724)}</strong></p>
