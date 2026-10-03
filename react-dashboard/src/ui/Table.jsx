@@ -2,10 +2,21 @@ import { cn } from './cn'
 import { EmptyState } from './EmptyState'
 import { Spinner } from './Spinner'
 
-export function Table({ columns, rows, loading, onRowClick, footer, className }) {
+export function Table({
+  columns, rows, loading, onRowClick, footer, className,
+  stickyHeader = false, maxHeight = '60vh',
+  emptyTitle = 'Kayıt bulunamadı',
+  emptyDescription = 'Bu tabloda gösterilecek veri yok.',
+  emptyAction,
+  caption,
+}) {
   return (
-    <div className={cn('overflow-x-auto rounded border border-border', className)}>
+    <div
+      className={cn('overflow-x-auto rounded border border-border', className)}
+      style={stickyHeader ? { maxHeight, overflowY: 'auto' } : undefined}
+    >
       <table className="w-full min-w-[400px] border-collapse text-base">
+        {caption && <caption className="sr-only">{caption}</caption>}
         <thead>
           <tr className="border-b border-border bg-surface-muted">
             {columns.map(col => (
@@ -14,6 +25,7 @@ export function Table({ columns, rows, loading, onRowClick, footer, className })
                 scope="col"
                 className={cn(
                   'px-4 py-3 text-sm font-semibold text-text-muted whitespace-nowrap',
+                  stickyHeader && 'sticky top-0 z-sticky bg-surface-muted',
                   (col.align === 'right' || col.numeric) ? 'text-right' : 'text-left'
                 )}
               >
@@ -62,7 +74,7 @@ export function Table({ columns, rows, loading, onRowClick, footer, className })
           ) : (
             <tr>
               <td colSpan={columns.length}>
-                <EmptyState title="Kayıt bulunamadı" description="Bu tabloda gösterilecek veri yok." />
+                <EmptyState title={emptyTitle} description={emptyDescription} action={emptyAction} />
               </td>
             </tr>
           )}

@@ -285,6 +285,8 @@ export default function UiPreview() {
               loading={loadingTable}
               footer={hakedisFooterRow}
               onRowClick={row => alert(`Seçilen kalem: ${row.tanim}`)}
+              stickyHeader
+              caption="2026 yılı hakediş kalemleri"
             />
           </Section>
 
