@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Building2, ClipboardList, Cuboid, FileText, Home, LogOut, Menu, X } from 'lucide-react'
 import SecondaryPage from './SecondaryPage'
+import HakedisPage from './modules/hakedis/HakedisPage.jsx'
 import './workspace.css'
 
 const PAGES = ['portfolio', 'site', 'metraj', 'bim', 'hakedis', 'saha', 'kamera', 'rapor', 'stok', 'fiyat']
-const LEGACY_PAGES = new Set(['metraj', 'hakedis', 'stok', 'fiyat'])
+const LEGACY_PAGES = new Set(['metraj', 'stok', 'fiyat'])
 const LEGACY_MODULE = { metraj: 'hiyerarsi', hakedis: 'hakedis', stok: 'stok', fiyat: 'fiyat' }
 const NAV = [
   ['portfolio', 'Portföy', Home],
@@ -24,7 +25,8 @@ function readLocation() {
   const params = new URLSearchParams(window.location.search)
   const page = params.get('page')
   const siteId = Number(params.get('site')) || null
-  return { page: PAGES.includes(page) ? page : 'portfolio', siteId }
+  const legacy = params.get('legacy') === '1'
+  return { page: PAGES.includes(page) ? page : 'portfolio', siteId, legacy }
 }
 
 async function api(path, token) {
@@ -87,7 +89,6 @@ export default function App() {
   const [sites, setSites] = useState([])
   const [dashboard, setDashboard] = useState(null)
   const [data, setData] = useState({})
-  const [selectedPayment, setSelectedPayment] = useState(null)
   const [selectedModelId, setSelectedModelId] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -102,7 +103,6 @@ export default function App() {
     if (resolvedSiteId) params.set('site', String(resolvedSiteId))
     window.history.pushState(next, '', `/workspace?${params}`)
     setLocation(next)
-    setSelectedPayment(null)
     setSelectedModelId(null)
     setMenuOpen(false)
   }, [location.siteId, sites])
@@ -135,7 +135,7 @@ export default function App() {
   }, [token])
 
   useEffect(() => {
-    if (!token || !site || location.page === 'portfolio' || LEGACY_PAGES.has(location.page)) return
+    if (!token || !site || location.page === 'portfolio' || LEGACY_PAGES.has(location.page) || location.page === 'hakedis') return
     let cancelled = false
     const id = site.id
     setData({})
@@ -168,12 +168,6 @@ export default function App() {
     setToken('')
     setProfile(null)
     setSites([])
-  }
-
-  async function openPayment(payment) {
-    setSelectedPayment({ loading: true })
-    try { setSelectedPayment(await api(`/api/hakedis/detay/${payment.id}`, token)) }
-    catch (err) { setSelectedPayment({ error: err.message }) }
   }
 
   if (!token) return <Login onLogin={setToken} />
@@ -217,10 +211,13 @@ export default function App() {
           <div className="ws-kpis"><div className="ws-card"><span>İş kalemi</span><strong>{data.metraj?.toplam_kalem ?? '—'}</strong></div><div className="ws-card"><span>Toplam metraj tutarı</span><strong>{data.metraj ? money(data.metraj.toplam_tutar) : '—'}</strong></div><div className="ws-card"><span>BIM modeli</span><strong>{data.models?.length ?? '—'}</strong></div><div className="ws-card"><span>Hakediş dönemi</span><strong>{data.payments?.length ?? '—'}</strong></div></div>
           <div className="ws-actions"><button onClick={() => navigate('metraj')}>Metrajı incele</button><button onClick={() => navigate('bim')}>BIM modelini aç</button><button onClick={() => navigate('hakedis')}>Hakedişleri incele</button></div>
         </section>}
-        {site && LEGACY_PAGES.has(location.page) && <section className="ws-legacy-section">
+        {site && (LEGACY_PAGES.has(location.page) || (location.page === 'hakedis' && location.legacy)) && <section className="ws-legacy-section">
           <div className="ws-section-head"><div><span className="ws-eyebrow">ALIŞTIĞINIZ ÇALIŞMA DÜZENİ</span><h2>{site.ad} · {NAV.find(item => item[0] === location.page)?.[1]}</h2></div><a className="ws-open-full" href={`/app?workspace_module=${LEGACY_MODULE[location.page]}&site=${site.id}`} target="_blank" rel="noopener noreferrer">Tam ekranda aç ↗</a></div>
           <iframe key={`${location.page}-${site.id}`} className="ws-legacy-frame" title={`${site.ad} ${location.page} çalışma ekranı`} src={`/app?workspace_module=${LEGACY_MODULE[location.page]}&site=${site.id}`} />
         </section>}
+        {site && location.page === 'hakedis' && !location.legacy && (
+          <HakedisPage site={site} token={token} profile={profile} />
+        )}
         {site && location.page === 'metraj-old' && <section>
           <div className="ws-section-head"><h2>{site.ad} · Metraj</h2><button onClick={() => navigate('bim')}>3D BIM ↗</button></div>
           {data.metraj && <div className="ws-kpis"><div className="ws-card"><span>Toplam kalem</span><strong>{data.metraj.toplam_kalem}</strong></div><div className="ws-card"><span>Tamamlanan</span><strong>{data.metraj.tamamlanan}</strong></div><div className="ws-card"><span>Devam eden</span><strong>{data.metraj.devam_eden}</strong></div><div className="ws-card"><span>Toplam tutar</span><strong>{money(data.metraj.toplam_tutar)}</strong></div></div>}
@@ -231,12 +228,6 @@ export default function App() {
           <div className="ws-section-head"><h2>{site.ad} · BIM</h2><button onClick={() => navigate('metraj')}>Metraja dön</button></div>
           {!loading && !data.models?.length && <Notice>Bu şantiyeye bağlı BIM modeli yok. Model yükleme için mevcut metraj aracını açabilirsiniz: <a href="/app">Metraj aracı ↗</a></Notice>}
           {!!data.models?.length && <><div className="ws-model-list">{data.models.map(model => <button className={(selectedModelId || data.models[0].id) === model.id ? 'active' : ''} onClick={() => setSelectedModelId(model.id)} key={model.id}>{model.orijinal_dosya_adi || `Model ${model.id}`}</button>)}</div><iframe className="ws-bim-frame" title={`${site.ad} BIM modeli`} src={`/bim-viewer/?model_id=${selectedModelId || data.models[0].id}&santiye_id=${site.id}`} /></>}
-        </section>}
-        {site && location.page === 'hakedis-old' && <section>
-          <h2>{site.ad} · Hakedişler</h2>
-          {!loading && !data.payments?.length && <Notice>Bu şantiyede henüz hakediş dönemi yok.</Notice>}
-          <div className="ws-payment-layout"><div className="ws-list">{(data.payments || []).map(payment => <button className="ws-payment" key={payment.id} onClick={() => openPayment(payment)}><strong>Hakediş #{payment.hakedis_no}</strong><small>{payment.donem_baslangic} – {payment.donem_bitis}</small><span>{money(payment.toplam_tutar)} · {payment.durum}</span></button>)}</div>
-          <div className="ws-card ws-payment-detail">{selectedPayment?.loading ? 'Detay yükleniyor…' : selectedPayment?.error ? <Notice kind="error">{selectedPayment.error}</Notice> : selectedPayment?.hakedis ? <><h3>Hakediş #{selectedPayment.hakedis.hakedis_no}</h3><p>{selectedPayment.hakedis.durum} · {money(selectedPayment.hakedis.toplam_tutar)}</p><div className="ws-table-wrap"><table><thead><tr><th>İş kalemi</th><th>Bu dönem</th><th>Tutar</th></tr></thead><tbody>{selectedPayment.kalemler.map(kalem => <tr key={kalem.id}><td>{kalem.tanim}</td><td>{kalem.bu_donem_miktar} {kalem.birim}</td><td>{money(kalem.bu_donem_tutar)}</td></tr>)}</tbody></table></div></> : 'Dönem ayrıntısı için bir hakediş seçin.'}</div></div>
         </section>}
         {site && ['saha', 'kamera', 'rapor'].includes(location.page) && <SecondaryPage page={location.page} site={site} token={token} />}
       </main>
