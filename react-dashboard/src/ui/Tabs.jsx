@@ -49,8 +49,8 @@ export function Tabs({ tabs, defaultTab, value: controlledValue, onChange, child
                 'px-4 py-2.5 text-sm font-medium rounded-t border-b-2 -mb-px',
                 'transition-colors duration-fast focus-visible:outline-2 focus-visible:outline-focus-ring',
                 isActive
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-text-muted hover:text-text hover:border-border-strong'
+                  ? 'border-brand-500 text-text font-semibold'
+                  : 'border-transparent text-text-muted hover:text-text'
               )}
             >
               {tab.label}
