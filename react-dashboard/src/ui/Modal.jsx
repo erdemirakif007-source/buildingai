@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { cn } from './cn'
@@ -15,11 +15,38 @@ const FOCUSABLE = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',')
 
+function useVisualViewport(active) {
+  const [offset, setOffset] = useState({ bottom: 0, maxHeight: null })
+
+  useEffect(() => {
+    if (!active || typeof window === 'undefined' || !window.visualViewport) return
+    if (window.innerWidth >= 768) return
+
+    function update() {
+      const vv = window.visualViewport
+      const keyboardHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
+      setOffset({ bottom: keyboardHeight, maxHeight: vv.height })
+    }
+
+    window.visualViewport.addEventListener('resize', update)
+    window.visualViewport.addEventListener('scroll', update)
+    update()
+    return () => {
+      window.visualViewport.removeEventListener('resize', update)
+      window.visualViewport.removeEventListener('scroll', update)
+      setOffset({ bottom: 0, maxHeight: null })
+    }
+  }, [active])
+
+  return offset
+}
+
 export function Modal({ open, onClose, title, children, footer, size = 'md', closeOnOverlay = true }) {
   const dialogRef = useRef(null)
   const triggerRef = useRef(null)
   const mousedownTargetRef = useRef(null)
   const titleId = useId()
+  const { bottom: keyboardOffset, maxHeight: vpHeight } = useVisualViewport(open)
 
   useEffect(() => {
     if (open) {
@@ -58,6 +85,10 @@ export function Modal({ open, onClose, title, children, footer, size = 'md', clo
 
   if (!open) return null
 
+  const sheetStyle = keyboardOffset > 0 || vpHeight
+    ? { transform: `translateY(-${keyboardOffset}px)`, maxHeight: vpHeight ? `${vpHeight}px` : undefined }
+    : undefined
+
   return createPortal(
     <div
       className="fixed inset-0 z-modal flex items-end md:items-center justify-center p-0 md:p-4"
@@ -70,6 +101,7 @@ export function Modal({ open, onClose, title, children, footer, size = 'md', clo
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        style={sheetStyle}
         className={cn(
           'relative flex flex-col overflow-hidden bg-surface shadow-lg',
           'w-full rounded-t-lg md:rounded-lg',
