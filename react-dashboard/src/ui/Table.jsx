@@ -14,7 +14,7 @@ export function Table({ columns, rows, loading, onRowClick, footer, className })
                 scope="col"
                 className={cn(
                   'px-4 py-3 text-sm font-semibold text-text-muted whitespace-nowrap',
-                  col.align === 'right' ? 'text-right' : 'text-left'
+                  (col.align === 'right' || col.numeric) ? 'text-right' : 'text-left'
                 )}
               >
                 {col.header}
