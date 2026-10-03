@@ -28,13 +28,18 @@ export function Button({
   onClick,
   ...props
 }) {
+  const isDisabled = disabled && !loading
+  const handleClick = loading
+    ? (e) => { e.preventDefault() }
+    : onClick
+
   return (
     <button
       type={type}
-      disabled={disabled && !loading}
+      disabled={isDisabled}
       aria-disabled={disabled || loading || undefined}
       aria-busy={loading || undefined}
-      onClick={loading ? undefined : onClick}
+      onClick={handleClick}
       className={cn(
         'inline-flex items-center justify-center font-semibold rounded border',
         'transition-colors duration-fast',
