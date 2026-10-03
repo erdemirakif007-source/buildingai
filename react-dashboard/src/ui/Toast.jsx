@@ -20,19 +20,42 @@ const icons = {
 const DEFAULT_DURATION = { success: 4000, info: 4000, danger: 6000 }
 const MAX_TOASTS = 3
 
-function ToastItem({ id, message, tone = 'info', onRemove }) {
+function ToastItem({ id, message, tone = 'info', duration, onRemove }) {
   const Icon = icons[tone]
+  const startRef = useRef(null)
+  const remainingRef = useRef(duration)
+  const timerRef = useRef(null)
+
+  const pause = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+      remainingRef.current -= Date.now() - startRef.current
+    }
+  }, [])
+
+  const resume = useCallback(() => {
+    startRef.current = Date.now()
+    timerRef.current = setTimeout(() => onRemove(id), remainingRef.current)
+  }, [id, onRemove])
+
+  useEffect(() => {
+    resume()
+    return () => clearTimeout(timerRef.current)
+  }, [resume])
+
   return (
     <div
-      role="status"
-      aria-live={tone === 'danger' ? 'assertive' : 'polite'}
-      aria-atomic="true"
       className={cn(
-        'flex items-start gap-3 w-full md:w-auto md:min-w-[280px] md:max-w-sm',
+        'flex items-start gap-3',
         'px-4 py-3 rounded border shadow-md',
         'animate-fade-in',
         toneClasses[tone]
       )}
+      onMouseEnter={pause}
+      onMouseLeave={resume}
+      onFocusCapture={pause}
+      onBlurCapture={resume}
     >
       {Icon && <Icon size={18} aria-hidden className="flex-none mt-0.5" />}
       <span className="flex-1 text-sm font-medium">{message}</span>
@@ -60,28 +83,58 @@ export function ToastProvider({ children }) {
 
   const add = useCallback(({ message, tone = 'info', duration }) => {
     const id = Date.now() + Math.random()
-    setToasts(prev => {
-      const next = [...prev, { id, message, tone }]
-      return next.length > MAX_TOASTS ? next.slice(next.length - MAX_TOASTS) : next
-    })
     const ms = duration ?? DEFAULT_DURATION[tone] ?? 4000
-    timers.current[id] = setTimeout(() => remove(id), ms)
+    setToasts(prev => {
+      if (prev.length >= MAX_TOASTS) {
+        const dropped = prev[0]
+        clearTimeout(timers.current[dropped.id])
+        delete timers.current[dropped.id]
+        return [...prev.slice(1), { id, message, tone, duration: ms }]
+      }
+      return [...prev, { id, message, tone, duration: ms }]
+    })
     return id
-  }, [remove])
+  }, [])
 
   useEffect(() => () => Object.values(timers.current).forEach(clearTimeout), [])
+
+  const politeToasts = toasts.filter(t => t.tone !== 'danger')
+  const urgentToasts = toasts.filter(t => t.tone === 'danger')
 
   return (
     <ToastContext.Provider value={add}>
       {children}
       {createPortal(
-        <div className="fixed bottom-4 right-4 z-toast flex flex-col-reverse gap-2 w-full md:w-auto px-4 md:px-0 pointer-events-none">
-          <div className="flex flex-col gap-2 pointer-events-auto">
-            {toasts.map(t => (
-              <ToastItem key={t.id} {...t} onRemove={remove} />
-            ))}
+        <>
+          <div
+            aria-live="polite"
+            aria-atomic="false"
+            className="sr-only"
+          >
+            {politeToasts.map(t => <span key={t.id}>{t.message}</span>)}
           </div>
-        </div>,
+          <div
+            role="alert"
+            aria-atomic="false"
+            className="sr-only"
+          >
+            {urgentToasts.map(t => <span key={t.id}>{t.message}</span>)}
+          </div>
+          <div
+            className="fixed z-toast flex flex-col-reverse gap-2 pointer-events-none"
+            style={{
+              bottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))',
+              right: '1rem',
+              left: '1rem',
+            }}
+          >
+            <div className="flex flex-col gap-2 pointer-events-auto md:items-end">
+              {toasts.map(t => (
+                <ToastItem key={t.id} {...t} onRemove={remove} />
+              ))}
+            </div>
+          </div>
+        </>,
         document.body
       )}
     </ToastContext.Provider>
