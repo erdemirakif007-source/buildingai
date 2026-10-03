@@ -9,7 +9,7 @@ import { EmptyState } from './EmptyState'
 import { Table } from './Table'
 import { Tabs } from './Tabs'
 import { Toggle } from './Toggle'
-import { ToastProvider, useToast } from './Toast'
+import { useToast } from './Toast'
 import { Spinner } from './Spinner'
 import { formatMoney, formatNumber, formatDate, formatPercent } from './format'
 
@@ -100,7 +100,6 @@ export default function UiPreview() {
   const [loadingTable, setLoadingTable] = useState(false)
 
   return (
-    <ToastProvider>
       <div className="min-h-dvh bg-bg">
         <div className="max-w-5xl mx-auto px-6 py-10">
           <div className="mb-10">
@@ -369,6 +368,5 @@ export default function UiPreview() {
           </Section>
         </div>
       </div>
-    </ToastProvider>
   )
 }

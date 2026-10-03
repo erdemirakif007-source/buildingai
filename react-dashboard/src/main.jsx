@@ -5,6 +5,7 @@ import '@fontsource/plus-jakarta-sans/500.css'
 import '@fontsource/plus-jakarta-sans/600.css'
 import '@fontsource/plus-jakarta-sans/700.css'
 import App from './App.jsx'
+import { ToastProvider } from './ui/Toast.jsx'
 import './index.css'
 
 async function mount() {
@@ -14,7 +15,11 @@ async function mount() {
     Root = UiPreview
   }
   ReactDOM.createRoot(document.getElementById('root')).render(
-    <React.StrictMode><Root /></React.StrictMode>
+    <React.StrictMode>
+      <ToastProvider>
+        <Root />
+      </ToastProvider>
+    </React.StrictMode>
   )
 }
 
