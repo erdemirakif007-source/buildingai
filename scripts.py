@@ -7917,7 +7917,7 @@ function davetModalEnsure() {
 
       <div style="display:flex;justify-content:flex-end;gap:10px;padding:16px 20px;border-top:1px solid #E2E8F0;background:#F8FAFC;">
         <button type="button" onclick="davetModalKapat()" style="background:#FFFFFF;border:1px solid #CBD5E1;color:#334155;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer;">Vazgeç</button>
-        <button id="davetGonderBtn" type="button" disabled style="background:#94A3B8;border:none;color:white;border-radius:8px;padding:10px 16px;font-weight:800;cursor:not-allowed;">Davet gönderimi kapalı</button>
+        <button id="davetGonderBtn" type="button" onclick="davetGonder()" style="background:#2563EB;border:none;color:white;border-radius:8px;padding:10px 16px;font-weight:800;cursor:pointer;">Davet Gönder</button>
       </div>
     </div>`;
   document.body.appendChild(modal);
@@ -7933,18 +7933,20 @@ function davetTabSec(mod) {
   const emailField = document.getElementById('davetEmailField');
   const btn = document.getElementById('davetGonderBtn');
   const msg = document.getElementById('davetMsg');
-  if (msg) { msg.style.display = 'block'; msg.style.background = '#EFF6FF'; msg.style.color = '#1D4ED8'; msg.textContent = 'Gerçek davet gönderimi bu sürümde etkin değil. Kapsam seçimi yalnız önizlemedir.'; }
+  if (msg) { msg.style.display = 'none'; }
 
   if (mod === 'email') {
     emailTab.style.borderBottomColor = '#2563EB'; emailTab.style.color = '#2563EB'; emailTab.style.background = '#F8FAFC';
     linkTab.style.borderBottomColor  = 'transparent'; linkTab.style.color  = '#64748B'; linkTab.style.background = '#FFFFFF';
     emailField.style.display = 'block';
-    btn.textContent = 'Davet gönderimi kapalı';
+    btn.textContent = 'Davet Gönder';
+    btn.disabled = false; btn.style.background = '#2563EB'; btn.style.cursor = 'pointer';
   } else {
     linkTab.style.borderBottomColor  = '#2563EB'; linkTab.style.color  = '#2563EB'; linkTab.style.background = '#F8FAFC';
     emailTab.style.borderBottomColor = 'transparent'; emailTab.style.color = '#64748B'; emailTab.style.background = '#FFFFFF';
     emailField.style.display = 'none';
-    btn.textContent = 'Link oluşturma kapalı';
+    btn.textContent = 'Link Oluştur';
+    btn.disabled = false; btn.style.background = '#2563EB'; btn.style.cursor = 'pointer';
   }
 }
 
@@ -7965,7 +7967,7 @@ function davetModalAc() {
   const emailInput = document.getElementById('davetEmail');
   if (emailInput) emailInput.value = '';
   const notice = document.getElementById('davetMsg');
-  if (notice) { notice.style.display = 'block'; notice.style.background = '#EFF6FF'; notice.style.color = '#1D4ED8'; notice.textContent = 'Gerçek davet gönderimi bu sürümde etkin değil. Kapsam seçimi yalnız önizlemedir.'; }
+  if (notice) { notice.style.display = 'none'; }
   modal.style.display = 'flex';
 }
 

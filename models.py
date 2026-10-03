@@ -34,6 +34,7 @@ class Invitation(Base):
     token = Column(String, unique=True, nullable=False, index=True)
     expires_at = Column(DateTime, nullable=False)
     status = Column(String, nullable=False, default="pending")
+    santiye_ids_json = Column(Text, nullable=True)  # JSON list of int; NULL = org-wide
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 

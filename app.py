@@ -645,6 +645,7 @@ ORG_SCHEMA_TABLES = {
             token TEXT UNIQUE NOT NULL,
             expires_at DATETIME NOT NULL,
             status TEXT NOT NULL DEFAULT 'pending',
+            santiye_ids_json TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """,
@@ -677,6 +678,9 @@ ORG_SCHEMA_COLUMNS = {
     },
     "video_analizler": {
         "organization_id": "INTEGER",
+    },
+    "invitations": {
+        "santiye_ids_json": "TEXT",
     },
 }
 
@@ -4054,10 +4058,26 @@ def davet_gonder(request: Request, payload: dict = Body(...), db: Session = Depe
     email = (payload.get("email") or "").strip().lower()
     from access_control import CANONICAL_ROLES
     role = normalize_role((payload.get("role") or "muhendis").strip())
-    santiye_ids: list = payload.get("santiye_ids") or []
+    raw_ids = payload.get("santiye_ids") or []
 
     if role not in CANONICAL_ROLES:
         raise HTTPException(status_code=422, detail=f"Geçersiz rol. İzin verilenler: {', '.join(sorted(CANONICAL_ROLES))}")
+
+    # Validate santiye_ids: must be ints, deduplicated, all belonging to caller's org
+    if raw_ids:
+        if not all(isinstance(x, int) for x in raw_ids):
+            raise HTTPException(status_code=422, detail="santiye_ids yalnızca tam sayı içerebilir.")
+        santiye_ids = list(dict.fromkeys(raw_ids))  # deduplicate, preserve order
+        org_site_ids = {
+            row.id for row in db.query(models.Santiye.id).filter_by(
+                organization_id=user.organization_id, aktif=True
+            ).all()
+        }
+        invalid = [sid for sid in santiye_ids if sid not in org_site_ids]
+        if invalid:
+            raise HTTPException(status_code=403, detail=f"Şantiye(ler) bu organizasyona ait değil veya aktif değil: {invalid}")
+    else:
+        santiye_ids = []
 
     token_str = secrets.token_urlsafe(32)
     expires_at = datetime.datetime.utcnow() + datetime.timedelta(days=7)
@@ -4070,6 +4090,7 @@ def davet_gonder(request: Request, payload: dict = Body(...), db: Session = Depe
         token=token_str,
         expires_at=expires_at,
         status="pending",
+        santiye_ids_json=json.dumps(santiye_ids) if santiye_ids else None,
     )
     db.add(davet)
     db.commit()
@@ -4119,20 +4140,49 @@ async def davet_kabul(request: Request, token_str: str, db: Session = Depends(da
                 return HTMLResponse("<h2>Zaten başka bir organizasyona üyesiniz.</h2>", status_code=409)
             if not user.organization_id:
                 user.organization_id = davet.organization_id
-            existing = db.query(models.ProjectMember).filter_by(
-                organization_id=davet.organization_id,
-                user_id=user.id,
-                status="active",
-            ).first()
-            if not existing:
-                db.add(models.ProjectMember(
+            _role = normalize_role(davet.role or "muhendis")
+            _santiye_ids = json.loads(davet.santiye_ids_json) if davet.santiye_ids_json else []
+            # Keep only santiye_ids that still exist and belong to the same org
+            if _santiye_ids:
+                _valid_ids = {
+                    row.id for row in db.query(models.Santiye.id).filter(
+                        models.Santiye.id.in_(_santiye_ids),
+                        models.Santiye.organization_id == davet.organization_id,
+                        models.Santiye.aktif == True,
+                    ).all()
+                }
+                for sid in _santiye_ids:
+                    if sid not in _valid_ids:
+                        continue
+                    if not db.query(models.ProjectMember).filter_by(
+                        organization_id=davet.organization_id,
+                        user_id=user.id,
+                        santiye_id=sid,
+                        status="active",
+                    ).first():
+                        db.add(models.ProjectMember(
+                            organization_id=davet.organization_id,
+                            user_id=user.id,
+                            santiye_id=sid,
+                            role=_role,
+                            status="active",
+                            invited_by=davet.invited_by,
+                        ))
+            else:
+                if not db.query(models.ProjectMember).filter_by(
                     organization_id=davet.organization_id,
                     user_id=user.id,
                     santiye_id=None,
-                    role=normalize_role(davet.role or "muhendis"),
                     status="active",
-                    invited_by=davet.invited_by,
-                ))
+                ).first():
+                    db.add(models.ProjectMember(
+                        organization_id=davet.organization_id,
+                        user_id=user.id,
+                        santiye_id=None,
+                        role=_role,
+                        status="active",
+                        invited_by=davet.invited_by,
+                    ))
             davet.status = "accepted"
             db.commit()
             logger.info("Davet kabul edildi: davet_id=%s user_id=%s", davet.id, user.id)
