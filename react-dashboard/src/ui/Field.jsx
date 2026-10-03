@@ -1,4 +1,5 @@
 import { useId } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { cn } from './cn'
 
 const baseInput = [
@@ -27,12 +28,19 @@ export function Input({ numeric, className, ...props }) {
 
 export function Select({ className, children, ...props }) {
   return (
-    <select
-      className={cn(baseInput, 'h-[44px] text-lg md:h-[38px] md:text-base pr-8 cursor-pointer', className)}
-      {...props}
-    >
-      {children}
-    </select>
+    <div className="relative">
+      <select
+        className={cn(baseInput, 'h-[44px] text-lg md:h-[38px] md:text-base appearance-none pr-10 cursor-pointer', className)}
+        {...props}
+      >
+        {children}
+      </select>
+      <ChevronDown
+        size={16}
+        aria-hidden
+        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-muted"
+      />
+    </div>
   )
 }
 
