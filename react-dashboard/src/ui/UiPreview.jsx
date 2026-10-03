@@ -188,7 +188,7 @@ export default function UiPreview() {
           <Section title="Form alanları (Field)">
             <div className="grid md:grid-cols-2 gap-6 max-w-2xl">
               <Field label="Şantiye adı" required>
-                {props => <Input placeholder="Örn: Beşiktaş Rezidansı" {...props} />}
+                <Input placeholder="Örn: Beşiktaş Rezidansı" />
               </Field>
               <Field label="Birim fiyat (₺)" hint="KDV hariç birim fiyat">
                 {props => <Input numeric placeholder="0,00" {...props} />}

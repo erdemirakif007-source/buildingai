@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { cloneElement, isValidElement, useId } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { cn } from './cn'
 
@@ -59,14 +59,30 @@ export function Field({ label, hint, error, required, children, className }) {
   const errorId = error ? `${id}-error` : undefined
   const describedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined
 
-  const child = typeof children === 'function'
-    ? children({ id, 'aria-describedby': describedBy, 'aria-invalid': error ? 'true' : undefined, 'aria-required': required })
-    : children
+  const accessibilityProps = {
+    'aria-describedby': describedBy,
+    'aria-invalid': error ? 'true' : undefined,
+    'aria-required': required,
+  }
+
+  let child
+  if (typeof children === 'function') {
+    child = children({ id, ...accessibilityProps })
+  } else if (isValidElement(children)) {
+    const childId = children.props.id || id
+    child = cloneElement(children, { id: childId, ...accessibilityProps })
+  } else {
+    child = children
+  }
+
+  const labelTarget = isValidElement(children) && children.props.id
+    ? children.props.id
+    : id
 
   return (
     <div className={cn('flex flex-col gap-1', className)}>
       {label && (
-        <label htmlFor={id} className="text-sm font-medium text-text">
+        <label htmlFor={labelTarget} className="text-sm font-medium text-text">
           {label}
           {required && <span className="text-danger-fg ml-0.5" aria-hidden>*</span>}
         </label>
