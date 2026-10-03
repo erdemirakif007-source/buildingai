@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { cn } from './cn'
@@ -19,6 +19,7 @@ export function Modal({ open, onClose, title, children, footer, size = 'md', clo
   const dialogRef = useRef(null)
   const triggerRef = useRef(null)
   const mousedownTargetRef = useRef(null)
+  const titleId = useId()
 
   useEffect(() => {
     if (open) {
@@ -57,8 +58,6 @@ export function Modal({ open, onClose, title, children, footer, size = 'md', clo
 
   if (!open) return null
 
-  const titleId = 'modal-title-' + Math.random().toString(36).slice(2)
-
   return createPortal(
     <div
       className="fixed inset-0 z-modal flex items-end md:items-center justify-center p-0 md:p-4"
@@ -72,14 +71,14 @@ export function Modal({ open, onClose, title, children, footer, size = 'md', clo
         aria-modal="true"
         aria-labelledby={titleId}
         className={cn(
-          'relative flex flex-col bg-surface shadow-lg',
+          'relative flex flex-col overflow-hidden bg-surface shadow-lg',
           'w-full rounded-t-lg md:rounded-lg',
-          'max-h-[90dvh] overflow-y-auto',
+          'max-h-[90dvh]',
           'animate-sheet-in md:animate-modal-in',
           sizeClasses[size]
         )}
       >
-        <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-border">
+        <div className="flex-none flex items-center justify-between gap-4 px-6 py-4 border-b border-border">
           <h2 id={titleId} className="text-lg font-semibold text-text">{title}</h2>
           <button
             type="button"
@@ -90,9 +89,12 @@ export function Modal({ open, onClose, title, children, footer, size = 'md', clo
             <X size={18} aria-hidden />
           </button>
         </div>
-        <div className="flex-1 px-6 py-5 overflow-y-auto">{children}</div>
+        <div className="flex-1 px-6 py-5 overflow-y-auto min-h-0">{children}</div>
         {footer && (
-          <div className="px-6 py-4 border-t border-border flex items-center justify-end gap-3">
+          <div
+            className="flex-none px-6 py-4 border-t border-border flex items-center justify-end gap-3"
+            style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))' }}
+          >
             {footer}
           </div>
         )}
