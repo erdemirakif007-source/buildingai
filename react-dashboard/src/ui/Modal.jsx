@@ -18,6 +18,7 @@ const FOCUSABLE = [
 export function Modal({ open, onClose, title, children, footer, size = 'md', closeOnOverlay = true }) {
   const dialogRef = useRef(null)
   const triggerRef = useRef(null)
+  const mousedownTargetRef = useRef(null)
 
   useEffect(() => {
     if (open) {
@@ -62,7 +63,8 @@ export function Modal({ open, onClose, title, children, footer, size = 'md', clo
     <div
       className="fixed inset-0 z-modal flex items-end md:items-center justify-center p-0 md:p-4"
       style={{ background: 'var(--bai-overlay)' }}
-      onClick={closeOnOverlay ? (e) => { if (e.target === e.currentTarget) onClose() } : undefined}
+      onMouseDown={closeOnOverlay ? (e) => { mousedownTargetRef.current = e.target } : undefined}
+      onClick={closeOnOverlay ? (e) => { if (mousedownTargetRef.current === e.currentTarget && e.target === e.currentTarget) onClose() } : undefined}
     >
       <div
         ref={dialogRef}
