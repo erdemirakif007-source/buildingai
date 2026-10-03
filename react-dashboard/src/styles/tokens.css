@@ -72,6 +72,7 @@
   --bai-control-height-sm: 30px;
   --bai-control-height-md: 38px;
   --bai-control-height-lg: 44px;
+  --bai-control-height-textarea-min: 80px;
   --bai-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
   --bai-shadow-md: 0 4px 14px rgba(15, 23, 42, 0.08);
   --bai-shadow-lg: 0 20px 48px rgba(15, 23, 42, 0.22);
@@ -103,5 +104,6 @@
   --bai-accent-soft: var(--bai-color-brand-50);
   --bai-link: var(--bai-color-brand-700);
   --bai-focus-ring: var(--bai-color-brand-500);
+  --bai-focus-ring-soft: var(--bai-color-brand-200);
   --bai-overlay: rgba(15, 23, 42, 0.6);
 }
