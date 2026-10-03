@@ -6305,6 +6305,9 @@ def hakedis_detay(request: Request, hakedis_id: int, db: Session = Depends(datab
         raise HTTPException(status_code=404, detail="Hakediş bulunamadı.")
     _kullanici_santiye_kontrol(user, h.santiye_id, db)
     kalemler = db.query(models.HakedisKalemi).filter(models.HakedisKalemi.hakedis_id == hakedis_id).all()
+    _user_ids = [uid for uid in (h.hazirlayan_id, h.onaylayan_id) if uid is not None]
+    _user_map = {u.id: (u.full_name or u.email)
+                 for u in db.query(models.User).filter(models.User.id.in_(_user_ids)).all()} if _user_ids else {}
     kalem_list = []
     for k in kalemler:
         ik = db.query(models.IsKalemi).filter(models.IsKalemi.id == k.is_kalemi_id).first()
@@ -6324,6 +6327,7 @@ def hakedis_detay(request: Request, hakedis_id: int, db: Session = Depends(datab
             "bu_donem_tutar": k.bu_donem_tutar / 100.0,
             "kumulatif_tutar": k.kumulatif_tutar / 100.0,
             "notlar": k.notlar or "",
+            "kaynak": "manuel" if (k.notlar or "").startswith("MANUEL:") else "ilerleme",
         })
     return {
         "hakedis": {
@@ -6335,6 +6339,10 @@ def hakedis_detay(request: Request, hakedis_id: int, db: Session = Depends(datab
             "onceki_toplam": h.onceki_toplam / 100.0,
             "notlar": h.notlar or "",
             "created_at": str(h.created_at)[:10],
+            "hazirlayan_id":  h.hazirlayan_id,
+            "hazirlayan_ad":  _user_map.get(h.hazirlayan_id) if h.hazirlayan_id else None,
+            "onaylayan_id":   h.onaylayan_id,
+            "onaylayan_ad":   _user_map.get(h.onaylayan_id) if h.onaylayan_id else None,
         },
         "kalemler": kalem_list,
     }

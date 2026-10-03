@@ -202,3 +202,67 @@ def test_manual_daily_report_without_ai_and_project_isolation(env):
     assert listed.status_code==200
     assert listed.json()['raporlar'][0]['summary']=='Ölçüm ve kroki hazır.'
     assert client.post('/daily-reports/manual',headers=headers(tokens,3),json={**body,'santiye_id':12}).status_code==404
+
+
+def test_hakedis_detay_yeni_alanlar_mevcut(env):
+    """hakedis_detay yanıtında yeni alanlar her zaman mevcut, kaynak ilerleme."""
+    client, factory, tokens = env
+    r = client.get('/api/hakedis/detay/11', headers=headers(tokens, 3))
+    assert r.status_code == 200, r.text
+    h = r.json()['hakedis']
+    for key in ('hazirlayan_id', 'hazirlayan_ad', 'onaylayan_id', 'onaylayan_ad'):
+        assert key in h, f"Eksik alan: {key}"
+    # Seed hakediş hazirlayan_id=None — ad da None olmalı
+    assert h['hazirlayan_id'] is None
+    assert h['hazirlayan_ad'] is None
+    # Kalemler için kaynak alanı
+    for k in r.json()['kalemler']:
+        assert k.get('kaynak') in ('manuel', 'ilerleme'), f"Geçersiz kaynak: {k.get('kaynak')}"
+
+
+def test_hazirlayan_ad_cozumleniyor(env):
+    """API üzerinden oluşturulan hakedişte hazirlayan_id ve hazirlayan_ad doğru dolar."""
+    client, factory, tokens = env
+    # env function-scoped: her test kendi izole DB'sine sahip
+    with factory() as db:
+        db.delete(db.get(models.Hakedis, 11))
+        db.commit()
+    r = client.post('/api/hakedis/olustur', headers=headers(tokens, 3),
+                    json={'santiye_id': 11, 'donem_baslangic': '2026-10-01', 'donem_bitis': '2026-10-31'})
+    assert r.status_code == 200, r.text
+    pid = r.json()['hakedis_id']
+    detail = client.get(f'/api/hakedis/detay/{pid}', headers=headers(tokens, 3))
+    assert detail.status_code == 200, detail.text
+    h = detail.json()['hakedis']
+    assert h['hazirlayan_id'] == 3
+    assert h['hazirlayan_ad'] == 'Test 3'
+    assert h['onaylayan_id'] is None
+    assert h['onaylayan_ad'] is None
+    # Kalem kaynak: ilerleme tabanlı oluşturulmuş
+    for k in detail.json()['kalemler']:
+        assert k['kaynak'] == 'ilerleme'
+
+
+def test_decisions_actor_ad(env):
+    """decisions endpoint'inde actor_ad batch yüklenir ve doğru çözümlenir."""
+    client, factory, tokens = env
+    with factory() as db:
+        db.delete(db.get(models.Hakedis, 11))
+        db.commit()
+    pid = client.post('/api/hakedis/olustur', headers=headers(tokens, 3),
+                      json={'santiye_id': 11, 'donem_baslangic': '2026-10-01', 'donem_bitis': '2026-10-31'}).json()['hakedis_id']
+    # user 3 taslak → onay_bekliyor
+    tr = client.patch(f'/api/hakedis/durum-guncelle/{pid}', headers=headers(tokens, 3),
+                      json={'durum': 'onay_bekliyor'})
+    assert tr.status_code == 200, tr.text
+    dec = client.get(f'/api/hakedis/decisions/{pid}', headers=headers(tokens, 3))
+    assert dec.status_code == 200, dec.text
+    d = dec.json()['decisions']
+    assert len(d) == 1
+    assert d[0]['actor_id'] == 3
+    assert d[0]['actor_ad'] == 'Test 3'
+    assert d[0]['previous_status'] == 'taslak'
+    assert d[0]['new_status'] == 'onay_bekliyor'
+    assert 'created_at' in d[0]
+    # Eski alanlar değişmemiş
+    assert 'reason' in d[0]

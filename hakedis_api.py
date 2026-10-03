@@ -210,9 +210,18 @@ def decisions(request: Request, payment_id: int, db: Session = Depends(database.
     user = principal(request, db)
     payment(db, user, payment_id)
     rows = db.query(models.PaymentDecision).filter_by(payment_id=payment_id).order_by(models.PaymentDecision.id).all()
-    return {"decisions": [{"actor_id": x.actor_id, "previous_status": x.previous_status,
-        "new_status": x.new_status, "reason": x.reason,
-        "created_at": x.created_at.isoformat()} for x in rows]}
+    _actor_ids = list({r.actor_id for r in rows})
+    _actor_map = {u.id: (u.full_name or u.email)
+                  for u in db.query(models.User).filter(models.User.id.in_(_actor_ids)).all()} if _actor_ids else {}
+    return {"decisions": [
+        {"actor_id": x.actor_id,
+         "actor_ad": _actor_map.get(x.actor_id),
+         "previous_status": x.previous_status,
+         "new_status": x.new_status,
+         "reason": x.reason,
+         "created_at": x.created_at.isoformat()}
+        for x in rows
+    ]}
 
 
 @router.delete("/sil/{payment_id}")
