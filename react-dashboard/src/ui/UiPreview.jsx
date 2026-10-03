@@ -97,7 +97,6 @@ export default function UiPreview() {
   const [modalOpen, setModalOpen] = useState(false)
   const [toggle1, setToggle1] = useState(true)
   const [toggle2, setToggle2] = useState(false)
-  const [formError, setFormError] = useState('')
   const [loadingTable, setLoadingTable] = useState(false)
 
   return (
@@ -123,7 +122,7 @@ export default function UiPreview() {
                         style={{ background: `var(--bai-color-${label}-${shade})` }}
                         title={`${label}-${shade}`}
                       />
-                      <span className="text-xs text-text-subtle">{shade}</span>
+                      <span className="text-xs text-text-muted">{shade}</span>
                     </div>
                   ))}
                 </div>
@@ -139,7 +138,7 @@ export default function UiPreview() {
                       style={{ background: `var(${key})` }}
                       title={key}
                     />
-                    <span className="text-xs text-text-subtle">{label}</span>
+                    <span className="text-xs text-text-muted">{label}</span>
                   </div>
                 ))}
               </div>
@@ -150,7 +149,7 @@ export default function UiPreview() {
           <Section title="Tipografi ölçeği">
             {FONT_SIZES.map(size => (
               <div key={size} className="flex items-baseline gap-6 py-2 border-b border-border last:border-0">
-                <span className="text-sm text-text-subtle w-10 flex-none">{size}</span>
+                <span className="text-sm text-text-muted w-10 flex-none">{size}</span>
                 <span style={{ fontSize: `var(--bai-font-size-${size})` }} className="text-text font-medium">
                   Şantiye hakkında kısa bilgi
                 </span>
@@ -191,7 +190,7 @@ export default function UiPreview() {
               <Field label="Şantiye adı" required>
                 {props => <Input placeholder="Örn: Beşiktaş Rezidansı" {...props} />}
               </Field>
-              <Field label="Birim fiyat (₺)" hint="Kuruş cinsinden giriniz.">
+              <Field label="Birim fiyat (₺)" hint="KDV hariç birim fiyat">
                 {props => <Input numeric placeholder="0,00" {...props} />}
               </Field>
               <Field label="Durum">
@@ -207,15 +206,8 @@ export default function UiPreview() {
               <Field label="Notlar">
                 {props => <Textarea placeholder="Saha gözlemleri…" rows={3} {...props} />}
               </Field>
-              <Field label="Miktar" error={formError || undefined}>
-                {props => (
-                  <div className="flex gap-2">
-                    <Input numeric placeholder="0,00" {...props} />
-                    <Button size="md" variant="secondary" type="button" onClick={() => setFormError(formError ? '' : 'Miktar sıfırdan büyük olmalı.')}>
-                      Hata dene
-                    </Button>
-                  </div>
-                )}
+              <Field label="Miktar" error="Miktar 0'dan büyük olmalı">
+                {props => <Input numeric placeholder="0,00" {...props} />}
               </Field>
             </div>
           </Section>
