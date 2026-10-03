@@ -120,6 +120,7 @@ export const theme = {
     sm: 30,
     md: 38,
     lg: 44,
+    textareaMin: 80,
   },
   shadow: {
     sm: "0 1px 2px rgba(15, 23, 42, 0.06)",

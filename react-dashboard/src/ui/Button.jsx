@@ -9,9 +9,9 @@ const variantClasses = {
 }
 
 const sizeClasses = {
-  sm: 'h-[30px] px-3 text-sm gap-1.5',
-  md: 'h-[38px] px-4 text-base gap-2',
-  lg: 'h-[44px] px-5 text-lg gap-2',
+  sm: 'h-control-sm px-3 text-sm gap-1.5',
+  md: 'h-control-md px-4 text-base gap-2',
+  lg: 'h-control-lg px-5 text-lg gap-2',
 }
 
 export function Button({

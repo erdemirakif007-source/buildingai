@@ -16,7 +16,7 @@ export function Input({ numeric, className, ...props }) {
     <input
       className={cn(
         baseInput,
-        'h-[44px] text-lg md:h-[38px] md:text-base',
+        'h-control-lg text-lg md:h-control-md md:text-base',
         numeric && 'text-right tabular-nums',
         className
       )}
@@ -30,7 +30,7 @@ export function Select({ className, children, ...props }) {
   return (
     <div className="relative">
       <select
-        className={cn(baseInput, 'h-[44px] text-lg md:h-[38px] md:text-base appearance-none pr-10 cursor-pointer', className)}
+        className={cn(baseInput, 'h-control-lg text-lg md:h-control-md md:text-base appearance-none pr-10 cursor-pointer', className)}
         {...props}
       >
         {children}
@@ -47,7 +47,7 @@ export function Select({ className, children, ...props }) {
 export function Textarea({ className, ...props }) {
   return (
     <textarea
-      className={cn(baseInput, 'py-2 text-lg md:text-base min-h-[80px] resize-y', className)}
+      className={cn(baseInput, 'py-2 text-lg md:text-base min-h-textarea resize-y', className)}
       {...props}
     />
   )

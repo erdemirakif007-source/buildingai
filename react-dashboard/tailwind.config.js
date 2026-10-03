@@ -130,6 +130,17 @@ export default {
       '2xl': '1536px',
     },
     extend: {
+      height: {
+        'control-sm': 'var(--bai-control-height-sm)',
+        'control-md': 'var(--bai-control-height-md)',
+        'control-lg': 'var(--bai-control-height-lg)',
+      },
+      minHeight: {
+        'control-sm': 'var(--bai-control-height-sm)',
+        'control-md': 'var(--bai-control-height-md)',
+        'control-lg': 'var(--bai-control-height-lg)',
+        'textarea':   'var(--bai-control-height-textarea-min)',
+      },
       keyframes: {
         'modal-in': {
           from: { opacity: '0', transform: 'translateY(6px) scale(0.98)' },
