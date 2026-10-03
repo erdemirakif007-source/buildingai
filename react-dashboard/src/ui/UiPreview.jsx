@@ -43,7 +43,7 @@ const hakedisKalemleri = [
   { id: 5, pozNo: 'Y.42.003/01', tanim: 'Seramik döşeme kaplaması', birim: 'm²', miktar: 380, birimFiyat: 310, tutar: 117800 },
 ]
 const hakedisFooter = {
-  tanim: 'TOPLAM',
+  tanim: 'Toplam',
   tutar: hakedisKalemleri.reduce((s, r) => s + r.tutar, 0),
 }
 const hakedisColumns = [
@@ -55,7 +55,7 @@ const hakedisColumns = [
   { key: 'tutar', header: 'Tutar', numeric: true, render: r => formatMoney(r.tutar) },
 ]
 const hakedisFooterRow = {
-  pozNo: '', tanim: 'TOPLAM', birim: '', miktar: '', birimFiyat: '',
+  pozNo: '', tanim: 'Toplam', birim: '', miktar: '', birimFiyat: '',
   tutar: formatMoney(hakedisFooter.tutar),
 }
 
@@ -105,7 +105,7 @@ export default function UiPreview() {
       <div className="min-h-dvh bg-bg">
         <div className="max-w-5xl mx-auto px-6 py-10">
           <div className="mb-10">
-            <span className="text-sm font-bold tracking-widest text-primary uppercase">BuildingAI</span>
+            <span className="text-sm font-semibold text-link">BuildingAI</span>
             <h1 className="text-3xl font-bold text-text mt-1">UI Bileşen Önizlemesi</h1>
             <p className="text-text-muted mt-2">Tasarım sistemi token'ları ve bileşen kütüphanesi.</p>
           </div>
