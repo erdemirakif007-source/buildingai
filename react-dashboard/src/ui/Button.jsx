@@ -25,19 +25,22 @@ export function Button({
   className,
   disabled,
   type = 'button',
+  onClick,
   ...props
 }) {
-  const isDisabled = disabled || loading
   return (
     <button
       type={type}
-      disabled={isDisabled}
+      disabled={disabled && !loading}
+      aria-disabled={disabled || loading || undefined}
       aria-busy={loading || undefined}
+      onClick={loading ? undefined : onClick}
       className={cn(
         'inline-flex items-center justify-center font-semibold rounded border',
         'transition-colors duration-fast',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring',
-        'disabled:opacity-40 disabled:cursor-not-allowed',
+        disabled && !loading && 'opacity-40 cursor-not-allowed',
+        loading && 'cursor-progress',
         variantClasses[variant],
         sizeClasses[size],
         fullWidth && 'w-full',
