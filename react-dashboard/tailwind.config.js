@@ -73,7 +73,8 @@ export default {
       accent:           semanticColor('accent'),
       'accent-soft':    semanticColor('accent-soft'),
       link:             semanticColor('link'),
-      'focus-ring':     semanticColor('focus-ring'),
+      'focus-ring':      semanticColor('focus-ring'),
+      'focus-ring-soft': semanticColor('focus-ring-soft'),
     },
     fontFamily: {
       sans: ['var(--bai-font-family)'],

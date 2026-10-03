@@ -70,6 +70,7 @@ export const theme = {
     accentSoft: "#fdf4ee",
     link: "#b94916",
     focusRing: "#e6743b",
+    focusRingSoft: "#f6c9ad",
     overlay: "rgba(15, 23, 42, 0.6)",
   },
   font: {

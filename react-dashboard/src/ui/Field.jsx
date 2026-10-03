@@ -6,7 +6,7 @@ const baseInput = [
   'block w-full rounded border border-border bg-surface text-text',
   'px-3 placeholder:text-text-disabled',
   'transition-colors duration-fast',
-  'focus-visible:outline-none focus-visible:border-focus-ring focus-visible:ring-2 focus-visible:ring-focus-ring/20',
+  'focus-visible:outline-none focus-visible:border-focus-ring focus-visible:ring-2 focus-visible:ring-focus-ring-soft',
   'disabled:opacity-40 disabled:cursor-not-allowed',
   'aria-[invalid=true]:border-danger-solid aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-danger-solid',
 ].join(' ')

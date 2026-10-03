@@ -103,5 +103,6 @@
   --bai-accent-soft: var(--bai-color-brand-50);
   --bai-link: var(--bai-color-brand-700);
   --bai-focus-ring: var(--bai-color-brand-500);
+  --bai-focus-ring-soft: var(--bai-color-brand-200);
   --bai-overlay: rgba(15, 23, 42, 0.6);
 }
