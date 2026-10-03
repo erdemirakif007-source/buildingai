@@ -28,3 +28,15 @@ Yarı saydam bir renk gerekiyorsa tokens.json'a uygun bir semantic token ekle
 
 **Yanlış:** `<div className="bg-bg"><span className="text-subtle">…</span></div>`  
 **Doğru:** `<div className="bg-bg"><span className="text-muted">…</span></div>`
+
+## Inline style yalnızca dinamik yüzde genişlik için
+
+`style=` niteliği bileşenlerde kullanılmaz — tek istisna, Tailwind class'larıyla ifade
+edilemeyen dinamik hesaplanmış `width` değerleri (ilerleme çubukları):
+
+```jsx
+<div style={{ width: `${pct * 100}%` }} />
+```
+
+Tasarım token'ları, renkler, boşluklar veya sabit boyutlar için `style=` kullanılmaz;
+bunlar için Tailwind token class'ları kullanılır.
